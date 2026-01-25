@@ -1,0 +1,716 @@
+create table public.users (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text not null unique,
+  name text not null,
+  role text not null check (role in ('admin', 'staff')),
+  created_at timestamp with time zone default now()
+);
+
+alter table public.users enable row level security;
+
+create policy "Users can read own profile"
+on public.users
+for select
+to authenticated
+using (auth.uid() = id);
+
+create policy "Users can insert own profile"
+on public.users
+for insert
+with check (auth.uid() = id);
+
+
+
+insert into public.users (id, email, name, role)
+select
+  id,
+  email,
+  'Kush Pai',
+  'admin'
+from auth.users
+where email = 'kush.mithil.pai@gmail.com';
+
+insert into public.users (id, email, name, role)
+select
+  id,
+  email,
+  'Kush Staff',
+  'staff'
+from auth.users
+where email = 'kushpaipla@gmail.com';
+
+
+-- User role enum
+create type user_role as enum ('admin', 'staff');
+
+-- Trip status enum
+create type trip_status as enum (
+  'draft',
+  'sent',
+  'approved',
+  'completed',
+  'locked'
+);
+
+-- Institution type enum
+create type institution_type as enum ('school', 'college');
+
+
+create table public.trips (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  institution text not null,
+  country text not null,
+  city text not null,
+  start_date date not null,
+  end_date date not null,
+  total_days int not null,
+  total_nights int not null,
+  currency text not null,
+  status trip_status not null default 'draft',
+
+  total_cost numeric not null,
+  total_cost_inr numeric not null,
+  cost_per_student numeric not null,
+
+  created_by uuid references public.users(id),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table public.trips enable row level security;
+
+-- Creator or admin can read
+create policy "Read own trips or admin"
+on public.trips
+for select
+using (
+  created_by = auth.uid()
+  or exists (
+    select 1 from public.users
+    where id = auth.uid() and role = 'admin'
+  )
+);
+
+-- Staff create trips
+create policy "Create trips"
+on public.trips
+for insert
+with check (created_by = auth.uid());
+
+
+create table public.trip_participants (
+  trip_id uuid primary key references public.trips(id) on delete cascade,
+
+  boys int,
+  girls int,
+  male_faculty int,
+  female_faculty int,
+  male_vxplorers int,
+  female_vxplorers int,
+
+  total_students int,
+  total_faculty int,
+  total_vxplorers int,
+  total_participants int
+);
+
+alter table public.trip_participants enable row level security;
+
+create policy "Trip access"
+on public.trip_participants
+for all
+using (
+  exists (
+    select 1 from public.trips t
+    where t.id = trip_id
+      and t.created_by = auth.uid()
+  )
+);
+
+create table public.trip_flights (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid references public.trips(id) on delete cascade,
+
+  from_city text,
+  to_city text,
+  airline text,
+  flight_number text,
+  departure_time timestamptz,
+  arrival_time timestamptz,
+
+  cost_per_person numeric,
+  currency text,
+  description text,
+
+  total_cost numeric,
+  total_cost_inr numeric
+);
+
+alter table public.trip_flights enable row level security;
+
+create policy "Trip flight access"
+on public.trip_flights
+for all
+using (
+  exists (
+    select 1 from public.trips t
+    where t.id = trip_id
+      and t.created_by = auth.uid()
+  )
+);
+
+
+
+
+
+
+create table public.trip_buses (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid references public.trips(id) on delete cascade,
+
+  name text,
+  seating_capacity int,
+  cost_per_bus numeric,
+  currency text,
+  number_of_days int,
+  quantity int,
+  description text,
+
+  total_cost numeric,
+  total_cost_inr numeric
+);
+
+alter table public.trip_buses enable row level security;
+
+create policy "Trip bus access"
+on public.trip_buses
+for all
+using (
+  exists (
+    select 1 from public.trips t
+    where t.id = trip_id
+      and t.created_by = auth.uid()
+  )
+);
+
+
+
+
+
+
+
+
+
+
+create table public.trip_trains (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid references public.trips(id) on delete cascade,
+
+  name text,
+  train_number text,
+  class text,
+  timing text,
+
+  cost_per_person numeric,
+  currency text,
+  description text,
+
+  total_cost numeric,
+  total_cost_inr numeric
+);
+
+alter table public.trip_trains enable row level security;
+
+create policy "Trip train access"
+on public.trip_trains
+for all
+using (
+  exists (
+    select 1 from public.trips t
+    where t.id = trip_id
+      and t.created_by = auth.uid()
+  )
+);
+
+
+create table public.trip_flights (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid references public.trips(id) on delete cascade,
+
+  from_city text,
+  to_city text,
+  airline text,
+  flight_number text,
+  departure_time timestamptz,
+  arrival_time timestamptz,
+
+  cost_per_person numeric,
+  currency text,
+  description text,
+
+  total_cost numeric,
+  total_cost_inr numeric
+);
+
+alter table public.trip_flights enable row level security;
+
+create policy "Trip flight access"
+on public.trip_flights
+for all
+using (
+  exists (
+    select 1 from public.trips t
+    where t.id = trip_id
+      and t.created_by = auth.uid()
+  )
+);
+
+
+
+
+
+
+create table public.trip_buses (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid references public.trips(id) on delete cascade,
+
+  name text,
+  seating_capacity int,
+  cost_per_bus numeric,
+  currency text,
+  number_of_days int,
+  quantity int,
+  description text,
+
+  total_cost numeric,
+  total_cost_inr numeric
+);
+
+alter table public.trip_buses enable row level security;
+
+create policy "Trip bus access"
+on public.trip_buses
+for all
+using (
+  exists (
+    select 1 from public.trips t
+    where t.id = trip_id
+      and t.created_by = auth.uid()
+  )
+);
+
+
+
+
+
+
+
+
+
+
+create table public.trip_trains (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid references public.trips(id) on delete cascade,
+
+  name text,
+  train_number text,
+  class text,
+  timing text,
+
+  cost_per_person numeric,
+  currency text,
+  description text,
+
+  total_cost numeric,
+  total_cost_inr numeric
+);
+
+alter table public.trip_trains enable row level security;
+
+create policy "Trip train access"
+on public.trip_trains
+for all
+using (
+  exists (
+    select 1 from public.trips t
+    where t.id = trip_id
+      and t.created_by = auth.uid()
+  )
+);
+
+
+
+create table public.trip_accommodations (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid references public.trips(id) on delete cascade,
+
+  hotel_name text,
+  city text,
+  number_of_nights int,
+  cost_per_room numeric,
+  currency text,
+  breakfast_included boolean,
+
+  total_rooms int,
+  total_cost numeric,
+  total_cost_inr numeric
+);
+
+alter table public.trip_accommodations enable row level security;
+
+create policy "Trip accommodation access"
+on public.trip_accommodations
+for all
+using (
+  exists (
+    select 1 from public.trips t
+    where t.id = trip_id
+      and t.created_by = auth.uid()
+  )
+);
+
+
+
+
+-- Migration: Add room_allocation column to trip_accommodations
+-- This allows storing detailed room allocation data
+
+-- Add room_allocation column as JSONB
+ALTER TABLE public.trip_accommodations 
+ADD COLUMN IF NOT EXISTS room_allocation JSONB;
+
+-- Add default value for existing records
+UPDATE public.trip_accommodations
+SET room_allocation = jsonb_build_object(
+  'boysRooms', 0,
+  'girlsRooms', 0,
+  'maleFacultyRooms', 0,
+  'femaleFacultyRooms', 0,
+  'maleVXplorerRooms', 0,
+  'femaleVXplorerRooms', 0,
+  'totalRooms', 0
+)
+WHERE room_allocation IS NULL;
+
+-- Create index for JSONB queries (optional, for performance)
+CREATE INDEX IF NOT EXISTS idx_trip_accommodations_room_allocation 
+ON public.trip_accommodations USING gin (room_allocation);
+
+-- Add comment for documentation
+COMMENT ON COLUMN public.trip_accommodations.room_allocation IS 
+'JSONB object storing room allocation breakdown: boysRooms, girlsRooms, maleFacultyRooms, femaleFacultyRooms, maleVXplorerRooms, femaleVXplorerRooms, totalRooms';
+
+
+
+-- Migration: Add room_type_definitions column to trip_accommodations
+-- This stores the room types (occupancy, prices) so we can recalculate allocation when participants change
+
+ALTER TABLE public.trip_accommodations 
+ADD COLUMN IF NOT EXISTS room_type_definitions JSONB;
+
+-- Add default empty array for existing records
+UPDATE public.trip_accommodations
+SET room_type_definitions = '[]'::jsonb
+WHERE room_type_definitions IS NULL;
+
+-- Create index for JSONB queries (optional, for performance)
+CREATE INDEX IF NOT EXISTS idx_trip_accommodations_room_type_definitions 
+ON public.trip_accommodations USING gin (room_type_definitions);
+
+-- Add comment for documentation
+COMMENT ON COLUMN public.trip_accommodations.room_type_definitions IS 
+'JSONB array storing room type definitions: [{ id, name, occupancy, pricePerNight }]';
+
+
+
+
+
+
+-- Migration: Add room_type_definitions column to trip_accommodations
+-- This stores the room type definitions used for allocation so we can recalculate when participants change
+
+-- Add room_type_definitions column as JSONB
+ALTER TABLE public.trip_accommodations 
+ADD COLUMN IF NOT EXISTS room_type_definitions JSONB;
+
+-- Add default value for existing records (empty array)
+UPDATE public.trip_accommodations
+SET room_type_definitions = '[]'::jsonb
+WHERE room_type_definitions IS NULL;
+
+-- Create index for JSONB queries (optional, for performance)
+CREATE INDEX IF NOT EXISTS idx_trip_accommodations_room_types 
+ON public.trip_accommodations USING gin (room_type_definitions);
+
+-- Add comment for documentation
+COMMENT ON COLUMN public.trip_accommodations.room_type_definitions IS 
+'JSONB array storing room type definitions used for allocation: [{id, name, occupancy, pricePerNight}]. Used to recalculate room allocation when participants change.';
+
+
+-- Create trip_meals table
+CREATE TABLE public.trip_meals (
+  trip_id uuid PRIMARY KEY REFERENCES public.trips(id) ON DELETE CASCADE,
+  
+  breakfast_cost_per_person numeric NOT NULL DEFAULT 0,
+  lunch_cost_per_person numeric NOT NULL DEFAULT 0,
+  dinner_cost_per_person numeric NOT NULL DEFAULT 0,
+  
+  currency text NOT NULL,
+  total_days int NOT NULL,
+  total_participants int NOT NULL,
+  
+  daily_cost_per_person numeric NOT NULL,
+  total_cost numeric NOT NULL,
+  total_cost_inr numeric NOT NULL
+);
+
+-- Enable RLS
+ALTER TABLE public.trip_meals ENABLE ROW LEVEL SECURITY;
+
+-- Create policy for trip meals access
+CREATE POLICY "Trip meals access"
+ON public.trip_meals
+FOR ALL
+USING (
+  EXISTS (
+    SELECT 1 FROM public.trips t
+    WHERE t.id = trip_id
+      AND t.created_by = auth.uid()
+  )
+);
+
+-- Add comment for documentation
+COMMENT ON TABLE public.trip_meals IS 
+'Stores meal costs for trips including breakfast, lunch, and dinner per person';
+
+COMMENT ON COLUMN public.trip_meals.breakfast_cost_per_person IS 
+'Cost of breakfast per person (0 if included in hotel)';
+
+COMMENT ON COLUMN public.trip_meals.lunch_cost_per_person IS 
+'Cost of lunch per person';
+
+COMMENT ON COLUMN public.trip_meals.dinner_cost_per_person IS 
+'Cost of dinner per person';
+
+COMMENT ON COLUMN public.trip_meals.daily_cost_per_person IS 
+'Total daily cost per person (breakfast + lunch + dinner)';
+
+
+create table public.trip_activities (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid references public.trips(id) on delete cascade,
+
+  name text,
+  entry_cost numeric,
+  transport_cost numeric,
+  guide_cost numeric,
+  currency text,
+  description text,
+
+  total_cost numeric,
+  total_cost_inr numeric
+);
+
+alter table public.trip_activities enable row level security;
+
+create policy "Trip activities access"
+on public.trip_activities
+for all
+using (
+  exists (
+    select 1 from public.trips t
+    where t.id = trip_id
+      and t.created_by = auth.uid()
+  )
+);
+
+
+create table public.trip_overheads (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid references public.trips(id) on delete cascade,
+
+  name text,
+  amount numeric,
+  currency text,
+  hide_from_client boolean,
+  total_cost_inr numeric
+);
+
+alter table public.trip_overheads enable row level security;
+
+create policy "Trip overhead access"
+on public.trip_overheads
+for all
+using (
+  exists (
+    select 1 from public.trips t
+    where t.id = trip_id
+      and t.created_by = auth.uid()
+  )
+);
+
+
+create table public.post_trip_analysis (
+  trip_id uuid primary key references public.trips(id) on delete cascade,
+
+  total_expected numeric,
+  total_actual numeric,
+  profit_loss numeric,
+  profit_loss_percentage numeric,
+  variance_explanation text,
+  is_finalized boolean
+);
+
+alter table public.post_trip_analysis enable row level security;
+
+create policy "Post trip analysis access"
+on public.post_trip_analysis
+for all
+using (
+  exists (
+    select 1 from public.trips t
+    where t.id = trip_id
+      and t.created_by = auth.uid()
+  )
+);
+
+
+create table public.countries (
+  id uuid primary key default gen_random_uuid(),
+  name text,
+  code text,
+  default_currency text
+);
+
+alter table public.countries enable row level security;
+
+create policy "Read countries"
+on public.countries
+for select
+using (true);
+
+create policy "Allow update countries"
+on public.countries
+for update
+using (true)
+with check (true);
+
+create table public.cities (
+  id uuid primary key default gen_random_uuid(),
+  name text,
+  country_id uuid references public.countries(id)
+);
+
+alter table public.cities enable row level security;
+
+create policy "Read cities"
+on public.cities
+for select
+using (true);
+
+create policy "Allow update cities"
+on public.cities
+for update
+using (true)
+with check (true);
+
+create table public.currencies (
+  id uuid primary key default gen_random_uuid(),
+  code text,
+  name text,
+  symbol text,
+  rate_to_inr numeric,
+  effective_date date
+);
+
+alter table public.currencies enable row level security;
+
+create policy "Read currencies"
+on public.currencies
+for select
+using (true);
+
+create policy "Allow update currencies"
+on public.currencies
+for update
+using (true)
+with check (true);
+
+create table public.institutions (
+  id uuid primary key default gen_random_uuid(),
+  name text,
+  type institution_type,
+  city text
+);
+
+alter table public.institutions enable row level security;
+
+create policy "Read institutions"
+on public.institutions
+for select
+using (true);
+
+
+
+
+
+
+
+
+
+insert into public.currencies (id, code, name, symbol, rate_to_inr, effective_date) values
+(gen_random_uuid(), 'INR', 'Indian Rupee', '₹', 1, current_date),
+(gen_random_uuid(), 'USD', 'US Dollar', '$', 83.0, current_date),
+(gen_random_uuid(), 'EUR', 'Euro', '€', 90.0, current_date),
+(gen_random_uuid(), 'GBP', 'British Pound', '£', 104.0, current_date),
+(gen_random_uuid(), 'JPY', 'Japanese Yen', '¥', 0.56, current_date);
+
+insert into public.countries (id, name, code, default_currency) values
+(gen_random_uuid(), 'India', 'IN', 'INR'),
+(gen_random_uuid(), 'United States', 'US', 'USD'),
+(gen_random_uuid(), 'United Kingdom', 'GB', 'GBP'),
+(gen_random_uuid(), 'France', 'FR', 'EUR'),
+(gen_random_uuid(), 'Japan', 'JP', 'JPY');
+
+insert into public.cities (id, name, country_id) values
+(gen_random_uuid(), 'Mumbai', (select id from public.countries where code = 'IN')),
+(gen_random_uuid(), 'Delhi', (select id from public.countries where code = 'IN')),
+(gen_random_uuid(), 'Bengaluru', (select id from public.countries where code = 'IN')),
+(gen_random_uuid(), 'Chennai', (select id from public.countries where code = 'IN')),
+(gen_random_uuid(), 'Jaipur', (select id from public.countries where code = 'IN'));
+
+insert into public.cities (id, name, country_id) values
+(gen_random_uuid(), 'New York', (select id from public.countries where code = 'US')),
+(gen_random_uuid(), 'Los Angeles', (select id from public.countries where code = 'US')),
+(gen_random_uuid(), 'San Francisco', (select id from public.countries where code = 'US')),
+(gen_random_uuid(), 'Chicago', (select id from public.countries where code = 'US')),
+(gen_random_uuid(), 'Boston', (select id from public.countries where code = 'US'));
+
+insert into public.cities (id, name, country_id) values
+(gen_random_uuid(), 'London', (select id from public.countries where code = 'GB')),
+(gen_random_uuid(), 'Manchester', (select id from public.countries where code = 'GB')),
+(gen_random_uuid(), 'Oxford', (select id from public.countries where code = 'GB')),
+(gen_random_uuid(), 'Cambridge', (select id from public.countries where code = 'GB')),
+(gen_random_uuid(), 'Edinburgh', (select id from public.countries where code = 'GB'));
+
+insert into public.cities (id, name, country_id) values
+(gen_random_uuid(), 'Paris', (select id from public.countries where code = 'FR')),
+(gen_random_uuid(), 'Nice', (select id from public.countries where code = 'FR')),
+(gen_random_uuid(), 'Lyon', (select id from public.countries where code = 'FR')),
+(gen_random_uuid(), 'Marseille', (select id from public.countries where code = 'FR')),
+(gen_random_uuid(), 'Bordeaux', (select id from public.countries where code = 'FR'));
+
+insert into public.cities (id, name, country_id) values
+(gen_random_uuid(), 'Tokyo', (select id from public.countries where code = 'JP')),
+(gen_random_uuid(), 'Kyoto', (select id from public.countries where code = 'JP')),
+(gen_random_uuid(), 'Osaka', (select id from public.countries where code = 'JP')),
+(gen_random_uuid(), 'Hiroshima', (select id from public.countries where code = 'JP')),
+(gen_random_uuid(), 'Nagoya', (select id from public.countries where code = 'JP'));
+
+insert into public.institutions (id, name, type, city) values
+(gen_random_uuid(), 'Delhi Public School', 'school', 'Delhi'),
+(gen_random_uuid(), 'St. Xavier’s College', 'college', 'Mumbai'),
+(gen_random_uuid(), 'Indian Institute of Technology Bombay', 'college', 'Mumbai'),
+(gen_random_uuid(), 'The Doon School', 'school', 'Dehradun'),
+(gen_random_uuid(), 'Christ University', 'college', 'Bengaluru');
