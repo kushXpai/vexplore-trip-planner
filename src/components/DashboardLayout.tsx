@@ -36,6 +36,7 @@ const navItems: NavItem[] = [
   { label: 'Create Trip', href: '/trips/create', icon: <Plane className="w-5 h-5" /> },
   { label: 'Masters', href: '/masters', icon: <FileText className="w-5 h-5" /> },
   { label: 'Reports', href: '/reports', icon: <BarChart3 className="w-5 h-5" />, adminOnly: true },
+  { label: 'User Management', href: '/users', icon: <Users className="w-5 h-5" />, adminOnly: true },
   { label: 'Settings', href: '/settings', icon: <Settings className="w-5 h-5" /> },
 ];
 

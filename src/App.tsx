@@ -15,21 +15,22 @@ import Masters from "@/pages/Masters";
 import Reports from "@/pages/Reports";
 import Settings from "@/pages/Settings";
 import NotFound from "@/pages/NotFound";
+import UserManagement from "./pages/UserManagement";
 
 const queryClient = new QueryClient();
 
 // Router configuration - ONLY uses DashboardLayout
 const router = createBrowserRouter([
   // Public routes
-  { 
-    path: "/login", 
-    element: <Login /> 
+  {
+    path: "/login",
+    element: <Login />
   },
-  
+
   // Redirect root to dashboard
-  { 
-    path: "/", 
-    element: <Navigate to="/dashboard" replace /> 
+  {
+    path: "/",
+    element: <Navigate to="/dashboard" replace />
   },
 
   // Protected routes - All use DashboardLayout
@@ -40,41 +41,49 @@ const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { 
-        path: "/dashboard", 
-        element: <Dashboard /> 
+      {
+        path: "/dashboard",
+        element: <Dashboard />
       },
-      { 
-        path: "/trips/create", 
-        element: <CreateTrip /> 
+      {
+        path: "/trips/create",
+        element: <CreateTrip />
       },
-      { 
-        path: "/trips/:id", 
-        element: <TripDetail /> 
+      {
+        path: "/trips/:id",
+        element: <TripDetail />
       },
-      { 
-        path: "/masters", 
-        element: <Masters /> 
+      {
+        path: "/masters",
+        element: <Masters />
       },
-      { 
-        path: "/reports", 
+      {
+        path: "/users",
+        element: (
+          <ProtectedRoute requireAdmin>
+            <UserManagement />
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: "/reports",
         element: (
           <ProtectedRoute requireAdmin>
             <Reports />
           </ProtectedRoute>
-        ) 
+        )
       },
-      { 
-        path: "/settings", 
-        element: <Settings /> 
+      {
+        path: "/settings",
+        element: <Settings />
       },
     ],
   },
 
   // 404
-  { 
-    path: "*", 
-    element: <NotFound /> 
+  {
+    path: "*",
+    element: <NotFound />
   },
 ]);
 

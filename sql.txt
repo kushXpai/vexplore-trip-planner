@@ -28,7 +28,7 @@ DROP TYPE IF EXISTS user_role CASCADE;
 -- ENUMS
 -- ============================================
 
-CREATE TYPE user_role AS ENUM ('admin', 'staff');
+CREATE TYPE user_role AS ENUM ('admin', 'manager');
 
 CREATE TYPE trip_status AS ENUM (
   'draft',

@@ -39,7 +39,7 @@ export function AppHeader({
   const { user, logout, isAdmin } = useAuth();
 
   const userName = user?.name || 'User';
-  const userRole = isAdmin ? 'Admin' : 'Staff';
+  const userRole = isAdmin ? 'Admin' : 'manager';
 
   const initials =
     userName

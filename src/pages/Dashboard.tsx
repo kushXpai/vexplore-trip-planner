@@ -110,8 +110,8 @@ export default function Dashboard() {
         `);
 
       // Apply role-based filtering
-      if (user.role === 'staff') {
-        // Staff can only see trips they created
+      if (user.role === 'manager') {
+        // manager can only see trips they created
         query = query.eq('created_by', user.id);
       }
       // Admin sees all trips (no additional filter needed)
@@ -168,7 +168,7 @@ export default function Dashboard() {
       {user && (
         <div className="text-sm text-muted-foreground">
           Hi <span className="font-medium text-foreground">{user.name}</span> ({user.role})
-          {user.role === 'staff' && (
+          {user.role === 'manager' && (
             <span className="ml-2 text-xs">(Viewing your trips only)</span>
           )}
           {user.role === 'admin' && (
@@ -210,7 +210,7 @@ export default function Dashboard() {
         <CardHeader className="pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <CardTitle className="text-xl font-semibold">
             Trip Cost Sheets
-            {user?.role === 'staff' && (
+            {user?.role === 'manager' && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
                 (Your Trips)
               </span>

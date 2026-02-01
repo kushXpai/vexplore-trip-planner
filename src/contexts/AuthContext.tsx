@@ -44,7 +44,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             id: data.session.user.id,
             email: data.session.user.email || '',
             name: data.session.user.email?.split('@')[0] || 'User',
-            role: 'staff', // default role
+            role: 'manager', // default role
           };
 
           setUser(currentUser);
@@ -74,7 +74,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               id: session.user.id,
               email: session.user.email || '',
               name: session.user.email?.split('@')[0] || 'User',
-              role: 'staff', // default role
+              role: 'manager', // default role
             };
 
             setUser(currentUser);
