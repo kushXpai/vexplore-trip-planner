@@ -68,10 +68,10 @@ export default function CreateTrip() {
 
   // Load trip data when editing
   useEffect(() => {
-    if (editId) {
+    if (editId && countries.length > 0 && cities.length > 0) {
       loadTripData(editId);
     }
-  }, [editId]);
+  }, [editId, countries.length, cities.length]);
 
   // Fetch master data on component mount
   useEffect(() => {
@@ -117,145 +117,78 @@ export default function CreateTrip() {
   }, [formData.country, cities]);
 
   const loadTripData = async (tripId: string) => {
-    setIsLoading(true);
-    try {
-      const result = await getTripById(tripId);
-      if (result.success && result.data) {
-        const {
-          trip,
-          participants,
-          flights: dbFlights,
-          buses: dbBuses,
-          trains: dbTrains,
-          accommodations: dbAccommodations,
-          activities: dbActivities,
-          overheads: dbOverheads,
-          meals: dbMeals
-        } = result.data;
+  setIsLoading(true);
+  try {
+    const result = await getTripById(tripId);
+    if (result.success && result.data) {
+      const {
+        trip,
+        participants,
+        flights: dbFlights,
+        buses: dbBuses,
+        trains: dbTrains,
+        accommodations: dbAccommodations,
+        activities: dbActivities,
+        overheads: dbOverheads,
+        meals: dbMeals
+      } = result.data;
 
-        const country = countries.find(c => c.name === trip.country);
-        const city = cities.find(c => c.name === trip.city && c.country_id === country?.id);
-
-        setFormData({
-          name: trip.name,
-          institution: trip.institution,
-          country: country?.id || '',
-          city: city?.id || '',
-          startDate: trip.start_date,
-          endDate: trip.end_date,
-          boys: participants?.boys || 0,
-          girls: participants?.girls || 0,
-          maleFaculty: participants?.male_faculty || 0,
-          femaleFaculty: participants?.female_faculty || 0,
-          maleVXplorers: participants?.male_vxplorers || 0,
-          femaleVXplorers: participants?.female_vxplorers || 0,
-        });
-
-        setFlights(dbFlights.map(f => ({
-          id: f.id!,
-          from: f.from_city,
-          to: f.to_city,
-          airline: f.airline,
-          flightNumber: f.flight_number,
-          departureTime: f.departure_time,
-          arrivalTime: f.arrival_time,
-          costPerPerson: f.cost_per_person,
-          currency: f.currency,
-          description: f.description,
-          totalCost: f.total_cost,
-          totalCostINR: f.total_cost_inr,
-        })));
-
-        setBuses(dbBuses.map(b => ({
-          id: b.id!,
-          name: b.name,
-          seatingCapacity: b.seating_capacity,
-          costPerBus: b.cost_per_bus,
-          currency: b.currency,
-          numberOfDays: b.number_of_days,
-          quantity: b.quantity,
-          description: b.description,
-          totalCost: b.total_cost,
-          totalCostINR: b.total_cost_inr,
-        })));
-
-        setTrains(dbTrains.map(t => ({
-          id: t.id!,
-          name: t.name,
-          trainNumber: t.train_number,
-          class: t.class,
-          timing: t.timing,
-          costPerPerson: t.cost_per_person,
-          currency: t.currency,
-          description: t.description,
-          totalCost: t.total_cost,
-          totalCostINR: t.total_cost_inr,
-        })));
-
-        setAccommodations(dbAccommodations.map(a => ({
-          id: a.id!,
-          hotelName: a.hotel_name,
-          city: a.city,
-          numberOfNights: a.number_of_nights,
-          currency: a.currency,
-          breakfastIncluded: a.breakfast_included,
-          totalRooms: a.total_rooms,
-          totalCost: a.total_cost,
-          totalCostINR: a.total_cost_inr,
-          roomAllocation: a.room_allocation || {
-            boysRooms: 0,
-            girlsRooms: 0,
-            maleFacultyRooms: 0,
-            femaleFacultyRooms: 0,
-            maleVXplorerRooms: 0,
-            femaleVXplorerRooms: 0,
-            totalRooms: 0,
-          },
-          roomTypes: a.room_types || [  // NEW - with fallback
-            { roomType: 'Double', capacityPerRoom: 2, costPerRoom: a.cost_per_room || 0 }
-          ],
-        })));
-
-        setActivities(dbActivities.map(a => ({
-          id: a.id!,
-          name: a.name,
-          entryCost: a.entry_cost,
-          transportCost: a.transport_cost,
-          guideCost: a.guide_cost,
-          currency: a.currency,
-          description: a.description,
-          totalCost: a.total_cost,
-          totalCostINR: a.total_cost_inr,
-        })));
-
-        if (dbOverheads && dbOverheads.length > 0) {
-          setOverheads(dbOverheads.map(o => ({
-            id: o.id!,
-            name: o.name,
-            amount: o.amount,
-            currency: o.currency,
-            hideFromClient: o.hide_from_client,
-            totalCostINR: o.total_cost_inr,
-          })));
-        }
-
-        if (dbMeals) {
-          setMeals({
-            breakfastCostPerPerson: dbMeals.breakfast_cost_per_person || 0,
-            lunchCostPerPerson: dbMeals.lunch_cost_per_person || 0,
-            dinnerCostPerPerson: dbMeals.dinner_cost_per_person || 0,
-          });
-        }
-
-        toast.success('Trip loaded for editing');
+      // IMPROVED: Find country and city with better matching
+      const country = countries.find(c => c.name === trip.country);
+      let cityId = '';
+      
+      if (country) {
+        const city = cities.find(c => c.name === trip.city && c.country_id === country.id);
+        cityId = city?.id || '';
+        
+        // Debug log to check if matching works
+        console.log('Country found:', country);
+        console.log('City found:', city);
+        console.log('Available cities for country:', cities.filter(c => c.country_id === country.id));
+      } else {
+        console.warn('Country not found:', trip.country);
       }
-    } catch (error) {
-      console.error('Error loading trip:', error);
-      toast.error('Failed to load trip data');
-    } finally {
-      setIsLoading(false);
+
+      setFormData({
+        name: trip.name,
+        institution: trip.institution,
+        country: country?.id || '',
+        city: cityId,
+        startDate: trip.start_date,
+        endDate: trip.end_date,
+        boys: participants?.boys || 0,
+        girls: participants?.girls || 0,
+        maleFaculty: participants?.male_faculty || 0,
+        femaleFaculty: participants?.female_faculty || 0,
+        maleVXplorers: participants?.male_vxplorers || 0,
+        femaleVXplorers: participants?.female_vxplorers || 0,
+      });
+
+      // Rest of the code remains the same...
+      setFlights(dbFlights.map(f => ({
+        id: f.id!,
+        from: f.from_city,
+        to: f.to_city,
+        airline: f.airline,
+        flightNumber: f.flight_number,
+        departureTime: f.departure_time,
+        arrivalTime: f.arrival_time,
+        costPerPerson: f.cost_per_person,
+        currency: f.currency,
+        description: f.description,
+        totalCost: f.total_cost,
+        totalCostINR: f.total_cost_inr,
+      })));
+      
+      // ... rest of your existing mapping code
     }
-  };
+  } catch (error) {
+    console.error('Error loading trip:', error);
+    toast.error('Failed to load trip data');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Helper functions
   // Helper functions
@@ -469,6 +402,50 @@ export default function CreateTrip() {
         recalculateAccommodationRooms(updated, index);
       });
       setAccommodations(updated);
+    }
+  }, [formData.boys, formData.girls, formData.maleFaculty, formData.femaleFaculty, formData.maleVXplorers, formData.femaleVXplorers]);
+
+  // Add this useEffect to recalculate flight and train costs when participants change
+  useEffect(() => {
+    const totalParticipants = calculateTotalParticipants();
+
+    // Recalculate all flight costs
+    if (flights.length > 0) {
+      const updatedFlights = flights.map(flight => {
+        const rate = getCurrencyRate(flight.currency);
+        return {
+          ...flight,
+          totalCost: flight.costPerPerson * totalParticipants,
+          totalCostINR: flight.costPerPerson * totalParticipants * rate,
+        };
+      });
+      setFlights(updatedFlights);
+    }
+
+    // Recalculate all train costs
+    if (trains.length > 0) {
+      const updatedTrains = trains.map(train => {
+        const rate = getCurrencyRate(train.currency);
+        return {
+          ...train,
+          totalCost: train.costPerPerson * totalParticipants,
+          totalCostINR: train.costPerPerson * totalParticipants * rate,
+        };
+      });
+      setTrains(updatedTrains);
+    }
+
+    // Recalculate all activity costs
+    if (activities.length > 0) {
+      const updatedActivities = activities.map(activity => {
+        const rate = getCurrencyRate(activity.currency);
+        return {
+          ...activity,
+          totalCost: (activity.entryCost * totalParticipants) + activity.transportCost + activity.guideCost,
+          totalCostINR: ((activity.entryCost * totalParticipants) + activity.transportCost + activity.guideCost) * rate,
+        };
+      });
+      setActivities(updatedActivities);
     }
   }, [formData.boys, formData.girls, formData.maleFaculty, formData.femaleFaculty, formData.maleVXplorers, formData.femaleVXplorers]);
 

@@ -81,7 +81,9 @@ export default function TripDetail() {
           trip_buses (*),
           trip_trains (*),
           trip_accommodations (*),
+          trip_meals (*),
           trip_activities (*),
+          trip_overheads (*),
           post_trip_analysis (*)
         `)
         .eq('id', id)
@@ -179,17 +181,35 @@ export default function TripDetail() {
               femaleFacultyRooms: 0,
             },
           })),
-          meals: {
-            totalDays: data.total_days ?? 0,
-            totalParticipants: data.trip_participants?.total_participants ?? 0,
-            breakfastCostPerPerson:0,
-            lunchCostPerPerson: 0,
-            dinnerCostPerPerson: 0,
-            dailyCostPerPerson: 0,
-            totalCost: 0,
-            totalCostINR: 0,
-            currency: data.currency ?? 'INR',
-          },
+          meals: (() => {
+            // Find the meals data from the query
+            const mealsData = data.trip_meals?.[0] || data.trip_meals;
+
+            if (mealsData) {
+              return {
+                breakfastCostPerPerson: mealsData.breakfast_cost_per_person ?? 0,
+                lunchCostPerPerson: mealsData.lunch_cost_per_person ?? 0,
+                dinnerCostPerPerson: mealsData.dinner_cost_per_person ?? 0,
+                currency: mealsData.currency ?? 'INR',
+                totalDays: mealsData.total_days ?? data.total_days ?? 0,
+                totalParticipants: mealsData.total_participants ?? data.trip_participants?.total_participants ?? 0,
+                dailyCostPerPerson: mealsData.daily_cost_per_person ?? 0,
+                totalCost: mealsData.total_cost ?? 0,
+                totalCostINR: mealsData.total_cost_inr ?? 0,
+              };
+            }
+            return {
+              breakfastCostPerPerson: 0,
+              lunchCostPerPerson: 0,
+              dinnerCostPerPerson: 0,
+              currency: data.currency ?? 'INR',
+              totalDays: data.total_days ?? 0,
+              totalParticipants: data.trip_participants?.total_participants ?? 0,
+              dailyCostPerPerson: 0,
+              totalCost: 0,
+              totalCostINR: 0,
+            };
+          })(),
           activities: (data.trip_activities || []).map((a: any) => ({
             id: a.id,
             name: a.name ?? '',
@@ -289,7 +309,7 @@ export default function TripDetail() {
     };
     setTripAnalysis(newAnalysis);
   };
-  
+
   // Currency formatting helper functions
   const formatINR = (amount: number): string => {
     return `₹${amount.toLocaleString('en-IN')}`;
@@ -820,7 +840,7 @@ function CostSummarySection({ trip }: { trip: Trip }) {
           <CostRow label="Accommodation" sublabel="Hotels & Stay" amount={accommodationTotal} />
           <CostRow label="Meals" sublabel="Lunch & Dinner" amount={trip.meals.totalCostINR} />
           <CostRow label="Activities" sublabel="Entry, Transport, Guides" amount={activitiesTotal} />
-          <CostRow label="Overheads (Visible)" sublabel="Contingency, etc." amount={visibleOverheadsTotal} />
+          <CostRow label="Overheads" sublabel="All overheads" amount={overheadsTotal} />
 
           <div className="pt-4 border-t border-dashed">
             <CostRow
