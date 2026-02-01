@@ -1,7 +1,6 @@
 // src/pages/TripDetail.tsx
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -245,22 +244,18 @@ export default function TripDetail() {
 
   if (loading) {
     return (
-      <AppLayout title="Loading Trip...">
-        <div className="flex items-center justify-center h-96 text-muted-foreground">
-          Loading...
-        </div>
-      </AppLayout>
+      <div className="flex items-center justify-center h-96 text-muted-foreground">
+        Loading...
+      </div>
     );
   }
 
   if (!trip) {
     return (
-      <AppLayout title="Trip Not Found">
-        <div className="flex flex-col items-center justify-center h-96">
-          <p className="text-muted-foreground mb-4">Trip not found</p>
-          <Button onClick={() => navigate('/')}>Back to Dashboard</Button>
-        </div>
-      </AppLayout>
+      <div className="flex flex-col items-center justify-center h-96">
+        <p className="text-muted-foreground mb-4">Trip not found</p>
+        <Button onClick={() => navigate('/')}>Back to Dashboard</Button>
+      </div>
     );
   }
 
@@ -322,206 +317,198 @@ export default function TripDetail() {
   };
 
   return (
-    <AppLayout
-      title={trip.name}
-      tripStatus={trip.status}
-      lastSaved="2 minutes ago"
-      showAutosave
-    >
-      <div className="p-6 space-y-6 animate-fade-in">
-        {/* Header Actions */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <Button variant="ghost" onClick={() => navigate('/')} className="gap-2">
-            <ArrowLeft className="w-4 h-4" />
-            Back to Dashboard
+
+    <div className="p-6 space-y-6 animate-fade-in">
+      {/* Header Actions */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <Button variant="ghost" onClick={() => navigate('/')} className="gap-2">
+          <ArrowLeft className="w-4 h-4" />
+          Back to Dashboard
+        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => setShowPDFPreview(true)}>
+            <FileDown className="w-4 h-4" />
+            Export PDF
           </Button>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="gap-2" onClick={() => setShowPDFPreview(true)}>
-              <FileDown className="w-4 h-4" />
-              Export PDF
+          {!isLocked && (
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => navigate(`/trips/create?edit=${trip.id}`)}
+            >
+              <Pencil className="w-4 h-4" />
+              Edit
             </Button>
-            {!isLocked && (
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={() => navigate(`/trips/create?edit=${trip.id}`)}
-              >
-                <Pencil className="w-4 h-4" />
-                Edit
-              </Button>
-            )}
-            {trip.status === 'draft' && (
-              <Button className="gradient-primary text-primary-foreground gap-2" onClick={handleSendForApproval}>
-                <Send className="w-4 h-4" />
-                Send for Approval
-              </Button>
-            )}
-            {trip.status === 'approved' && (
-              <Button variant="secondary" className="gap-2" onClick={handleLockExchangeRate}>
-                <Lock className="w-4 h-4" />
-                Lock Exchange Rate
-              </Button>
-            )}
-            {(trip.status === 'completed' || tripAnalysis) && !isLocked && (
-              <Button variant="destructive" className="gap-2" onClick={handleLockTrip}>
-                <Lock className="w-4 h-4" />
-                Lock Trip
-              </Button>
-            )}
-            {isLocked && (
-              <span className="inline-flex items-center gap-2 px-3 py-2 bg-destructive/10 text-destructive rounded-md text-sm font-medium">
-                <Lock className="w-4 h-4" />
-                Trip Locked
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Trip Overview */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="shadow-card lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-primary" />
-                Trip Overview
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <InfoItem label="Institution" value={trip.institution} />
-                <InfoItem
-                  label="Destination"
-                  value={`${trip.city}, ${trip.country}`}
-                  icon={<MapPin className="w-4 h-4" />}
-                />
-                <InfoItem
-                  label="Duration"
-                  value={`${trip.totalDays} Days / ${trip.totalNights} Nights`}
-                />
-                <InfoItem label="Currency" value={trip.currency} />
-                <InfoItem
-                  label="Start Date"
-                  value={new Date(trip.startDate).toLocaleDateString('en-IN', {
-                    day: 'numeric', month: 'long', year: 'numeric'
-                  })}
-                />
-                <InfoItem
-                  label="End Date"
-                  value={new Date(trip.endDate).toLocaleDateString('en-IN', {
-                    day: 'numeric', month: 'long', year: 'numeric'
-                  })}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-primary" />
-                Participants
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Boys</span>
-                  <span className="font-medium">{trip.participants.boys}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Girls</span>
-                  <span className="font-medium">{trip.participants.girls}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Male Faculty</span>
-                  <span className="font-medium">{trip.participants.maleFaculty}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Female Faculty</span>
-                  <span className="font-medium">{trip.participants.femaleFaculty}</span>
-                </div>
-                <div className="border-t pt-3 mt-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Total Students</span>
-                    <span className="font-semibold">{trip.participants.totalStudents}</span>
-                  </div>
-                  <div className="flex justify-between text-sm mt-1">
-                    <span className="text-muted-foreground">Total Faculty</span>
-                    <span className="font-semibold">{trip.participants.totalFaculty}</span>
-                  </div>
-                  <div className="flex justify-between mt-2 pt-2 border-t">
-                    <span className="font-medium">Total Participants</span>
-                    <span className="font-bold text-primary">{trip.participants.totalParticipants}</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Detailed Sections */}
-        <Tabs defaultValue="transport" className="space-y-4">
-          <TabsList className="bg-muted/50 flex-wrap h-auto gap-1 p-1">
-            <TabsTrigger value="transport" className="gap-2">
-              <Plane className="w-4 h-4" />
-              Transport
-            </TabsTrigger>
-            <TabsTrigger value="accommodation" className="gap-2">
-              <Hotel className="w-4 h-4" />
-              Accommodation
-            </TabsTrigger>
-            <TabsTrigger value="meals" className="gap-2">
-              <Utensils className="w-4 h-4" />
-              Meals
-            </TabsTrigger>
-            <TabsTrigger value="activities" className="gap-2">
-              <Ticket className="w-4 h-4" />
-              Activities
-            </TabsTrigger>
-            <TabsTrigger value="summary" className="gap-2">
-              <Calculator className="w-4 h-4" />
-              Cost Summary
-            </TabsTrigger>
-            <TabsTrigger value="actuals" className="gap-2">
-              <ClipboardEdit className="w-4 h-4" />
-              Enter Actuals
-            </TabsTrigger>
-            {trip.analysis && (
-              <TabsTrigger value="analysis" className="gap-2">
-                <BarChart3 className="w-4 h-4" />
-                Analysis
-              </TabsTrigger>
-            )}
-          </TabsList>
-
-          <TabsContent value="transport">
-            <TransportSection trip={trip} currencies={currencies} />
-          </TabsContent>
-          <TabsContent value="accommodation">
-            <AccommodationSection trip={trip} currencies={currencies} />
-          </TabsContent>
-          <TabsContent value="meals">
-            <MealsSection trip={trip} currencies={currencies} />
-          </TabsContent>
-          <TabsContent value="activities">
-            <ActivitiesSection trip={trip} currencies={currencies} />
-          </TabsContent>
-          <TabsContent value="summary">
-            <CostSummarySection trip={trip} />
-          </TabsContent>
-          <TabsContent value="actuals">
-            <ActualExpensesEntry trip={trip} onSubmit={handleActualExpensesSubmit} />
-          </TabsContent>
-          {trip.analysis && (
-            <TabsContent value="analysis">
-              <AnalysisSection trip={trip} />
-            </TabsContent>
           )}
-        </Tabs>
+          {trip.status === 'draft' && (
+            <Button className="gradient-primary text-primary-foreground gap-2" onClick={handleSendForApproval}>
+              <Send className="w-4 h-4" />
+              Send for Approval
+            </Button>
+          )}
+          {trip.status === 'approved' && (
+            <Button variant="secondary" className="gap-2" onClick={handleLockExchangeRate}>
+              <Lock className="w-4 h-4" />
+              Lock Exchange Rate
+            </Button>
+          )}
+          {(trip.status === 'completed' || tripAnalysis) && !isLocked && (
+            <Button variant="destructive" className="gap-2" onClick={handleLockTrip}>
+              <Lock className="w-4 h-4" />
+              Lock Trip
+            </Button>
+          )}
+          {isLocked && (
+            <span className="inline-flex items-center gap-2 px-3 py-2 bg-destructive/10 text-destructive rounded-md text-sm font-medium">
+              <Lock className="w-4 h-4" />
+              Trip Locked
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* <PDFPreview trip={trip} open={showPDFPreview} onClose={() => setShowPDFPreview(false)} /> */}
-    </AppLayout>
+      {/* Trip Overview */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="shadow-card lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-primary" />
+              Trip Overview
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <InfoItem label="Institution" value={trip.institution} />
+              <InfoItem
+                label="Destination"
+                value={`${trip.city}, ${trip.country}`}
+                icon={<MapPin className="w-4 h-4" />}
+              />
+              <InfoItem
+                label="Duration"
+                value={`${trip.totalDays} Days / ${trip.totalNights} Nights`}
+              />
+              <InfoItem label="Currency" value={trip.currency} />
+              <InfoItem
+                label="Start Date"
+                value={new Date(trip.startDate).toLocaleDateString('en-IN', {
+                  day: 'numeric', month: 'long', year: 'numeric'
+                })}
+              />
+              <InfoItem
+                label="End Date"
+                value={new Date(trip.endDate).toLocaleDateString('en-IN', {
+                  day: 'numeric', month: 'long', year: 'numeric'
+                })}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-primary" />
+              Participants
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Boys</span>
+                <span className="font-medium">{trip.participants.boys}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Girls</span>
+                <span className="font-medium">{trip.participants.girls}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Male Faculty</span>
+                <span className="font-medium">{trip.participants.maleFaculty}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Female Faculty</span>
+                <span className="font-medium">{trip.participants.femaleFaculty}</span>
+              </div>
+              <div className="border-t pt-3 mt-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total Students</span>
+                  <span className="font-semibold">{trip.participants.totalStudents}</span>
+                </div>
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="text-muted-foreground">Total Faculty</span>
+                  <span className="font-semibold">{trip.participants.totalFaculty}</span>
+                </div>
+                <div className="flex justify-between mt-2 pt-2 border-t">
+                  <span className="font-medium">Total Participants</span>
+                  <span className="font-bold text-primary">{trip.participants.totalParticipants}</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Detailed Sections */}
+      <Tabs defaultValue="transport" className="space-y-4">
+        <TabsList className="bg-muted/50 flex-wrap h-auto gap-1 p-1">
+          <TabsTrigger value="transport" className="gap-2">
+            <Plane className="w-4 h-4" />
+            Transport
+          </TabsTrigger>
+          <TabsTrigger value="accommodation" className="gap-2">
+            <Hotel className="w-4 h-4" />
+            Accommodation
+          </TabsTrigger>
+          <TabsTrigger value="meals" className="gap-2">
+            <Utensils className="w-4 h-4" />
+            Meals
+          </TabsTrigger>
+          <TabsTrigger value="activities" className="gap-2">
+            <Ticket className="w-4 h-4" />
+            Activities
+          </TabsTrigger>
+          <TabsTrigger value="summary" className="gap-2">
+            <Calculator className="w-4 h-4" />
+            Cost Summary
+          </TabsTrigger>
+          <TabsTrigger value="actuals" className="gap-2">
+            <ClipboardEdit className="w-4 h-4" />
+            Enter Actuals
+          </TabsTrigger>
+          {trip.analysis && (
+            <TabsTrigger value="analysis" className="gap-2">
+              <BarChart3 className="w-4 h-4" />
+              Analysis
+            </TabsTrigger>
+          )}
+        </TabsList>
+
+        <TabsContent value="transport">
+          <TransportSection trip={trip} currencies={currencies} />
+        </TabsContent>
+        <TabsContent value="accommodation">
+          <AccommodationSection trip={trip} currencies={currencies} />
+        </TabsContent>
+        <TabsContent value="meals">
+          <MealsSection trip={trip} currencies={currencies} />
+        </TabsContent>
+        <TabsContent value="activities">
+          <ActivitiesSection trip={trip} currencies={currencies} />
+        </TabsContent>
+        <TabsContent value="summary">
+          <CostSummarySection trip={trip} />
+        </TabsContent>
+        <TabsContent value="actuals">
+          <ActualExpensesEntry trip={trip} onSubmit={handleActualExpensesSubmit} />
+        </TabsContent>
+        {trip.analysis && (
+          <TabsContent value="analysis">
+            <AnalysisSection trip={trip} />
+          </TabsContent>
+        )}
+      </Tabs>
+    </div>
   );
 }
 

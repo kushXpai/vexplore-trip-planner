@@ -1,7 +1,6 @@
 // src/pages/Reports.tsx
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,11 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 // import { demoTrips, formatINR, currencies, countries, institutions } from '@/data/demoData';
-import { 
-  FileDown, 
-  Filter, 
-  TrendingUp, 
-  TrendingDown, 
+import {
+  FileDown,
+  Filter,
+  TrendingUp,
+  TrendingDown,
   Eye,
   Calendar,
   MapPin,
@@ -55,7 +54,7 @@ export default function Reports() {
 
   // // Chart data
   // const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--success))', 'hsl(var(--warning))', 'hsl(var(--destructive))'];
-  
+
   // // Revenue by Institution (College/School)
   // const revenueByInstitutionData = uniqueInstitutions.map(institution => ({
   //   name: institution.length > 25 ? institution.substring(0, 25) + '...' : institution,
@@ -83,10 +82,10 @@ export default function Reports() {
   // const handlePrintReport = () => {
   //   const printContent = reportRef.current;
   //   if (!printContent) return;
-    
+
   //   const printWindow = window.open('', '_blank');
   //   if (!printWindow) return;
-    
+
   //   printWindow.document.write(`
   //     <html>
   //       <head>
@@ -115,7 +114,6 @@ export default function Reports() {
   // };
 
   return (
-    // <AppLayout title="Reports & Analytics">
     //   <div className="p-6 space-y-6 animate-fade-in">
     //     {/* Filters */}
     //     <Card className="shadow-card">
@@ -437,7 +435,7 @@ export default function Reports() {
     //                     </Button>
     //                   </div>
     //                 </div>
-                    
+
     //                 {/* Cost Breakdown */}
     //                 <div className="mt-4 pt-4 border-t grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
     //                   <div>
@@ -683,7 +681,6 @@ export default function Reports() {
     //       </DialogContent>
     //     </Dialog>
     //   </div>
-    // </AppLayout>
     <div className="p-6">
       <h1 className="text-2xl font-bold">Reports & Analytics Page Under Construction</h1>
       <p className="mt-4 text-muted-foreground">We're working hard to bring you detailed reports and analytics soon. Stay tuned!</p>

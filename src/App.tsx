@@ -18,24 +18,64 @@ import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
 
-// Router configuration
+// Router configuration - ONLY uses DashboardLayout
 const router = createBrowserRouter([
-  { path: "/login", element: <Login /> },
-  { path: "/", element: <Navigate to="/dashboard" replace /> },
+  // Public routes
+  { 
+    path: "/login", 
+    element: <Login /> 
+  },
+  
+  // Redirect root to dashboard
+  { 
+    path: "/", 
+    element: <Navigate to="/dashboard" replace /> 
+  },
 
+  // Protected routes - All use DashboardLayout
   {
-    element: <ProtectedRoute><DashboardLayout /></ProtectedRoute>,
+    element: (
+      <ProtectedRoute>
+        <DashboardLayout />
+      </ProtectedRoute>
+    ),
     children: [
-      { path: "/dashboard", element: <Dashboard /> },
-      { path: "/trips/create", element: <CreateTrip /> },
-      { path: "/trips/:id", element: <TripDetail /> },
-      { path: "/masters", element: <Masters /> },
-      { path: "/reports", element: <ProtectedRoute requireAdmin><Reports /></ProtectedRoute> },
-      { path: "/settings", element: <Settings /> },
+      { 
+        path: "/dashboard", 
+        element: <Dashboard /> 
+      },
+      { 
+        path: "/trips/create", 
+        element: <CreateTrip /> 
+      },
+      { 
+        path: "/trips/:id", 
+        element: <TripDetail /> 
+      },
+      { 
+        path: "/masters", 
+        element: <Masters /> 
+      },
+      { 
+        path: "/reports", 
+        element: (
+          <ProtectedRoute requireAdmin>
+            <Reports />
+          </ProtectedRoute>
+        ) 
+      },
+      { 
+        path: "/settings", 
+        element: <Settings /> 
+      },
     ],
   },
 
-  { path: "*", element: <NotFound /> },
+  // 404
+  { 
+    path: "*", 
+    element: <NotFound /> 
+  },
 ]);
 
 const App = () => (

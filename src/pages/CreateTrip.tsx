@@ -1,7 +1,6 @@
 // src/pages/CreateTrip.tsx - INLINE EDITABLE VERSION
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -117,78 +116,78 @@ export default function CreateTrip() {
   }, [formData.country, cities]);
 
   const loadTripData = async (tripId: string) => {
-  setIsLoading(true);
-  try {
-    const result = await getTripById(tripId);
-    if (result.success && result.data) {
-      const {
-        trip,
-        participants,
-        flights: dbFlights,
-        buses: dbBuses,
-        trains: dbTrains,
-        accommodations: dbAccommodations,
-        activities: dbActivities,
-        overheads: dbOverheads,
-        meals: dbMeals
-      } = result.data;
+    setIsLoading(true);
+    try {
+      const result = await getTripById(tripId);
+      if (result.success && result.data) {
+        const {
+          trip,
+          participants,
+          flights: dbFlights,
+          buses: dbBuses,
+          trains: dbTrains,
+          accommodations: dbAccommodations,
+          activities: dbActivities,
+          overheads: dbOverheads,
+          meals: dbMeals
+        } = result.data;
 
-      // IMPROVED: Find country and city with better matching
-      const country = countries.find(c => c.name === trip.country);
-      let cityId = '';
-      
-      if (country) {
-        const city = cities.find(c => c.name === trip.city && c.country_id === country.id);
-        cityId = city?.id || '';
-        
-        // Debug log to check if matching works
-        console.log('Country found:', country);
-        console.log('City found:', city);
-        console.log('Available cities for country:', cities.filter(c => c.country_id === country.id));
-      } else {
-        console.warn('Country not found:', trip.country);
+        // IMPROVED: Find country and city with better matching
+        const country = countries.find(c => c.name === trip.country);
+        let cityId = '';
+
+        if (country) {
+          const city = cities.find(c => c.name === trip.city && c.country_id === country.id);
+          cityId = city?.id || '';
+
+          // Debug log to check if matching works
+          console.log('Country found:', country);
+          console.log('City found:', city);
+          console.log('Available cities for country:', cities.filter(c => c.country_id === country.id));
+        } else {
+          console.warn('Country not found:', trip.country);
+        }
+
+        setFormData({
+          name: trip.name,
+          institution: trip.institution,
+          country: country?.id || '',
+          city: cityId,
+          startDate: trip.start_date,
+          endDate: trip.end_date,
+          boys: participants?.boys || 0,
+          girls: participants?.girls || 0,
+          maleFaculty: participants?.male_faculty || 0,
+          femaleFaculty: participants?.female_faculty || 0,
+          maleVXplorers: participants?.male_vxplorers || 0,
+          femaleVXplorers: participants?.female_vxplorers || 0,
+        });
+
+        // Rest of the code remains the same...
+        setFlights(dbFlights.map(f => ({
+          id: f.id!,
+          from: f.from_city,
+          to: f.to_city,
+          airline: f.airline,
+          flightNumber: f.flight_number,
+          departureTime: f.departure_time,
+          arrivalTime: f.arrival_time,
+          costPerPerson: f.cost_per_person,
+          currency: f.currency,
+          description: f.description,
+          totalCost: f.total_cost,
+          totalCostINR: f.total_cost_inr,
+        })));
+
+        // ... rest of your existing mapping code
       }
-
-      setFormData({
-        name: trip.name,
-        institution: trip.institution,
-        country: country?.id || '',
-        city: cityId,
-        startDate: trip.start_date,
-        endDate: trip.end_date,
-        boys: participants?.boys || 0,
-        girls: participants?.girls || 0,
-        maleFaculty: participants?.male_faculty || 0,
-        femaleFaculty: participants?.female_faculty || 0,
-        maleVXplorers: participants?.male_vxplorers || 0,
-        femaleVXplorers: participants?.female_vxplorers || 0,
-      });
-
-      // Rest of the code remains the same...
-      setFlights(dbFlights.map(f => ({
-        id: f.id!,
-        from: f.from_city,
-        to: f.to_city,
-        airline: f.airline,
-        flightNumber: f.flight_number,
-        departureTime: f.departure_time,
-        arrivalTime: f.arrival_time,
-        costPerPerson: f.cost_per_person,
-        currency: f.currency,
-        description: f.description,
-        totalCost: f.total_cost,
-        totalCostINR: f.total_cost_inr,
-      })));
-      
-      // ... rest of your existing mapping code
+    } catch (error) {
+      console.error('Error loading trip:', error);
+      toast.error('Failed to load trip data');
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    console.error('Error loading trip:', error);
-    toast.error('Failed to load trip data');
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   // Helper functions
   // Helper functions
@@ -707,1082 +706,1078 @@ export default function CreateTrip() {
 
   if (isLoading) {
     return (
-      <AppLayout title={isEditing ? 'Edit Trip' : 'Create New Trip'}>
-        <div className="flex items-center justify-center h-96">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
-      </AppLayout>
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
     );
   }
 
   if (isLoadingMasterData || isLoading) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center">
-            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-muted-foreground">
-              {isLoadingMasterData ? 'Loading countries and currencies...' : 'Loading trip data...'}
-            </p>
-          </div>
+
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+          <p className="text-muted-foreground">
+            {isLoadingMasterData ? 'Loading countries and currencies...' : 'Loading trip data...'}
+          </p>
         </div>
-      </AppLayout>
+      </div>
+
     );
   }
 
   return (
-    <AppLayout title={isEditing ? 'Edit Trip' : 'Create New Trip'}>
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
-
-        {/* Basic Information */}
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Info className="w-5 h-5 text-primary" />
-              Basic Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Trip Name *</Label>
-                <Input
-                  placeholder="Singapore Education Tour 2024"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Institution *</Label>
-                <Input
-                  placeholder="ABC School"
-                  value={formData.institution}
-                  onChange={(e) => setFormData({ ...formData, institution: e.target.value })}
-                />
-              </div>
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* Basic Information */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Info className="w-5 h-5 text-primary" />
+            Basic Information
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Trip Name *</Label>
+              <Input
+                placeholder="Singapore Education Tour 2024"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Country *</Label>
-                <Select
-                  value={formData.country}
-                  onValueChange={(v) => {
-                    setFormData({ ...formData, country: v, city: '' });
-                  }}
-                  disabled={isLoadingMasterData}
-                >
-                  <SelectTrigger className="bg-background">
-                    <SelectValue placeholder={isLoadingMasterData ? "Loading countries..." : "Select country"} />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {countries.map((country) => (
-                      <SelectItem key={country.id} value={country.id}>
-                        {country.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>City *</Label>
-                <Select
-                  value={formData.city}
-                  onValueChange={(v) => setFormData({ ...formData, city: v })}
-                  disabled={!formData.country || isLoadingMasterData}
-                >
-                  <SelectTrigger className="bg-background">
-                    <SelectValue placeholder={
-                      !formData.country
-                        ? "Select country first"
-                        : isLoadingMasterData
-                          ? "Loading cities..."
-                          : "Select city"
-                    } />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {filteredCities.map((city) => (
-                      <SelectItem key={city.id} value={city.id}>
-                        {city.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-2">
+              <Label>Institution *</Label>
+              <Input
+                placeholder="ABC School"
+                value={formData.institution}
+                onChange={(e) => setFormData({ ...formData, institution: e.target.value })}
+              />
             </div>
+          </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Start Date *</Label>
-                <Input
-                  type="date"
-                  value={formData.startDate}
-                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>End Date *</Label>
-                <Input
-                  type="date"
-                  value={formData.endDate}
-                  onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                />
-              </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Country *</Label>
+              <Select
+                value={formData.country}
+                onValueChange={(v) => {
+                  setFormData({ ...formData, country: v, city: '' });
+                }}
+                disabled={isLoadingMasterData}
+              >
+                <SelectTrigger className="bg-background">
+                  <SelectValue placeholder={isLoadingMasterData ? "Loading countries..." : "Select country"} />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {countries.map((country) => (
+                    <SelectItem key={country.id} value={country.id}>
+                      {country.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-
-            {formData.startDate && formData.endDate && (
-              <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
-                <p className="text-sm font-semibold">
-                  <Calendar className="w-4 h-4 inline mr-2" />
-                  Duration: {getTripDays()} days / {getTripNights()} nights
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Participants */}
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-primary" />
-              Participants
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Boys</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={formData.boys || ''}
-                  onChange={(e) => setFormData({ ...formData, boys: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Girls</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={formData.girls || ''}
-                  onChange={(e) => setFormData({ ...formData, girls: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Total Students</Label>
-                <Input value={calculateTotalStudents()} disabled className="bg-muted" />
-              </div>
+            <div className="space-y-2">
+              <Label>City *</Label>
+              <Select
+                value={formData.city}
+                onValueChange={(v) => setFormData({ ...formData, city: v })}
+                disabled={!formData.country || isLoadingMasterData}
+              >
+                <SelectTrigger className="bg-background">
+                  <SelectValue placeholder={
+                    !formData.country
+                      ? "Select country first"
+                      : isLoadingMasterData
+                        ? "Loading cities..."
+                        : "Select city"
+                  } />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {filteredCities.map((city) => (
+                    <SelectItem key={city.id} value={city.id}>
+                      {city.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+          </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Male Faculty</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={formData.maleFaculty || ''}
-                  onChange={(e) => setFormData({ ...formData, maleFaculty: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Female Faculty</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={formData.femaleFaculty || ''}
-                  onChange={(e) => setFormData({ ...formData, femaleFaculty: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Total Faculty</Label>
-                <Input value={calculateTotalFaculty()} disabled className="bg-muted" />
-              </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Start Date *</Label>
+              <Input
+                type="date"
+                value={formData.startDate}
+                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+              />
             </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Male VXplorers</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={formData.maleVXplorers || ''}
-                  onChange={(e) => setFormData({ ...formData, maleVXplorers: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Female VXplorers</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={formData.femaleVXplorers || ''}
-                  onChange={(e) => setFormData({ ...formData, femaleVXplorers: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Total VXplorers</Label>
-                <Input value={calculateTotalVXplorers()} disabled className="bg-muted" />
-              </div>
+            <div className="space-y-2">
+              <Label>End Date *</Label>
+              <Input
+                type="date"
+                value={formData.endDate}
+                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+              />
             </div>
+          </div>
 
-            <div className="pt-4 border-t">
-              <div className="p-4 bg-primary/10 rounded-lg">
-                <p className="text-lg font-bold text-primary">
-                  Total Participants: {calculateTotalParticipants()}
-                </p>
-              </div>
+          {formData.startDate && formData.endDate && (
+            <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
+              <p className="text-sm font-semibold">
+                <Calendar className="w-4 h-4 inline mr-2" />
+                Duration: {getTripDays()} days / {getTripNights()} nights
+              </p>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* Transport - Flights */}
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Plane className="w-5 h-5 text-primary" />
-                Flights
-              </div>
-              <Button onClick={addFlight} size="sm" className="gradient-primary text-primary-foreground">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Flight
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {flights.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No flights added yet. Click "Add Flight" to begin.</p>
-            ) : (
-              flights.map((flight, index) => (
-                <div key={flight.id} className="p-4 border rounded-lg space-y-4 relative bg-card">
-                  <div className="absolute top-2 right-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => deleteFlight(index)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
+      {/* Participants */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-primary" />
+            Participants
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Boys</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={formData.boys || ''}
+                onChange={(e) => setFormData({ ...formData, boys: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Girls</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={formData.girls || ''}
+                onChange={(e) => setFormData({ ...formData, girls: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Total Students</Label>
+              <Input value={calculateTotalStudents()} disabled className="bg-muted" />
+            </div>
+          </div>
 
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label>From</Label>
-                      <Input
-                        placeholder="Mumbai"
-                        value={flight.from}
-                        onChange={(e) => updateFlight(index, 'from', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>To</Label>
-                      <Input
-                        placeholder="Singapore"
-                        value={flight.to}
-                        onChange={(e) => updateFlight(index, 'to', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Airline</Label>
-                      <Input
-                        placeholder="Singapore Airlines"
-                        value={flight.airline}
-                        onChange={(e) => updateFlight(index, 'airline', e.target.value)}
-                      />
-                    </div>
-                  </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Male Faculty</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={formData.maleFaculty || ''}
+                onChange={(e) => setFormData({ ...formData, maleFaculty: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Female Faculty</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={formData.femaleFaculty || ''}
+                onChange={(e) => setFormData({ ...formData, femaleFaculty: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Total Faculty</Label>
+              <Input value={calculateTotalFaculty()} disabled className="bg-muted" />
+            </div>
+          </div>
 
-                  <div className="grid grid-cols-4 gap-4">
-                    <div className="space-y-2">
-                      <Label>Flight Number</Label>
-                      <Input
-                        placeholder="SQ406"
-                        value={flight.flightNumber}
-                        onChange={(e) => updateFlight(index, 'flightNumber', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Departure</Label>
-                      <Input
-                        type="datetime-local"
-                        value={flight.departureTime}
-                        onChange={(e) => updateFlight(index, 'departureTime', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Arrival</Label>
-                      <Input
-                        type="datetime-local"
-                        value={flight.arrivalTime}
-                        onChange={(e) => updateFlight(index, 'arrivalTime', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Cost/Person ({flight.currency})</Label>
-                      <Input
-                        type="number"
-                        placeholder="0"
-                        value={flight.costPerPerson || ''}
-                        onChange={(e) => updateFlight(index, 'costPerPerson', parseFloat(e.target.value) || 0)}
-                      />
-                    </div>
-                  </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Male VXplorers</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={formData.maleVXplorers || ''}
+                onChange={(e) => setFormData({ ...formData, maleVXplorers: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Female VXplorers</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={formData.femaleVXplorers || ''}
+                onChange={(e) => setFormData({ ...formData, femaleVXplorers: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Total VXplorers</Label>
+              <Input value={calculateTotalVXplorers()} disabled className="bg-muted" />
+            </div>
+          </div>
 
+          <div className="pt-4 border-t">
+            <div className="p-4 bg-primary/10 rounded-lg">
+              <p className="text-lg font-bold text-primary">
+                Total Participants: {calculateTotalParticipants()}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Transport - Flights */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Plane className="w-5 h-5 text-primary" />
+              Flights
+            </div>
+            <Button onClick={addFlight} size="sm" className="gradient-primary text-primary-foreground">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Flight
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {flights.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No flights added yet. Click "Add Flight" to begin.</p>
+          ) : (
+            flights.map((flight, index) => (
+              <div key={flight.id} className="p-4 border rounded-lg space-y-4 relative bg-card">
+                <div className="absolute top-2 right-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => deleteFlight(index)}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label>Description</Label>
-                    <Textarea
-                      placeholder="Additional flight details..."
-                      value={flight.description}
-                      onChange={(e) => updateFlight(index, 'description', e.target.value)}
-                      rows={2}
+                    <Label>From</Label>
+                    <Input
+                      placeholder="Mumbai"
+                      value={flight.from}
+                      onChange={(e) => updateFlight(index, 'from', e.target.value)}
                     />
                   </div>
-
-                  <div className="pt-2 border-t">
-                    <p className="text-sm font-semibold text-primary">
-                      Total: {formatCurrency(flight.totalCostINR, 'INR')}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Transport - Buses */}
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Bus className="w-5 h-5 text-primary" />
-                Buses
-              </div>
-              <Button onClick={addBus} size="sm" className="gradient-primary text-primary-foreground">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Bus
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {buses.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No buses added yet. Click "Add Bus" to begin.</p>
-            ) : (
-              buses.map((bus, index) => (
-                <div key={bus.id} className="p-4 border rounded-lg space-y-4 relative bg-card">
-                  <div className="absolute top-2 right-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => deleteBus(index)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label>Bus Name/Type</Label>
-                      <Input
-                        placeholder="Volvo AC Coach"
-                        value={bus.name}
-                        onChange={(e) => updateBus(index, 'name', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Seating Capacity</Label>
-                      <Input
-                        type="number"
-                        placeholder="50"
-                        value={bus.seatingCapacity || ''}
-                        onChange={(e) => updateBus(index, 'seatingCapacity', parseInt(e.target.value) || 0)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Cost/Bus ({bus.currency})</Label>
-                      <Input
-                        type="number"
-                        placeholder="0"
-                        value={bus.costPerBus || ''}
-                        onChange={(e) => updateBus(index, 'costPerBus', parseFloat(e.target.value) || 0)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Number of Days</Label>
-                      <Input
-                        type="number"
-                        placeholder="6"
-                        value={bus.numberOfDays || ''}
-                        onChange={(e) => updateBus(index, 'numberOfDays', parseInt(e.target.value) || 0)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Quantity (No. of Buses)</Label>
-                      <Input
-                        type="number"
-                        placeholder="1"
-                        value={bus.quantity || ''}
-                        onChange={(e) => updateBus(index, 'quantity', parseInt(e.target.value) || 0)}
-                      />
-                    </div>
-                  </div>
-
                   <div className="space-y-2">
-                    <Label>Description</Label>
-                    <Textarea
-                      placeholder="Additional bus details..."
-                      value={bus.description}
-                      onChange={(e) => updateBus(index, 'description', e.target.value)}
-                      rows={2}
+                    <Label>To</Label>
+                    <Input
+                      placeholder="Singapore"
+                      value={flight.to}
+                      onChange={(e) => updateFlight(index, 'to', e.target.value)}
                     />
                   </div>
-
-                  <div className="pt-2 border-t">
-                    <p className="text-sm font-semibold text-primary">
-                      Total: {formatCurrency(bus.totalCostINR, 'INR')}
-                    </p>
+                  <div className="space-y-2">
+                    <Label>Airline</Label>
+                    <Input
+                      placeholder="Singapore Airlines"
+                      value={flight.airline}
+                      onChange={(e) => updateFlight(index, 'airline', e.target.value)}
+                    />
                   </div>
                 </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
 
-        {/* Transport - Trains */}
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Train className="w-5 h-5 text-primary" />
-                Trains
-              </div>
-              <Button onClick={addTrain} size="sm" className="gradient-primary text-primary-foreground">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Train
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {trains.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No trains added yet. Click "Add Train" to begin.</p>
-            ) : (
-              trains.map((train, index) => (
-                <div key={train.id} className="p-4 border rounded-lg space-y-4 relative bg-card">
-                  <div className="absolute top-2 right-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => deleteTrain(index)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label>Flight Number</Label>
+                    <Input
+                      placeholder="SQ406"
+                      value={flight.flightNumber}
+                      onChange={(e) => updateFlight(index, 'flightNumber', e.target.value)}
+                    />
                   </div>
-
-                  <div className="grid grid-cols-4 gap-4">
-                    <div className="space-y-2">
-                      <Label>Train Name</Label>
-                      <Input
-                        placeholder="Rajdhani Express"
-                        value={train.name}
-                        onChange={(e) => updateTrain(index, 'name', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Train Number</Label>
-                      <Input
-                        placeholder="12301"
-                        value={train.trainNumber}
-                        onChange={(e) => updateTrain(index, 'trainNumber', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Class</Label>
-                      <Input
-                        placeholder="AC 2-Tier"
-                        value={train.class}
-                        onChange={(e) => updateTrain(index, 'class', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Timing</Label>
-                      <Input
-                        placeholder="10:00 AM"
-                        value={train.timing}
-                        onChange={(e) => updateTrain(index, 'timing', e.target.value)}
-                      />
-                    </div>
+                  <div className="space-y-2">
+                    <Label>Departure</Label>
+                    <Input
+                      type="datetime-local"
+                      value={flight.departureTime}
+                      onChange={(e) => updateFlight(index, 'departureTime', e.target.value)}
+                    />
                   </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Cost/Person ({train.currency})</Label>
-                      <Input
-                        type="number"
-                        placeholder="0"
-                        value={train.costPerPerson || ''}
-                        onChange={(e) => updateTrain(index, 'costPerPerson', parseFloat(e.target.value) || 0)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Description</Label>
-                      <Input
-                        placeholder="Additional details..."
-                        value={train.description}
-                        onChange={(e) => updateTrain(index, 'description', e.target.value)}
-                      />
-                    </div>
+                  <div className="space-y-2">
+                    <Label>Arrival</Label>
+                    <Input
+                      type="datetime-local"
+                      value={flight.arrivalTime}
+                      onChange={(e) => updateFlight(index, 'arrivalTime', e.target.value)}
+                    />
                   </div>
-
-                  <div className="pt-2 border-t">
-                    <p className="text-sm font-semibold text-primary">
-                      Total: {formatCurrency(train.totalCostINR, 'INR')}
-                    </p>
+                  <div className="space-y-2">
+                    <Label>Cost/Person ({flight.currency})</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={flight.costPerPerson || ''}
+                      onChange={(e) => updateFlight(index, 'costPerPerson', parseFloat(e.target.value) || 0)}
+                    />
                   </div>
                 </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
 
-        {/* Accommodation */}
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Hotel className="w-5 h-5 text-primary" />
-                Accommodation
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    placeholder="Additional flight details..."
+                    value={flight.description}
+                    onChange={(e) => updateFlight(index, 'description', e.target.value)}
+                    rows={2}
+                  />
+                </div>
+
+                <div className="pt-2 border-t">
+                  <p className="text-sm font-semibold text-primary">
+                    Total: {formatCurrency(flight.totalCostINR, 'INR')}
+                  </p>
+                </div>
               </div>
-              <Button onClick={addAccommodation} size="sm" className="gradient-primary text-primary-foreground">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Hotel
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {accommodations.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No accommodation added yet. Click "Add Hotel" to begin.</p>
-            ) : (
-              accommodations.map((accommodation, index) => (
-                <div key={accommodation.id} className="p-6 border rounded-lg space-y-6 relative bg-card">
-                  <div className="absolute top-2 right-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => deleteAccommodation(index)}
-                      className="text-destructive hover:text-destructive"
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Transport - Buses */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bus className="w-5 h-5 text-primary" />
+              Buses
+            </div>
+            <Button onClick={addBus} size="sm" className="gradient-primary text-primary-foreground">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Bus
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {buses.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No buses added yet. Click "Add Bus" to begin.</p>
+          ) : (
+            buses.map((bus, index) => (
+              <div key={bus.id} className="p-4 border rounded-lg space-y-4 relative bg-card">
+                <div className="absolute top-2 right-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => deleteBus(index)}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Bus Name/Type</Label>
+                    <Input
+                      placeholder="Volvo AC Coach"
+                      value={bus.name}
+                      onChange={(e) => updateBus(index, 'name', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Seating Capacity</Label>
+                    <Input
+                      type="number"
+                      placeholder="50"
+                      value={bus.seatingCapacity || ''}
+                      onChange={(e) => updateBus(index, 'seatingCapacity', parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Cost/Bus ({bus.currency})</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={bus.costPerBus || ''}
+                      onChange={(e) => updateBus(index, 'costPerBus', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Number of Days</Label>
+                    <Input
+                      type="number"
+                      placeholder="6"
+                      value={bus.numberOfDays || ''}
+                      onChange={(e) => updateBus(index, 'numberOfDays', parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Quantity (No. of Buses)</Label>
+                    <Input
+                      type="number"
+                      placeholder="1"
+                      value={bus.quantity || ''}
+                      onChange={(e) => updateBus(index, 'quantity', parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    placeholder="Additional bus details..."
+                    value={bus.description}
+                    onChange={(e) => updateBus(index, 'description', e.target.value)}
+                    rows={2}
+                  />
+                </div>
+
+                <div className="pt-2 border-t">
+                  <p className="text-sm font-semibold text-primary">
+                    Total: {formatCurrency(bus.totalCostINR, 'INR')}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Transport - Trains */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Train className="w-5 h-5 text-primary" />
+              Trains
+            </div>
+            <Button onClick={addTrain} size="sm" className="gradient-primary text-primary-foreground">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Train
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {trains.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No trains added yet. Click "Add Train" to begin.</p>
+          ) : (
+            trains.map((train, index) => (
+              <div key={train.id} className="p-4 border rounded-lg space-y-4 relative bg-card">
+                <div className="absolute top-2 right-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => deleteTrain(index)}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label>Train Name</Label>
+                    <Input
+                      placeholder="Rajdhani Express"
+                      value={train.name}
+                      onChange={(e) => updateTrain(index, 'name', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Train Number</Label>
+                    <Input
+                      placeholder="12301"
+                      value={train.trainNumber}
+                      onChange={(e) => updateTrain(index, 'trainNumber', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Class</Label>
+                    <Input
+                      placeholder="AC 2-Tier"
+                      value={train.class}
+                      onChange={(e) => updateTrain(index, 'class', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Timing</Label>
+                    <Input
+                      placeholder="10:00 AM"
+                      value={train.timing}
+                      onChange={(e) => updateTrain(index, 'timing', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Cost/Person ({train.currency})</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={train.costPerPerson || ''}
+                      onChange={(e) => updateTrain(index, 'costPerPerson', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Description</Label>
+                    <Input
+                      placeholder="Additional details..."
+                      value={train.description}
+                      onChange={(e) => updateTrain(index, 'description', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t">
+                  <p className="text-sm font-semibold text-primary">
+                    Total: {formatCurrency(train.totalCostINR, 'INR')}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Accommodation */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Hotel className="w-5 h-5 text-primary" />
+              Accommodation
+            </div>
+            <Button onClick={addAccommodation} size="sm" className="gradient-primary text-primary-foreground">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Hotel
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {accommodations.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No accommodation added yet. Click "Add Hotel" to begin.</p>
+          ) : (
+            accommodations.map((accommodation, index) => (
+              <div key={accommodation.id} className="p-6 border rounded-lg space-y-6 relative bg-card">
+                <div className="absolute top-2 right-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => deleteAccommodation(index)}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                {/* Hotel Basic Info */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Hotel Name</Label>
+                    <Input
+                      placeholder="Hotel name"
+                      value={accommodation.hotelName}
+                      onChange={(e) => updateAccommodation(index, 'hotelName', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>City</Label>
+                    <Input
+                      placeholder="City"
+                      value={accommodation.city}
+                      onChange={(e) => updateAccommodation(index, 'city', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Nights</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={accommodation.numberOfNights || ''}
+                      onChange={(e) => updateAccommodation(index, 'numberOfNights', parseInt(e.target.value) || 1)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Currency</Label>
+                    <Select
+                      value={accommodation.currency}
+                      onValueChange={(v) => updateAccommodation(index, 'currency', v)}
+                      disabled={isLoadingMasterData}
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                      <SelectTrigger>
+                        <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select currency"} />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover">
+                        {currencies.map((currency) => (
+                          <SelectItem key={currency.id} value={currency.code}>
+                            {currency.code} ({currency.symbol})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-
-                  {/* Hotel Basic Info */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Hotel Name</Label>
-                      <Input
-                        placeholder="Hotel name"
-                        value={accommodation.hotelName}
-                        onChange={(e) => updateAccommodation(index, 'hotelName', e.target.value)}
+                  <div className="flex items-end">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={accommodation.breakfastIncluded}
+                        onCheckedChange={(checked) => updateAccommodation(index, 'breakfastIncluded', checked)}
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>City</Label>
-                      <Input
-                        placeholder="City"
-                        value={accommodation.city}
-                        onChange={(e) => updateAccommodation(index, 'city', e.target.value)}
-                      />
+                      <Label>Breakfast Included</Label>
                     </div>
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label>Nights</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={accommodation.numberOfNights || ''}
-                        onChange={(e) => updateAccommodation(index, 'numberOfNights', parseInt(e.target.value) || 1)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Currency</Label>
-                      <Select
-                        value={accommodation.currency}
-                        onValueChange={(v) => updateAccommodation(index, 'currency', v)}
-                        disabled={isLoadingMasterData}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select currency"} />
+                {/* Room Type Configuration */}
+                <div className="border-t pt-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-base font-semibold">Room Types Configuration</Label>
+                    <div className="flex gap-2">
+                      <Select onValueChange={(v) => applyRoomTypePreset(index, v)}>
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue placeholder="Apply Preset" />
                         </SelectTrigger>
                         <SelectContent className="bg-popover">
-                          {currencies.map((currency) => (
-                            <SelectItem key={currency.id} value={currency.code}>
-                              {currency.code} ({currency.symbol})
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="Double Only">Double Only</SelectItem>
+                          <SelectItem value="Triple Only">Triple Only</SelectItem>
+                          <SelectItem value="Double + Triple">Double + Triple</SelectItem>
+                          <SelectItem value="Single + Double">Single + Double</SelectItem>
+                          <SelectItem value="All Types">All Types</SelectItem>
                         </SelectContent>
                       </Select>
-                    </div>
-                    <div className="flex items-end">
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={accommodation.breakfastIncluded}
-                          onCheckedChange={(checked) => updateAccommodation(index, 'breakfastIncluded', checked)}
-                        />
-                        <Label>Breakfast Included</Label>
-                      </div>
+                      <Button onClick={() => addRoomType(index)} size="sm" variant="outline">
+                        <Plus className="w-4 h-4 mr-1" />
+                        Add Room Type
+                      </Button>
                     </div>
                   </div>
 
-                  {/* Room Type Configuration */}
-                  <div className="border-t pt-4 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-base font-semibold">Room Types Configuration</Label>
-                      <div className="flex gap-2">
-                        <Select onValueChange={(v) => applyRoomTypePreset(index, v)}>
-                          <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Apply Preset" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-popover">
-                            <SelectItem value="Double Only">Double Only</SelectItem>
-                            <SelectItem value="Triple Only">Triple Only</SelectItem>
-                            <SelectItem value="Double + Triple">Double + Triple</SelectItem>
-                            <SelectItem value="Single + Double">Single + Double</SelectItem>
-                            <SelectItem value="All Types">All Types</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button onClick={() => addRoomType(index)} size="sm" variant="outline">
-                          <Plus className="w-4 h-4 mr-1" />
-                          Add Room Type
+                  {/* Room Types List */}
+                  <div className="space-y-3">
+                    {accommodation.roomTypes.map((roomType, rtIndex) => (
+                      <div key={rtIndex} className="grid grid-cols-4 gap-3 items-end p-3 bg-muted/50 rounded-md">
+                        <div className="space-y-2">
+                          <Label className="text-xs">Room Type</Label>
+                          <Input
+                            placeholder="e.g., Double, Triple"
+                            value={roomType.roomType}
+                            onChange={(e) => updateRoomType(index, rtIndex, 'roomType', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs">People/Room</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={roomType.capacityPerRoom || ''}
+                            onChange={(e) => updateRoomType(index, rtIndex, 'capacityPerRoom', parseInt(e.target.value) || 1)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs">Cost/Room ({accommodation.currency})</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={roomType.costPerRoom || ''}
+                            onChange={(e) => updateRoomType(index, rtIndex, 'costPerRoom', parseFloat(e.target.value) || 0)}
+                          />
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => removeRoomType(index, rtIndex)}
+                          className="text-destructive"
+                          disabled={accommodation.roomTypes.length === 1}
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
-                    </div>
+                    ))}
+                  </div>
+                </div>
 
-                    {/* Room Types List */}
-                    <div className="space-y-3">
-                      {accommodation.roomTypes.map((roomType, rtIndex) => (
-                        <div key={rtIndex} className="grid grid-cols-4 gap-3 items-end p-3 bg-muted/50 rounded-md">
-                          <div className="space-y-2">
-                            <Label className="text-xs">Room Type</Label>
-                            <Input
-                              placeholder="e.g., Double, Triple"
-                              value={roomType.roomType}
-                              onChange={(e) => updateRoomType(index, rtIndex, 'roomType', e.target.value)}
-                            />
+                {/* Auto-Calculated Room Allocation Display */}
+                <div className="border-t pt-4 space-y-3">
+                  <Label className="text-base font-semibold">Auto-Calculated Room Allocation</Label>
+
+                  {accommodation.roomAllocation.breakdown && (
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      {[
+                        { label: 'Boys', count: formData.boys, breakdown: accommodation.roomAllocation.breakdown.boys },
+                        { label: 'Girls', count: formData.girls, breakdown: accommodation.roomAllocation.breakdown.girls },
+                        { label: 'Male Faculty', count: formData.maleFaculty, breakdown: accommodation.roomAllocation.breakdown.maleFaculty },
+                        { label: 'Female Faculty', count: formData.femaleFaculty, breakdown: accommodation.roomAllocation.breakdown.femaleFaculty },
+                        { label: 'Male VXplorers', count: formData.maleVXplorers, breakdown: accommodation.roomAllocation.breakdown.maleVXplorers },
+                        { label: 'Female VXplorers', count: formData.femaleVXplorers, breakdown: accommodation.roomAllocation.breakdown.femaleVXplorers },
+                      ].map(({ label, count, breakdown }) => (
+                        count > 0 && (
+                          <div key={label} className="p-3 bg-muted/30 rounded-md">
+                            <div className="font-medium text-muted-foreground mb-1">{label} ({count} people)</div>
+                            {breakdown.map((b, i) => (
+                              <div key={i} className="text-xs flex justify-between">
+                                <span>{b.numberOfRooms} × {b.roomType}</span>
+                                <span className="text-muted-foreground">({b.peopleAccommodated} people)</span>
+                              </div>
+                            ))}
                           </div>
-                          <div className="space-y-2">
-                            <Label className="text-xs">People/Room</Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={roomType.capacityPerRoom || ''}
-                              onChange={(e) => updateRoomType(index, rtIndex, 'capacityPerRoom', parseInt(e.target.value) || 1)}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-xs">Cost/Room ({accommodation.currency})</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={roomType.costPerRoom || ''}
-                              onChange={(e) => updateRoomType(index, rtIndex, 'costPerRoom', parseFloat(e.target.value) || 0)}
-                            />
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => removeRoomType(index, rtIndex)}
-                            className="text-destructive"
-                            disabled={accommodation.roomTypes.length === 1}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
+                        )
                       ))}
                     </div>
-                  </div>
+                  )}
 
-                  {/* Auto-Calculated Room Allocation Display */}
-                  <div className="border-t pt-4 space-y-3">
-                    <Label className="text-base font-semibold">Auto-Calculated Room Allocation</Label>
-
-                    {accommodation.roomAllocation.breakdown && (
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        {[
-                          { label: 'Boys', count: formData.boys, breakdown: accommodation.roomAllocation.breakdown.boys },
-                          { label: 'Girls', count: formData.girls, breakdown: accommodation.roomAllocation.breakdown.girls },
-                          { label: 'Male Faculty', count: formData.maleFaculty, breakdown: accommodation.roomAllocation.breakdown.maleFaculty },
-                          { label: 'Female Faculty', count: formData.femaleFaculty, breakdown: accommodation.roomAllocation.breakdown.femaleFaculty },
-                          { label: 'Male VXplorers', count: formData.maleVXplorers, breakdown: accommodation.roomAllocation.breakdown.maleVXplorers },
-                          { label: 'Female VXplorers', count: formData.femaleVXplorers, breakdown: accommodation.roomAllocation.breakdown.femaleVXplorers },
-                        ].map(({ label, count, breakdown }) => (
-                          count > 0 && (
-                            <div key={label} className="p-3 bg-muted/30 rounded-md">
-                              <div className="font-medium text-muted-foreground mb-1">{label} ({count} people)</div>
-                              {breakdown.map((b, i) => (
-                                <div key={i} className="text-xs flex justify-between">
-                                  <span>{b.numberOfRooms} × {b.roomType}</span>
-                                  <span className="text-muted-foreground">({b.peopleAccommodated} people)</span>
-                                </div>
-                              ))}
-                            </div>
-                          )
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="flex justify-between items-center pt-2 border-t">
-                      <span className="font-semibold">Total Rooms:</span>
-                      <span className="text-lg font-bold text-primary">{accommodation.totalRooms} rooms</span>
-                    </div>
-                  </div>
-
-                  {/* Total Cost */}
-                  <div className="pt-4 border-t">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">
-                        {accommodation.totalRooms} rooms × {accommodation.numberOfNights} nights
-                      </span>
-                      <span className="text-lg font-semibold text-primary">
-                        {formatCurrency(accommodation.totalCostINR, 'INR')}
-                      </span>
-                    </div>
+                  <div className="flex justify-between items-center pt-2 border-t">
+                    <span className="font-semibold">Total Rooms:</span>
+                    <span className="text-lg font-bold text-primary">{accommodation.totalRooms} rooms</span>
                   </div>
                 </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
 
-        {/* Meals */}
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Utensils className="w-5 h-5 text-primary" />
-              Meals
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Breakfast/Person ({tripCurrency})</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={meals.breakfastCostPerPerson || ''}
-                  onChange={(e) => setMeals({ ...meals, breakfastCostPerPerson: parseFloat(e.target.value) || 0 })}
-                />
-                <p className="text-xs text-muted-foreground">Put 0 if included in hotel</p>
+                {/* Total Cost */}
+                <div className="pt-4 border-t">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">
+                      {accommodation.totalRooms} rooms × {accommodation.numberOfNights} nights
+                    </span>
+                    <span className="text-lg font-semibold text-primary">
+                      {formatCurrency(accommodation.totalCostINR, 'INR')}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Lunch/Person ({tripCurrency})</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={meals.lunchCostPerPerson || ''}
-                  onChange={(e) => setMeals({ ...meals, lunchCostPerPerson: parseFloat(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Dinner/Person ({tripCurrency})</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={meals.dinnerCostPerPerson || ''}
-                  onChange={(e) => setMeals({ ...meals, dinnerCostPerPerson: parseFloat(e.target.value) || 0 })}
-                />
-              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Meals */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Utensils className="w-5 h-5 text-primary" />
+            Meals
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Breakfast/Person ({tripCurrency})</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={meals.breakfastCostPerPerson || ''}
+                onChange={(e) => setMeals({ ...meals, breakfastCostPerPerson: parseFloat(e.target.value) || 0 })}
+              />
+              <p className="text-xs text-muted-foreground">Put 0 if included in hotel</p>
             </div>
-
-            {totals.totalParticipants > 0 && totals.totalDays > 0 && (
-              <div className="pt-4 border-t space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Daily Cost/Person:</span>
-                  <span className="font-semibold">
-                    {formatCurrency(
-                      meals.breakfastCostPerPerson + meals.lunchCostPerPerson + meals.dinnerCostPerPerson,
-                      tripCurrency
-                    )}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">
-                    Daily Cost (All {totals.totalParticipants} people):
-                  </span>
-                  <span className="font-semibold">
-                    {formatCurrency(
-                      (meals.breakfastCostPerPerson + meals.lunchCostPerPerson + meals.dinnerCostPerPerson) *
-                      totals.totalParticipants,
-                      tripCurrency
-                    )}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold">Meals Total ({totals.totalDays} days):</span>
-                  <span className="text-lg font-bold text-primary">{formatCurrency(totals.meals, 'INR')}</span>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Activities */}
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Ticket className="w-5 h-5 text-primary" />
-                Activities
-              </div>
-              <Button onClick={addActivity} size="sm" className="gradient-primary text-primary-foreground">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Activity
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {activities.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No activities added yet. Click "Add Activity" to begin.</p>
-            ) : (
-              activities.map((activity, index) => (
-                <div key={activity.id} className="p-4 border rounded-lg space-y-4 relative bg-card">
-                  <div className="absolute top-2 right-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => deleteActivity(index)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Activity Name</Label>
-                    <Input
-                      placeholder="Universal Studios"
-                      value={activity.name}
-                      onChange={(e) => updateActivity(index, 'name', e.target.value)}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label>Entry/Person ({activity.currency})</Label>
-                      <Input
-                        type="number"
-                        placeholder="0"
-                        value={activity.entryCost || ''}
-                        onChange={(e) => updateActivity(index, 'entryCost', parseFloat(e.target.value) || 0)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Transport ({activity.currency})</Label>
-                      <Input
-                        type="number"
-                        placeholder="0"
-                        value={activity.transportCost || ''}
-                        onChange={(e) => updateActivity(index, 'transportCost', parseFloat(e.target.value) || 0)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Guide ({activity.currency})</Label>
-                      <Input
-                        type="number"
-                        placeholder="0"
-                        value={activity.guideCost || ''}
-                        onChange={(e) => updateActivity(index, 'guideCost', parseFloat(e.target.value) || 0)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Description</Label>
-                    <Textarea
-                      placeholder="Activity details..."
-                      value={activity.description}
-                      onChange={(e) => updateActivity(index, 'description', e.target.value)}
-                      rows={2}
-                    />
-                  </div>
-
-                  <div className="pt-2 border-t">
-                    <p className="text-sm font-semibold text-primary">
-                      Total: {formatCurrency(activity.totalCostINR, 'INR')}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Overheads */}
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-primary" />
-                Overheads
-              </div>
-              <Button onClick={addOverhead} size="sm" className="gradient-primary text-primary-foreground">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Overhead
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {overheads.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No overheads added yet. Click "Add Overhead" to begin.</p>
-            ) : (
-              overheads.map((overhead, index) => (
-                <div key={overhead.id} className="p-4 border rounded-lg space-y-4 relative bg-card">
-                  <div className="absolute top-2 right-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => deleteOverhead(index)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label>Name</Label>
-                      <Input
-                        placeholder="Contingency, Admin Fee, etc."
-                        value={overhead.name}
-                        onChange={(e) => updateOverhead(index, 'name', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Amount</Label>
-                      <Input
-                        type="number"
-                        placeholder="0"
-                        value={overhead.amount || ''}
-                        onChange={(e) => updateOverhead(index, 'amount', parseFloat(e.target.value) || 0)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Currency</Label>
-                      <Select
-                        value={overhead.currency}
-                        onValueChange={(v) => updateOverhead(index, 'currency', v)}
-                        disabled={isLoadingMasterData}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select currency"} />
-                        </SelectTrigger>
-                        <SelectContent className="bg-popover">
-                          {currencies.map((currency) => (
-                            <SelectItem key={currency.id} value={currency.code}>
-                              {currency.code} ({currency.symbol})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={overhead.hideFromClient}
-                      onCheckedChange={(checked) => updateOverhead(index, 'hideFromClient', checked)}
-                    />
-                    <Label>Hide from Client</Label>
-                  </div>
-
-                  <div className="pt-2 border-t">
-                    <p className="text-sm font-semibold text-primary">
-                      Total: {formatCurrency(overhead.totalCostINR, 'INR')}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Cost Summary */}
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calculator className="w-5 h-5 text-primary" />
-              Cost Summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex justify-between items-center pb-2 border-b">
-                <span className="text-muted-foreground">Transport</span>
-                <span className="font-semibold">{formatCurrency(totals.transport, 'INR')}</span>
-              </div>
-              <div className="flex justify-between items-center pb-2 border-b">
-                <span className="text-muted-foreground">Accommodation</span>
-                <span className="font-semibold">{formatCurrency(totals.accommodation, 'INR')}</span>
-              </div>
-              <div className="flex justify-between items-center pb-2 border-b">
-                <span className="text-muted-foreground">Meals</span>
-                <span className="font-semibold">{formatCurrency(totals.meals, 'INR')}</span>
-              </div>
-              <div className="flex justify-between items-center pb-2 border-b">
-                <span className="text-muted-foreground">Activities</span>
-                <span className="font-semibold">{formatCurrency(totals.activities, 'INR')}</span>
-              </div>
-              <div className="flex justify-between items-center pb-2 border-b">
-                <span className="text-muted-foreground">Overheads</span>
-                <span className="font-semibold">{formatCurrency(totals.overheads, 'INR')}</span>
-              </div>
+            <div className="space-y-2">
+              <Label>Lunch/Person ({tripCurrency})</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={meals.lunchCostPerPerson || ''}
+                onChange={(e) => setMeals({ ...meals, lunchCostPerPerson: parseFloat(e.target.value) || 0 })}
+              />
             </div>
+            <div className="space-y-2">
+              <Label>Dinner/Person ({tripCurrency})</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={meals.dinnerCostPerPerson || ''}
+                onChange={(e) => setMeals({ ...meals, dinnerCostPerPerson: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+          </div>
 
-            <div className="pt-4 border-t space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-bold">Grand Total</span>
-                <span className="text-2xl font-bold text-primary">{formatCurrency(totals.grandTotal, 'INR')}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="font-semibold text-muted-foreground">Cost per Student</span>
-                <span className="text-xl font-semibold text-primary">
-                  {formatCurrency(totals.costPerStudent, 'INR')}
+          {totals.totalParticipants > 0 && totals.totalDays > 0 && (
+            <div className="pt-4 border-t space-y-2">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Daily Cost/Person:</span>
+                <span className="font-semibold">
+                  {formatCurrency(
+                    meals.breakfastCostPerPerson + meals.lunchCostPerPerson + meals.dinnerCostPerPerson,
+                    tripCurrency
+                  )}
                 </span>
               </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">
+                  Daily Cost (All {totals.totalParticipants} people):
+                </span>
+                <span className="font-semibold">
+                  {formatCurrency(
+                    (meals.breakfastCostPerPerson + meals.lunchCostPerPerson + meals.dinnerCostPerPerson) *
+                    totals.totalParticipants,
+                    tripCurrency
+                  )}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="font-semibold">Meals Total ({totals.totalDays} days):</span>
+                <span className="text-lg font-bold text-primary">{formatCurrency(totals.meals, 'INR')}</span>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* Save Button */}
-        <div className="flex justify-end gap-4 pt-4">
-          <Button variant="outline" onClick={() => navigate('/dashboard')} disabled={isSaving}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSaveTrip}
-            disabled={isSaving}
-            className="gradient-primary text-primary-foreground px-8"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4 mr-2" />
-                {isEditing ? 'Update Trip' : 'Create Trip'}
-              </>
-            )}
-          </Button>
-        </div>
+      {/* Activities */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Ticket className="w-5 h-5 text-primary" />
+              Activities
+            </div>
+            <Button onClick={addActivity} size="sm" className="gradient-primary text-primary-foreground">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Activity
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {activities.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No activities added yet. Click "Add Activity" to begin.</p>
+          ) : (
+            activities.map((activity, index) => (
+              <div key={activity.id} className="p-4 border rounded-lg space-y-4 relative bg-card">
+                <div className="absolute top-2 right-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => deleteActivity(index)}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Activity Name</Label>
+                  <Input
+                    placeholder="Universal Studios"
+                    value={activity.name}
+                    onChange={(e) => updateActivity(index, 'name', e.target.value)}
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Entry/Person ({activity.currency})</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={activity.entryCost || ''}
+                      onChange={(e) => updateActivity(index, 'entryCost', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Transport ({activity.currency})</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={activity.transportCost || ''}
+                      onChange={(e) => updateActivity(index, 'transportCost', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Guide ({activity.currency})</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={activity.guideCost || ''}
+                      onChange={(e) => updateActivity(index, 'guideCost', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    placeholder="Activity details..."
+                    value={activity.description}
+                    onChange={(e) => updateActivity(index, 'description', e.target.value)}
+                    rows={2}
+                  />
+                </div>
+
+                <div className="pt-2 border-t">
+                  <p className="text-sm font-semibold text-primary">
+                    Total: {formatCurrency(activity.totalCostINR, 'INR')}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Overheads */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-primary" />
+              Overheads
+            </div>
+            <Button onClick={addOverhead} size="sm" className="gradient-primary text-primary-foreground">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Overhead
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {overheads.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No overheads added yet. Click "Add Overhead" to begin.</p>
+          ) : (
+            overheads.map((overhead, index) => (
+              <div key={overhead.id} className="p-4 border rounded-lg space-y-4 relative bg-card">
+                <div className="absolute top-2 right-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => deleteOverhead(index)}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Name</Label>
+                    <Input
+                      placeholder="Contingency, Admin Fee, etc."
+                      value={overhead.name}
+                      onChange={(e) => updateOverhead(index, 'name', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Amount</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={overhead.amount || ''}
+                      onChange={(e) => updateOverhead(index, 'amount', parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Currency</Label>
+                    <Select
+                      value={overhead.currency}
+                      onValueChange={(v) => updateOverhead(index, 'currency', v)}
+                      disabled={isLoadingMasterData}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select currency"} />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover">
+                        {currencies.map((currency) => (
+                          <SelectItem key={currency.id} value={currency.code}>
+                            {currency.code} ({currency.symbol})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={overhead.hideFromClient}
+                    onCheckedChange={(checked) => updateOverhead(index, 'hideFromClient', checked)}
+                  />
+                  <Label>Hide from Client</Label>
+                </div>
+
+                <div className="pt-2 border-t">
+                  <p className="text-sm font-semibold text-primary">
+                    Total: {formatCurrency(overhead.totalCostINR, 'INR')}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Cost Summary */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calculator className="w-5 h-5 text-primary" />
+            Cost Summary
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-3">
+            <div className="flex justify-between items-center pb-2 border-b">
+              <span className="text-muted-foreground">Transport</span>
+              <span className="font-semibold">{formatCurrency(totals.transport, 'INR')}</span>
+            </div>
+            <div className="flex justify-between items-center pb-2 border-b">
+              <span className="text-muted-foreground">Accommodation</span>
+              <span className="font-semibold">{formatCurrency(totals.accommodation, 'INR')}</span>
+            </div>
+            <div className="flex justify-between items-center pb-2 border-b">
+              <span className="text-muted-foreground">Meals</span>
+              <span className="font-semibold">{formatCurrency(totals.meals, 'INR')}</span>
+            </div>
+            <div className="flex justify-between items-center pb-2 border-b">
+              <span className="text-muted-foreground">Activities</span>
+              <span className="font-semibold">{formatCurrency(totals.activities, 'INR')}</span>
+            </div>
+            <div className="flex justify-between items-center pb-2 border-b">
+              <span className="text-muted-foreground">Overheads</span>
+              <span className="font-semibold">{formatCurrency(totals.overheads, 'INR')}</span>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-lg font-bold">Grand Total</span>
+              <span className="text-2xl font-bold text-primary">{formatCurrency(totals.grandTotal, 'INR')}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="font-semibold text-muted-foreground">Cost per Student</span>
+              <span className="text-xl font-semibold text-primary">
+                {formatCurrency(totals.costPerStudent, 'INR')}
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Save Button */}
+      <div className="flex justify-end gap-4 pt-4">
+        <Button variant="outline" onClick={() => navigate('/dashboard')} disabled={isSaving}>
+          Cancel
+        </Button>
+        <Button
+          onClick={handleSaveTrip}
+          disabled={isSaving}
+          className="gradient-primary text-primary-foreground px-8"
+        >
+          {isSaving ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4 mr-2" />
+              {isEditing ? 'Update Trip' : 'Create Trip'}
+            </>
+          )}
+        </Button>
       </div>
-    </AppLayout>
+    </div>
+
   );
 }
