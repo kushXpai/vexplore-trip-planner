@@ -96,7 +96,7 @@ export default function Settings() {
         title: "Logged Out",
         description: "You have been logged out successfully.",
       });
-      navigate('/auth', { replace: true });
+      navigate('/login', { replace: true });
     } catch (err) {
       toast({
         title: "Logout Failed",

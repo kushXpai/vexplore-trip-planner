@@ -9,7 +9,18 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { countries, cities, getCitiesByCountry, getCountryCurrency, formatCurrency, getCurrencyRate } from '@/data/demoData';
+import {
+  fetchCountries,
+  fetchCities,
+  fetchCurrencies,
+  fetchCitiesByCountry,
+  Currency,
+  Country,
+  City,
+  getCurrencyRate as getCurrencyRateHelper,
+  getCountryCurrency as getCountryCurrencyHelper,
+  formatCurrency as formatCurrencyHelper
+} from '@/services/masterDataService';
 import { Plane, Bus, Train, Hotel, Utensils, Ticket, Calculator, Shield, Info, Plus, Trash2, Loader2, Users, Calendar, MapPin, Save } from 'lucide-react';
 import { Flight, Bus as BusType, Train as TrainType, Accommodation, Activity, Overhead } from '@/types/trip';
 import { toast } from 'sonner';
@@ -49,6 +60,11 @@ export default function CreateTrip() {
   const [meals, setMeals] = useState({ breakfastCostPerPerson: 0, lunchCostPerPerson: 0, dinnerCostPerPerson: 0 });
   const [activities, setActivities] = useState<Activity[]>([]);
   const [overheads, setOverheads] = useState<Overhead[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [filteredCities, setFilteredCities] = useState<City[]>([]);
+  const [isLoadingMasterData, setIsLoadingMasterData] = useState(true);
 
   // Load trip data when editing
   useEffect(() => {
@@ -56,6 +72,49 @@ export default function CreateTrip() {
       loadTripData(editId);
     }
   }, [editId]);
+
+  // Fetch master data on component mount
+  useEffect(() => {
+    const loadMasterData = async () => {
+      setIsLoadingMasterData(true);
+      try {
+        const [countriesResult, citiesResult, currenciesResult] = await Promise.all([
+          fetchCountries(),
+          fetchCities(),
+          fetchCurrencies()
+        ]);
+
+        if (countriesResult.success && countriesResult.data) {
+          setCountries(countriesResult.data);
+        }
+
+        if (citiesResult.success && citiesResult.data) {
+          setCities(citiesResult.data);
+        }
+
+        if (currenciesResult.success && currenciesResult.data) {
+          setCurrencies(currenciesResult.data);
+        }
+      } catch (error) {
+        console.error('Error loading master data:', error);
+        toast.error('Failed to load countries and currencies');
+      } finally {
+        setIsLoadingMasterData(false);
+      }
+    };
+
+    loadMasterData();
+  }, []);
+
+  // Update filtered cities when country changes
+  useEffect(() => {
+    if (formData.country) {
+      const filtered = cities.filter(c => c.country_id === formData.country);
+      setFilteredCities(filtered);
+    } else {
+      setFilteredCities([]);
+    }
+  }, [formData.country, cities]);
 
   const loadTripData = async (tripId: string) => {
     setIsLoading(true);
@@ -75,7 +134,7 @@ export default function CreateTrip() {
         } = result.data;
 
         const country = countries.find(c => c.name === trip.country);
-        const city = cities.find(c => c.name === trip.city);
+        const city = cities.find(c => c.name === trip.city && c.country_id === country?.id);
 
         setFormData({
           name: trip.name,
@@ -199,10 +258,27 @@ export default function CreateTrip() {
   };
 
   // Helper functions
+  // Helper functions
   const calculateTotalStudents = () => formData.boys + formData.girls;
   const calculateTotalFaculty = () => formData.maleFaculty + formData.femaleFaculty;
   const calculateTotalVXplorers = () => formData.maleVXplorers + formData.femaleVXplorers;
   const calculateTotalParticipants = () => calculateTotalStudents() + calculateTotalFaculty() + calculateTotalVXplorers();
+
+  const getCurrencyRate = (code: string): number => {
+    return getCurrencyRateHelper(currencies, code);
+  };
+
+  const formatCurrency = (amount: number, currencyCode: string): string => {
+    return formatCurrencyHelper(currencies, amount, currencyCode);
+  };
+
+  const getCountryCurrency = (countryId: string): string => {
+    return getCountryCurrencyHelper(countries, countryId);
+  };
+
+  const getCitiesByCountry = (countryId: string): City[] => {
+    return cities.filter(c => c.country_id === countryId);
+  };
 
   const getTripDays = () => {
     if (!formData.startDate || !formData.endDate) return 0;
@@ -662,6 +738,21 @@ export default function CreateTrip() {
     );
   }
 
+  if (isLoadingMasterData || isLoading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted-foreground">
+              {isLoadingMasterData ? 'Loading countries and currencies...' : 'Loading trip data...'}
+            </p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout title={isEditing ? 'Edit Trip' : 'Create New Trip'}>
       <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -697,19 +788,47 @@ export default function CreateTrip() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Country *</Label>
-                <Select value={formData.country} onValueChange={(v) => setFormData({ ...formData, country: v, city: '' })}>
-                  <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
+                <Select
+                  value={formData.country}
+                  onValueChange={(v) => {
+                    setFormData({ ...formData, country: v, city: '' });
+                  }}
+                  disabled={isLoadingMasterData}
+                >
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder={isLoadingMasterData ? "Loading countries..." : "Select country"} />
+                  </SelectTrigger>
                   <SelectContent className="bg-popover">
-                    {countries.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    {countries.map((country) => (
+                      <SelectItem key={country.id} value={country.id}>
+                        {country.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label>City *</Label>
-                <Select value={formData.city} onValueChange={(v) => setFormData({ ...formData, city: v })} disabled={!formData.country}>
-                  <SelectTrigger><SelectValue placeholder="Select city" /></SelectTrigger>
+                <Select
+                  value={formData.city}
+                  onValueChange={(v) => setFormData({ ...formData, city: v })}
+                  disabled={!formData.country || isLoadingMasterData}
+                >
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder={
+                      !formData.country
+                        ? "Select country first"
+                        : isLoadingMasterData
+                          ? "Loading cities..."
+                          : "Select city"
+                    } />
+                  </SelectTrigger>
                   <SelectContent className="bg-popover">
-                    {availableCities.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    {filteredCities.map((city) => (
+                      <SelectItem key={city.id} value={city.id}>
+                        {city.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1219,14 +1338,17 @@ export default function CreateTrip() {
                       <Select
                         value={accommodation.currency}
                         onValueChange={(v) => updateAccommodation(index, 'currency', v)}
+                        disabled={isLoadingMasterData}
                       >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger>
+                          <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select currency"} />
+                        </SelectTrigger>
                         <SelectContent className="bg-popover">
-                          <SelectItem value="INR">INR (₹)</SelectItem>
-                          <SelectItem value="USD">USD ($)</SelectItem>
-                          <SelectItem value="EUR">EUR (€)</SelectItem>
-                          <SelectItem value="SGD">SGD (S$)</SelectItem>
-                          <SelectItem value="AED">AED (د.إ)</SelectItem>
+                          {currencies.map((currency) => (
+                            <SelectItem key={currency.id} value={currency.code}>
+                              {currency.code} ({currency.symbol})
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1578,14 +1700,17 @@ export default function CreateTrip() {
                       <Select
                         value={overhead.currency}
                         onValueChange={(v) => updateOverhead(index, 'currency', v)}
+                        disabled={isLoadingMasterData}
                       >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger>
+                          <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select currency"} />
+                        </SelectTrigger>
                         <SelectContent className="bg-popover">
-                          <SelectItem value="INR">INR (₹)</SelectItem>
-                          <SelectItem value="USD">USD ($)</SelectItem>
-                          <SelectItem value="EUR">EUR (€)</SelectItem>
-                          <SelectItem value="SGD">SGD (S$)</SelectItem>
-                          <SelectItem value="AED">AED (د.إ)</SelectItem>
+                          {currencies.map((currency) => (
+                            <SelectItem key={currency.id} value={currency.code}>
+                              {currency.code} ({currency.symbol})
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>

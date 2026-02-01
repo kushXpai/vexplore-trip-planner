@@ -5,10 +5,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Trip } from '@/types/trip';
-import { formatINR } from '@/data/demoData';
+import { Currency, Trip } from '@/types/trip';
 import { Calculator, Save, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+
+// Helper function to format currency with symbol
+const formatCurrencyWithSymbol = (amount: number, currencyCode: string, currencies: Currency[]): string => {
+  const currency = currencies.find(c => c.code === currencyCode);
+  const symbol = currency?.symbol ?? '₹';
+  return `${symbol}${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
+// Helper function to format INR specifically
+const formatINR = (amount: number): string => {
+  return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 interface ActualExpensesEntryProps {
   trip: Trip;

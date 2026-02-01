@@ -1,7 +1,6 @@
 // src/pages/Dashboard.tsx
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { StatCard } from '@/components/shared/StatCard';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -146,117 +145,115 @@ export default function Dashboard() {
   };
 
   return (
-    <AppLayout title="Dashboard">
-      <div className="p-6 space-y-6 animate-fade-in">
-        {/* Greeting */}
-        {user && (
-          <div className="text-sm text-muted-foreground">
-            Hi <span className="font-medium text-foreground">{user.name}</span> ({user.role})
-          </div>
-        )}
-
-        {/* Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            title="Total Trips"
-            value={stats.totalTrips}
-            subtitle="All time"
-            icon={Plane}
-          />
-          <StatCard
-            title="Active Trips"
-            value={stats.activeTrips}
-            subtitle="In progress"
-            icon={Calendar}
-          />
-          <StatCard
-            title="Total Revenue"
-            value={formatINR(stats.totalRevenue)}
-            subtitle="This quarter"
-            icon={IndianRupee}
-          />
-          <StatCard
-            title="Avg. Profit Margin"
-            value={`${stats.avgProfit}%`}
-            subtitle="Across all trips"
-            icon={TrendingUp}
-          />
+    <div className="p-6 space-y-6 animate-fade-in">
+      {/* Greeting */}
+      {user && (
+        <div className="text-sm text-muted-foreground">
+          Hi <span className="font-medium text-foreground">{user.name}</span> ({user.role})
         </div>
+      )}
 
-        {/* Trips Section */}
-        <Card className="shadow-card">
-          <CardHeader className="pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <CardTitle className="text-xl font-semibold">Trip Cost Sheets</CardTitle>
-            <Button
-              onClick={() => navigate('/trips/create')}
-              className="gradient-primary text-primary-foreground hover:opacity-90 transition-opacity"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Create New Trip
-            </Button>
-          </CardHeader>
+      {/* Stats Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="Total Trips"
+          value={stats.totalTrips}
+          subtitle="All time"
+          icon={Plane}
+        />
+        <StatCard
+          title="Active Trips"
+          value={stats.activeTrips}
+          subtitle="In progress"
+          icon={Calendar}
+        />
+        <StatCard
+          title="Total Revenue"
+          value={formatINR(stats.totalRevenue)}
+          subtitle="This quarter"
+          icon={IndianRupee}
+        />
+        <StatCard
+          title="Avg. Profit Margin"
+          value={`${stats.avgProfit}%`}
+          subtitle="Across all trips"
+          icon={TrendingUp}
+        />
+      </div>
 
-          <CardContent>
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-3 mb-6">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search trips, institutions, destinations..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
+      {/* Trips Section */}
+      <Card className="shadow-card">
+        <CardHeader className="pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <CardTitle className="text-xl font-semibold">Trip Cost Sheets</CardTitle>
+          <Button
+            onClick={() => navigate('/trips/create')}
+            className="gradient-primary text-primary-foreground hover:opacity-90 transition-opacity"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Create New Trip
+          </Button>
+        </CardHeader>
 
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="sent">Sent</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="locked">Locked</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <div className="flex border rounded-lg overflow-hidden">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setViewMode('table')}
-                  className={cn('rounded-none', viewMode === 'table' && 'bg-muted')}
-                >
-                  <List className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setViewMode('cards')}
-                  className={cn('rounded-none', viewMode === 'cards' && 'bg-muted')}
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                </Button>
-              </div>
+        <CardContent>
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search trips, institutions, destinations..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
             </div>
 
-            {/* Content */}
-            {isLoading ? (
-              <div className="text-center py-12 text-muted-foreground">Loading trips...</div>
-            ) : filteredTrips.length === 0 ? (
-              <EmptyState />
-            ) : viewMode === 'table' ? (
-              <TripTable trips={filteredTrips} />
-            ) : (
-              <TripCards trips={filteredTrips} />
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </AppLayout>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full sm:w-40">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="sent">Sent</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="locked">Locked</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <div className="flex border rounded-lg overflow-hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setViewMode('table')}
+                className={cn('rounded-none', viewMode === 'table' && 'bg-muted')}
+              >
+                <List className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setViewMode('cards')}
+                className={cn('rounded-none', viewMode === 'cards' && 'bg-muted')}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Content */}
+          {isLoading ? (
+            <div className="text-center py-12 text-muted-foreground">Loading trips...</div>
+          ) : filteredTrips.length === 0 ? (
+            <EmptyState />
+          ) : viewMode === 'table' ? (
+            <TripTable trips={filteredTrips} />
+          ) : (
+            <TripCards trips={filteredTrips} />
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

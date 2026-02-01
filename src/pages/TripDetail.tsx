@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { PDFPreview } from '@/components/trip/PDFPreview';
+// import { PDFPreview } from '@/components/trip/PDFPreview';
 import { ActualExpensesEntry, ActualExpenses } from '@/components/trip/ActualExpensesEntry';
 import { toast } from 'sonner';
 import {
@@ -28,9 +28,21 @@ import {
   BarChart3,
   ClipboardEdit,
 } from 'lucide-react';
-import { formatINR, formatCurrency } from '@/data/demoData';
 import { Trip, PostTripAnalysis } from '@/types/trip';
 import { supabase } from '@/supabase/client';
+import { fetchCurrencies, Currency } from '@/services/masterDataService';
+
+// Helper function to format currency with symbol
+const formatCurrencyWithSymbol = (amount: number, currencyCode: string, currencies: Currency[]): string => {
+  const currency = currencies.find(c => c.code === currencyCode);
+  const symbol = currency?.symbol ?? '₹';
+  return `${symbol}${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
+// Helper function to format INR specifically
+const formatINR = (amount: number): string => {
+  return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 export default function TripDetail() {
   const { id } = useParams();
@@ -41,6 +53,18 @@ export default function TripDetail() {
   const [tripAnalysis, setTripAnalysis] = useState<PostTripAnalysis | null>(null);
   const [tripStatus, setTripStatus] = useState<'draft' | 'sent' | 'approved' | 'completed' | 'locked'>('draft');
   const [isLocked, setIsLocked] = useState(false);
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
+
+  // Fetch currencies on mount
+  useEffect(() => {
+    const loadCurrencies = async () => {
+      const result = await fetchCurrencies();
+      if (result.success && result.data) {
+        setCurrencies(result.data);
+      }
+    };
+    loadCurrencies();
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -265,6 +289,17 @@ export default function TripDetail() {
     };
     setTripAnalysis(newAnalysis);
   };
+  
+  // Currency formatting helper functions
+  const formatINR = (amount: number): string => {
+    return `₹${amount.toLocaleString('en-IN')}`;
+  };
+
+  const formatCurrency = (amount: number, currencyCode: string): string => {
+    const currency = currencies.find(c => c.code === currencyCode);
+    const symbol = currency?.symbol || '₹';
+    return `${symbol}${amount.toLocaleString('en-IN')}`;
+  };
 
   return (
     <AppLayout
@@ -440,16 +475,16 @@ export default function TripDetail() {
           </TabsList>
 
           <TabsContent value="transport">
-            <TransportSection trip={trip} />
+            <TransportSection trip={trip} currencies={currencies} />
           </TabsContent>
           <TabsContent value="accommodation">
-            <AccommodationSection trip={trip} />
+            <AccommodationSection trip={trip} currencies={currencies} />
           </TabsContent>
           <TabsContent value="meals">
-            <MealsSection trip={trip} />
+            <MealsSection trip={trip} currencies={currencies} />
           </TabsContent>
           <TabsContent value="activities">
-            <ActivitiesSection trip={trip} />
+            <ActivitiesSection trip={trip} currencies={currencies} />
           </TabsContent>
           <TabsContent value="summary">
             <CostSummarySection trip={trip} />
@@ -465,7 +500,7 @@ export default function TripDetail() {
         </Tabs>
       </div>
 
-      <PDFPreview trip={trip} open={showPDFPreview} onClose={() => setShowPDFPreview(false)} />
+      {/* <PDFPreview trip={trip} open={showPDFPreview} onClose={() => setShowPDFPreview(false)} /> */}
     </AppLayout>
   );
 }
@@ -482,7 +517,7 @@ function InfoItem({ label, value, icon }: { label: string; value: string; icon?:
   );
 }
 
-function TransportSection({ trip }: { trip: Trip }) {
+function TransportSection({ trip, currencies }: { trip: Trip; currencies: Currency[] }) {
   return (
     <div className="grid gap-4">
       {trip.transport.flights.length > 0 && (
@@ -512,7 +547,7 @@ function TransportSection({ trip }: { trip: Trip }) {
                     </div>
                     <div>
                       <p className="text-muted-foreground">Cost/Person</p>
-                      <p className="font-medium">{formatCurrency(flight.costPerPerson, flight.currency)}</p>
+                      <p className="font-medium">{formatCurrencyWithSymbol(flight.costPerPerson, flight.currency, currencies)}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Total (INR)</p>
@@ -552,7 +587,7 @@ function TransportSection({ trip }: { trip: Trip }) {
                     </div>
                     <div>
                       <p className="text-muted-foreground">Cost/Bus/Day</p>
-                      <p className="font-medium">{formatCurrency(bus.costPerBus, bus.currency)}</p>
+                      <p className="font-medium">{formatCurrencyWithSymbol(bus.costPerBus, bus.currency, currencies)}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Days</p>
@@ -597,7 +632,7 @@ function TransportSection({ trip }: { trip: Trip }) {
                     </div>
                     <div>
                       <p className="text-muted-foreground">Cost/Person</p>
-                      <p className="font-medium">{formatCurrency(train.costPerPerson, train.currency)}</p>
+                      <p className="font-medium">{formatCurrencyWithSymbol(train.costPerPerson, train.currency, currencies)}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Total (INR)</p>
@@ -614,7 +649,7 @@ function TransportSection({ trip }: { trip: Trip }) {
   );
 }
 
-function AccommodationSection({ trip }: { trip: Trip }) {
+function AccommodationSection({ trip, currencies }: { trip: Trip; currencies: Currency[] }) {
   return (
     <Card className="shadow-card">
       <CardHeader className="pb-3">
@@ -645,7 +680,7 @@ function AccommodationSection({ trip }: { trip: Trip }) {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Cost/Room</p>
-                  <p className="font-medium">{formatCurrency(hotel.totalCostINR / hotel.totalRooms, hotel.currency)}</p>
+                  <p className="font-medium">{formatCurrencyWithSymbol(hotel.totalCostINR / hotel.totalRooms, hotel.currency, currencies)}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Total Rooms</p>
@@ -681,7 +716,7 @@ function AccommodationSection({ trip }: { trip: Trip }) {
   );
 }
 
-function MealsSection({ trip }: { trip: Trip }) {
+function MealsSection({ trip, currencies }: { trip: Trip; currencies: Currency[] }) {
   return (
     <Card className="shadow-card">
       <CardHeader className="pb-3">
@@ -695,15 +730,15 @@ function MealsSection({ trip }: { trip: Trip }) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             <div>
               <p className="text-muted-foreground text-sm">Lunch Cost/Person</p>
-              <p className="font-semibold text-lg">{formatCurrency(trip.meals.lunchCostPerPerson, trip.meals.currency)}</p>
+              <p className="font-semibold text-lg">{formatCurrencyWithSymbol(trip.meals.lunchCostPerPerson, trip.meals.currency, currencies)}</p>
             </div>
             <div>
               <p className="text-muted-foreground text-sm">Dinner Cost/Person</p>
-              <p className="font-semibold text-lg">{formatCurrency(trip.meals.dinnerCostPerPerson, trip.meals.currency)}</p>
+              <p className="font-semibold text-lg">{formatCurrencyWithSymbol(trip.meals.dinnerCostPerPerson, trip.meals.currency, currencies)}</p>
             </div>
             <div>
               <p className="text-muted-foreground text-sm">Daily Total</p>
-              <p className="font-semibold text-lg">{formatCurrency(trip.meals.dailyCostPerPerson, trip.meals.currency)}</p>
+              <p className="font-semibold text-lg">{formatCurrencyWithSymbol(trip.meals.dailyCostPerPerson, trip.meals.currency, currencies)}</p>
             </div>
             <div>
               <p className="text-muted-foreground text-sm">Total ({trip.meals.totalDays} days)</p>
@@ -719,7 +754,7 @@ function MealsSection({ trip }: { trip: Trip }) {
   );
 }
 
-function ActivitiesSection({ trip }: { trip: Trip }) {
+function ActivitiesSection({ trip, currencies }: { trip: Trip; currencies: Currency[] }) {
   const totalActivitiesCost = trip.activities.reduce((sum, a) => sum + a.totalCostINR, 0);
 
   return (
@@ -742,12 +777,12 @@ function ActivitiesSection({ trip }: { trip: Trip }) {
                 <span className="font-semibold text-primary">{formatINR(activity.totalCostINR)}</span>
               </div>
               <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                <span>Entry: {formatCurrency(activity.entryCost, activity.currency)}</span>
+                <span>Entry: {formatCurrencyWithSymbol(activity.entryCost, activity.currency, currencies)}</span>
                 {activity.transportCost > 0 && (
-                  <span>Transport: {formatCurrency(activity.transportCost, activity.currency)}</span>
+                  <span>Transport: {formatCurrencyWithSymbol(activity.transportCost, activity.currency, currencies)}</span>
                 )}
                 {activity.guideCost > 0 && (
-                  <span>Guide: {formatCurrency(activity.guideCost, activity.currency)}</span>
+                  <span>Guide: {formatCurrencyWithSymbol(activity.guideCost, activity.currency, currencies)}</span>
                 )}
               </div>
               {activity.description && (
