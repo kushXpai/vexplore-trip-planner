@@ -18,7 +18,7 @@ import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
 
-// ✅ Data Router configuration
+// Router configuration
 const router = createBrowserRouter([
   { path: "/login", element: <Login /> },
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -39,16 +39,15 @@ const router = createBrowserRouter([
 ]);
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <AuthProvider>
-        {/* ✅ Use RouterProvider instead of BrowserRouter */}
+  <AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
         <RouterProvider router={router} />
-      </AuthProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
+        <Toaster />
+        <Sonner />
+      </TooltipProvider>
+    </QueryClientProvider>
+  </AuthProvider>
 );
 
 export default App;
