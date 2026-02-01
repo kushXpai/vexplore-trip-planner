@@ -66,6 +66,7 @@ type DashboardTrip = {
   totalCostINR: number;
   status: 'draft' | 'sent' | 'approved' | 'completed' | 'locked';
   participants: { totalParticipants: number };
+  createdBy?: string; // Added to track creator
 };
 
 type ViewMode = 'table' | 'cards';
@@ -80,11 +81,16 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  /* -------------------- FETCH TRIPS -------------------- */
+  /* -------------------- FETCH TRIPS WITH ROLE-BASED ACCESS -------------------- */
   const { data: trips, isLoading } = useQuery<DashboardTrip[], Error>({
-    queryKey: ['trips'],
+    queryKey: ['trips', user?.id, user?.role],
     queryFn: async () => {
-      const { data, error } = await supabase
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Start building the query
+      let query = supabase
         .from('trips')
         .select(`
           id,
@@ -97,11 +103,21 @@ export default function Dashboard() {
           total_days,
           total_cost_inr,
           status,
+          created_by,
           trip_participants (
             total_participants
           )
-        `)
-        .order('created_at', { ascending: false });
+        `);
+
+      // Apply role-based filtering
+      if (user.role === 'staff') {
+        // Staff can only see trips they created
+        query = query.eq('created_by', user.id);
+      }
+      // Admin sees all trips (no additional filter needed)
+
+      // Execute query with ordering
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
         console.error('Supabase error:', error);
@@ -119,11 +135,13 @@ export default function Dashboard() {
         totalDays: t.total_days,
         totalCostINR: t.total_cost_inr,
         status: t.status,
+        createdBy: t.created_by,
         participants: {
           totalParticipants: t.trip_participants?.total_participants || 0
         },
       }));
     },
+    enabled: !!user, // Only run query if user is available
   });
 
   /* -------------------- FILTERED TRIPS -------------------- */
@@ -150,6 +168,12 @@ export default function Dashboard() {
       {user && (
         <div className="text-sm text-muted-foreground">
           Hi <span className="font-medium text-foreground">{user.name}</span> ({user.role})
+          {user.role === 'staff' && (
+            <span className="ml-2 text-xs">(Viewing your trips only)</span>
+          )}
+          {user.role === 'admin' && (
+            <span className="ml-2 text-xs">(Viewing all trips)</span>
+          )}
         </div>
       )}
 
@@ -158,7 +182,7 @@ export default function Dashboard() {
         <StatCard
           title="Total Trips"
           value={stats.totalTrips}
-          subtitle="All time"
+          subtitle={user?.role === 'admin' ? 'All time' : 'Your trips'}
           icon={Plane}
         />
         <StatCard
@@ -184,7 +208,14 @@ export default function Dashboard() {
       {/* Trips Section */}
       <Card className="shadow-card">
         <CardHeader className="pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <CardTitle className="text-xl font-semibold">Trip Cost Sheets</CardTitle>
+          <CardTitle className="text-xl font-semibold">
+            Trip Cost Sheets
+            {user?.role === 'staff' && (
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                (Your Trips)
+              </span>
+            )}
+          </CardTitle>
           <Button
             onClick={() => navigate('/trips/create')}
             className="gradient-primary text-primary-foreground hover:opacity-90 transition-opacity"
