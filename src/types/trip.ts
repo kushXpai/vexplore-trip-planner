@@ -127,12 +127,18 @@ export interface Train {
    Accommodation
 ========================= */
 
+export interface RoomTypeConfig {
+  roomType: string;
+  capacityPerRoom: number;
+  costPerRoom: number;
+}
+
 export interface Accommodation {
   id: string;
   hotelName: string;
   city: string;
   numberOfNights: number;
-  costPerRoom: number;
+  roomTypes: RoomTypeConfig[];
   currency: string;
   breakfastIncluded: boolean;
   roomAllocation: RoomAllocation;
@@ -149,20 +155,37 @@ export interface RoomAllocation {
   maleVXplorerRooms: number;
   femaleVXplorerRooms: number;
   totalRooms: number;
+  breakdown?: {
+    boys: RoomTypeBreakdown[];
+    girls: RoomTypeBreakdown[];
+    maleFaculty: RoomTypeBreakdown[];
+    femaleFaculty: RoomTypeBreakdown[];
+    maleVXplorers: RoomTypeBreakdown[];
+    femaleVXplorers: RoomTypeBreakdown[];
+  };
+}
+
+export interface RoomTypeBreakdown {
+  roomType: string;
+  capacityPerRoom: number;
+  numberOfRooms: number;
+  peopleAccommodated: number;
+  costPerRoom: number;
 }
 
 /* =========================
-   Meals
+   Meals - UPDATED WITH BREAKFAST
 ========================= */
 
 export interface Meals {
+  breakfastCostPerPerson: number;  // NEW FIELD - Cost of breakfast per person
   lunchCostPerPerson: number;
   dinnerCostPerPerson: number;
   currency: string;
   totalDays: number;
   totalParticipants: number;
-  dailyCost: number;
-  totalCost: number;
+  dailyCostPerPerson: number;  // breakfast + lunch + dinner
+  totalCost: number;            // dailyCostPerPerson * totalDays * totalParticipants
   totalCostINR: number;
 }
 

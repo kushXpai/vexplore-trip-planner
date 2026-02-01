@@ -158,9 +158,10 @@ export default function TripDetail() {
           meals: {
             totalDays: data.total_days ?? 0,
             totalParticipants: data.trip_participants?.total_participants ?? 0,
+            breakfastCostPerPerson:0,
             lunchCostPerPerson: 0,
             dinnerCostPerPerson: 0,
-            dailyCost: 0,
+            dailyCostPerPerson: 0,
             totalCost: 0,
             totalCostINR: 0,
             currency: data.currency ?? 'INR',
@@ -644,7 +645,7 @@ function AccommodationSection({ trip }: { trip: Trip }) {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Cost/Room</p>
-                  <p className="font-medium">{formatCurrency(hotel.costPerRoom, hotel.currency)}</p>
+                  <p className="font-medium">{formatCurrency(hotel.totalCostINR / hotel.totalRooms, hotel.currency)}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Total Rooms</p>
@@ -702,7 +703,7 @@ function MealsSection({ trip }: { trip: Trip }) {
             </div>
             <div>
               <p className="text-muted-foreground text-sm">Daily Total</p>
-              <p className="font-semibold text-lg">{formatCurrency(trip.meals.dailyCost, trip.meals.currency)}</p>
+              <p className="font-semibold text-lg">{formatCurrency(trip.meals.dailyCostPerPerson, trip.meals.currency)}</p>
             </div>
             <div>
               <p className="text-muted-foreground text-sm">Total ({trip.meals.totalDays} days)</p>

@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 
 const allNavigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard, exact: true, adminOnly: false },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, exact: true, adminOnly: false },
   { name: 'Masters', href: '/masters', icon: Database, exact: false, adminOnly: false },
   { name: 'Reports', href: '/reports', icon: BarChart3, exact: false, adminOnly: true },
 ];

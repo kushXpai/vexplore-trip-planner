@@ -98,12 +98,13 @@ interface DbAccommodation {
   hotel_name: string;
   city: string;
   number_of_nights: number;
-  cost_per_room: number;
   currency: string;
   breakfast_included: boolean;
   total_rooms: number;
   total_cost: number;
   total_cost_inr: number;
+  room_allocation?: any;
+  room_types?: any;
 }
 
 interface DbActivity {
@@ -116,6 +117,29 @@ interface DbActivity {
   currency: string;
   description: string;
   total_cost: number;
+  total_cost_inr: number;
+}
+
+interface DbMeals {
+  trip_id: string;
+  breakfast_cost_per_person: number;
+  lunch_cost_per_person: number;
+  dinner_cost_per_person: number;
+  currency: string;
+  total_days: number;
+  total_participants: number;
+  daily_cost_per_person: number;
+  total_cost: number;
+  total_cost_inr: number;
+}
+
+interface DbOverhead {
+  id?: string;
+  trip_id: string;
+  name: string;
+  amount: number;
+  currency: string;
+  hide_from_client: boolean;
   total_cost_inr: number;
 }
 
@@ -145,14 +169,15 @@ export async function createTrip(tripData: {
   // Accommodation
   accommodations: Accommodation[];
   
-  // Meals
+  // Meals - UPDATED WITH BREAKFAST
   meals: {
+    breakfastCostPerPerson: number;
     lunchCostPerPerson: number;
     dinnerCostPerPerson: number;
     currency: string;
     totalDays: number;
     totalParticipants: number;
-    dailyCost: number;
+    dailyCostPerPerson: number;
     totalCost: number;
     totalCostINR: number;
   };
@@ -300,12 +325,13 @@ export async function createTrip(tripData: {
         hotel_name: acc.hotelName,
         city: acc.city,
         number_of_nights: acc.numberOfNights,
-        cost_per_room: acc.costPerRoom,
         currency: acc.currency,
         breakfast_included: acc.breakfastIncluded,
         total_rooms: acc.totalRooms,
         total_cost: acc.totalCost,
         total_cost_inr: acc.totalCostINR,
+        room_allocation: acc.roomAllocation,
+        room_types: acc.roomTypes,  // NEW
       }));
 
       const { error: accommodationsError } = await supabase
@@ -315,7 +341,27 @@ export async function createTrip(tripData: {
       if (accommodationsError) throw accommodationsError;
     }
 
-    // 7. Insert activities
+    // 7. Insert meals - UPDATED WITH BREAKFAST
+    const dbMeals: DbMeals = {
+      trip_id: tripId,
+      breakfast_cost_per_person: tripData.meals.breakfastCostPerPerson,
+      lunch_cost_per_person: tripData.meals.lunchCostPerPerson,
+      dinner_cost_per_person: tripData.meals.dinnerCostPerPerson,
+      currency: tripData.meals.currency,
+      total_days: tripData.meals.totalDays,
+      total_participants: tripData.meals.totalParticipants,
+      daily_cost_per_person: tripData.meals.dailyCostPerPerson,
+      total_cost: tripData.meals.totalCost,
+      total_cost_inr: tripData.meals.totalCostINR,
+    };
+
+    const { error: mealsError } = await supabase
+      .from('trip_meals')
+      .insert(dbMeals);
+
+    if (mealsError) throw mealsError;
+
+    // 8. Insert activities
     if (tripData.activities.length > 0) {
       const dbActivities: DbActivity[] = tripData.activities.map(activity => ({
         trip_id: tripId,
@@ -336,11 +382,25 @@ export async function createTrip(tripData: {
       if (activitiesError) throw activitiesError;
     }
 
-    // Note: Meals and Overheads tables don't exist in your schema
-    // You may want to add these tables or handle them differently
-    // For now, they will be stored in the total costs
+    // 9. Insert overheads
+    if (tripData.overheads.length > 0) {
+      const dbOverheads: DbOverhead[] = tripData.overheads.map(overhead => ({
+        trip_id: tripId,
+        name: overhead.name,
+        amount: overhead.amount,
+        currency: overhead.currency,
+        hide_from_client: overhead.hideFromClient,
+        total_cost_inr: overhead.totalCostINR,
+      }));
 
-    return { success: true, tripId: trip.id, trip };
+      const { error: overheadsError } = await supabase
+        .from('trip_overheads')
+        .insert(dbOverheads);
+
+      if (overheadsError) throw overheadsError;
+    }
+
+    return { success: true, tripId };
   } catch (error) {
     console.error('Error creating trip:', error);
     return { 
@@ -351,7 +411,7 @@ export async function createTrip(tripData: {
 }
 
 /**
- * Update an existing trip
+ * Update an existing trip with all related data
  */
 export async function updateTrip(
   tripId: string,
@@ -472,17 +532,38 @@ export async function updateTrip(
         hotel_name: acc.hotelName,
         city: acc.city,
         number_of_nights: acc.numberOfNights,
-        cost_per_room: acc.costPerRoom,
         currency: acc.currency,
         breakfast_included: acc.breakfastIncluded,
         total_rooms: acc.totalRooms,
         total_cost: acc.totalCost,
         total_cost_inr: acc.totalCostINR,
+        room_allocation: acc.roomAllocation,
+        room_types: acc.roomTypes,  // NEW
       }));
       await supabase.from('trip_accommodations').insert(dbAccommodations);
     }
 
-    // 7. Delete and re-insert activities
+    // 7. Update meals (upsert) - UPDATED WITH BREAKFAST
+    const dbMeals: DbMeals = {
+      trip_id: tripId,
+      breakfast_cost_per_person: tripData.meals.breakfastCostPerPerson,
+      lunch_cost_per_person: tripData.meals.lunchCostPerPerson,
+      dinner_cost_per_person: tripData.meals.dinnerCostPerPerson,
+      currency: tripData.meals.currency,
+      total_days: tripData.meals.totalDays,
+      total_participants: tripData.meals.totalParticipants,
+      daily_cost_per_person: tripData.meals.dailyCostPerPerson,
+      total_cost: tripData.meals.totalCost,
+      total_cost_inr: tripData.meals.totalCostINR,
+    };
+
+    const { error: mealsError } = await supabase
+      .from('trip_meals')
+      .upsert(dbMeals, { onConflict: 'trip_id' });
+
+    if (mealsError) throw mealsError;
+
+    // 8. Delete and re-insert activities
     await supabase.from('trip_activities').delete().eq('trip_id', tripId);
     if (tripData.activities.length > 0) {
       const dbActivities: DbActivity[] = tripData.activities.map(activity => ({
@@ -497,6 +578,20 @@ export async function updateTrip(
         total_cost_inr: activity.totalCostINR,
       }));
       await supabase.from('trip_activities').insert(dbActivities);
+    }
+
+    // 9. Delete and re-insert overheads
+    await supabase.from('trip_overheads').delete().eq('trip_id', tripId);
+    if (tripData.overheads.length > 0) {
+      const dbOverheads: DbOverhead[] = tripData.overheads.map(overhead => ({
+        trip_id: tripId,
+        name: overhead.name,
+        amount: overhead.amount,
+        currency: overhead.currency,
+        hide_from_client: overhead.hideFromClient,
+        total_cost_inr: overhead.totalCostINR,
+      }));
+      await supabase.from('trip_overheads').insert(dbOverheads);
     }
 
     return { success: true, tripId };
@@ -565,6 +660,16 @@ export async function getTripById(tripId: string) {
 
     if (accommodationsError) throw accommodationsError;
 
+    // Fetch meals - UPDATED
+    const { data: meals, error: mealsError } = await supabase
+      .from('trip_meals')
+      .select('*')
+      .eq('trip_id', tripId)
+      .single();
+
+    // Don't throw error if meals not found (PGRST116 = not found)
+    if (mealsError && mealsError.code !== 'PGRST116') throw mealsError;
+
     // Fetch activities
     const { data: activities, error: activitiesError } = await supabase
       .from('trip_activities')
@@ -572,6 +677,14 @@ export async function getTripById(tripId: string) {
       .eq('trip_id', tripId);
 
     if (activitiesError) throw activitiesError;
+
+    // Fetch overheads
+    const { data: overheads, error: overheadsError } = await supabase
+      .from('trip_overheads')
+      .select('*')
+      .eq('trip_id', tripId);
+
+    if (overheadsError) throw overheadsError;
 
     // Transform to frontend format
     return {
@@ -583,7 +696,9 @@ export async function getTripById(tripId: string) {
         buses: buses || [],
         trains: trains || [],
         accommodations: accommodations || [],
+        meals: meals || null,  // UPDATED - Include meals
         activities: activities || [],
+        overheads: overheads || [],
       }
     };
   } catch (error) {
