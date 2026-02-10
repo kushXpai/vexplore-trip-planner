@@ -14,6 +14,13 @@ export interface User {
 }
 
 /* =========================
+   Trip Classification
+========================= */
+
+export type TripCategory = 'domestic' | 'international';
+export type TripType = 'institute' | 'commercial';
+
+/* =========================
    Trip & Status
 ========================= */
 
@@ -28,13 +35,24 @@ export interface Trip {
   id: string;
   name: string;
   institution: string;
+  
+  // NEW: Trip classification
+  tripCategory: TripCategory;  // domestic or international
+  tripType: TripType;          // institute or commercial
+  
   country: string;
-  city: string;
+  
+  // CHANGED: Multi-city support (array of city names)
+  cities: string[];  // ["Paris", "Lyon", "Nice"]
+  
   startDate: string;
   endDate: string;
   totalDays: number;
   totalNights: number;
-  currency: string;
+  
+  // Default currency for the trip
+  defaultCurrency: string;
+  
   status: TripStatus;
 
   participants: Participants;
@@ -43,10 +61,22 @@ export interface Trip {
   meals: Meals;
   activities: Activity[];
   overheads: Overhead[];
+  
+  // NEW: Extras (visa, tips, insurance)
+  extras?: TripExtras;
 
-  totalCost: number;
-  totalCostINR: number;
-  costPerStudent: number;
+  // Cost calculations
+  subtotalBeforeTax: number;
+  
+  // NEW: Tax fields
+  gstPercentage: number;
+  gstAmount: number;
+  tcsPercentage: number;  // Only for international
+  tcsAmount: number;      // Only for international
+  
+  grandTotal: number;
+  grandTotalINR: number;
+  costPerParticipant: number;
 
   createdAt: string;
   updatedAt: string;
@@ -55,20 +85,54 @@ export interface Trip {
 }
 
 /* =========================
-   Participants
+   NEW: Trip Extras (Visa, Tips, Insurance)
+========================= */
+
+export interface TripExtras {
+  // Visa (international only)
+  visaCostPerPerson: number;
+  visaCurrency: string;
+  visaTotalCost: number;
+  visaTotalCostINR: number;
+  
+  // Tips (international only)
+  tipsCostPerPerson: number;
+  tipsCurrency: string;
+  tipsTotalCost: number;
+  tipsTotalCostINR: number;
+  
+  // Insurance (both domestic and international)
+  insuranceCostPerPerson: number;
+  insuranceCurrency: string;
+  insuranceTotalCost: number;
+  insuranceTotalCostINR: number;
+}
+
+/* =========================
+   Participants - UPDATED
 ========================= */
 
 export interface Participants {
+  // For INSTITUTE trips
   boys: number;
   girls: number;
   maleFaculty: number;
   femaleFaculty: number;
   maleVXplorers: number;
   femaleVXplorers: number;
+  
+  // For COMMERCIAL trips
+  maleCount: number;
+  femaleCount: number;
+  otherCount: number;
+  commercialMaleVXplorers: number;  // NEW: Male VXplorers in commercial trips
+  commercialFemaleVXplorers: number;  // NEW: Female VXplorers in commercial trips
 
+  // Totals
   totalStudents: number;
   totalFaculty: number;
   totalVXplorers: number;
+  totalCommercial: number;
   totalParticipants: number;
 }
 
@@ -91,7 +155,7 @@ export interface Flight {
   departureTime: string;
   arrivalTime: string;
   costPerPerson: number;
-  currency: string;
+  currency: string;  // Each item can have its own currency
   description: string;
   totalCost: number;
   totalCostINR: number;
@@ -102,7 +166,7 @@ export interface Bus {
   name: string;
   seatingCapacity: number;
   costPerBus: number;
-  currency: string;
+  currency: string;  // Each item can have its own currency
   numberOfDays: number;
   quantity: number;
   description: string;
@@ -117,14 +181,14 @@ export interface Train {
   class: string;
   timing: string;
   costPerPerson: number;
-  currency: string;
+  currency: string;  // Each item can have its own currency
   description: string;
   totalCost: number;
   totalCostINR: number;
 }
 
 /* =========================
-   Accommodation
+   Accommodation - UPDATED
 ========================= */
 
 export interface RoomTypeConfig {
@@ -133,13 +197,27 @@ export interface RoomTypeConfig {
   costPerRoom: number;
 }
 
+// NEW: Room preferences for allocation
+// NEW: Room preferences for allocation
+export interface RoomPreferences {
+  students?: string[];      // For institute: boys + girls combined
+  faculty?: string[];       // For institute: always ["single"]
+  vxplorers?: string[];     // For institute: male + female VXplorers combined
+  participants?: string[];  // For commercial: male + female + other combined
+  commercialVXplorers?: string[];  // For commercial: male + female VXplorers combined
+}
+
 export interface Accommodation {
   id: string;
   hotelName: string;
-  city: string;
+  city: string;  // Which city in the multi-city itinerary
   numberOfNights: number;
   roomTypes: RoomTypeConfig[];
-  currency: string;
+  
+  // NEW: Room preferences
+  roomPreferences: RoomPreferences;
+  
+  currency: string;  // Each hotel can have its own currency
   breakfastIncluded: boolean;
   roomAllocation: RoomAllocation;
   totalRooms: number;
@@ -154,6 +232,14 @@ export interface RoomAllocation {
   femaleFacultyRooms: number;
   maleVXplorerRooms: number;
   femaleVXplorerRooms: number;
+  
+  // Commercial trip allocations
+  commercialMaleRooms: number;
+  commercialFemaleRooms: number;
+  commercialOtherRooms: number;
+  commercialMaleVXplorerRooms: number;  // NEW
+  commercialFemaleVXplorerRooms: number;  // NEW
+  
   totalRooms: number;
   breakdown?: {
     boys: RoomTypeBreakdown[];
@@ -162,6 +248,14 @@ export interface RoomAllocation {
     femaleFaculty: RoomTypeBreakdown[];
     maleVXplorers: RoomTypeBreakdown[];
     femaleVXplorers: RoomTypeBreakdown[];
+    
+    // NEW: Commercial breakdowns
+    // Commercial breakdowns
+    commercialMale: RoomTypeBreakdown[];
+    commercialFemale: RoomTypeBreakdown[];
+    commercialOther: RoomTypeBreakdown[];
+    commercialMaleVXplorers: RoomTypeBreakdown[];  // NEW
+    commercialFemaleVXplorers: RoomTypeBreakdown[];  // NEW
   };
 }
 
@@ -174,18 +268,18 @@ export interface RoomTypeBreakdown {
 }
 
 /* =========================
-   Meals - UPDATED WITH BREAKFAST
+   Meals
 ========================= */
 
 export interface Meals {
-  breakfastCostPerPerson: number;  // NEW FIELD - Cost of breakfast per person
+  breakfastCostPerPerson: number;
   lunchCostPerPerson: number;
   dinnerCostPerPerson: number;
-  currency: string;
+  currency: string;  // Can have its own currency
   totalDays: number;
   totalParticipants: number;
-  dailyCostPerPerson: number;  // breakfast + lunch + dinner
-  totalCost: number;            // dailyCostPerPerson * totalDays * totalParticipants
+  dailyCostPerPerson: number;
+  totalCost: number;
   totalCostINR: number;
 }
 
@@ -196,10 +290,11 @@ export interface Meals {
 export interface Activity {
   id: string;
   name: string;
+  city?: string;  // NEW: Which city in multi-city itinerary (optional)
   entryCost: number;
   transportCost: number;
   guideCost: number;
-  currency: string;
+  currency: string;  // Each activity can have its own currency
   description: string;
   totalCost: number;
   totalCostINR: number;
@@ -213,7 +308,7 @@ export interface Overhead {
   id: string;
   name: string;
   amount: number;
-  currency: string;
+  currency: string;  // Each overhead can have its own currency
   hideFromClient: boolean;
   totalCostINR: number;
 }

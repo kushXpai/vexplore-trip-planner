@@ -1,8 +1,10 @@
 -- ============================================
 -- COMPLETE DATABASE SCHEMA FOR TRIP MANAGEMENT
+-- Version 2.0 - With Domestic/International, Commercial Trips, GST/TCS, Multi-City
 -- ============================================
 
 -- Drop existing tables in correct order (respecting foreign keys)
+DROP TABLE IF EXISTS public.trip_extras CASCADE;
 DROP TABLE IF EXISTS public.post_trip_analysis CASCADE;
 DROP TABLE IF EXISTS public.trip_overheads CASCADE;
 DROP TABLE IF EXISTS public.trip_activities CASCADE;
@@ -23,6 +25,8 @@ DROP TABLE IF EXISTS public.users CASCADE;
 DROP TYPE IF EXISTS institution_type CASCADE;
 DROP TYPE IF EXISTS trip_status CASCADE;
 DROP TYPE IF EXISTS user_role CASCADE;
+DROP TYPE IF EXISTS trip_category CASCADE;
+DROP TYPE IF EXISTS trip_type CASCADE;
 
 -- ============================================
 -- ENUMS
@@ -40,6 +44,12 @@ CREATE TYPE trip_status AS ENUM (
 
 CREATE TYPE institution_type AS ENUM ('school', 'college');
 
+-- NEW: Trip category (domestic vs international)
+CREATE TYPE trip_category AS ENUM ('domestic', 'international');
+
+-- NEW: Trip type (institute vs commercial)
+CREATE TYPE trip_type AS ENUM ('institute', 'commercial');
+
 -- ============================================
 -- USERS TABLE
 -- ============================================
@@ -55,14 +65,41 @@ CREATE TABLE public.users (
 -- Enable RLS
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies for users
-CREATE POLICY "Users can view their own data"
-  ON public.users FOR SELECT
-  USING (auth.uid() = id);
+-- Create security definer function to avoid RLS recursion
+CREATE OR REPLACE FUNCTION public.current_user_role()
+RETURNS user_role AS $$
+  SELECT role FROM public.users WHERE id = auth.uid()
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
 
-CREATE POLICY "Users can update their own data"
+-- RLS Policies for users
+CREATE POLICY "Users can view based on role"
+  ON public.users FOR SELECT
+  USING (
+    auth.uid() = id 
+    OR 
+    public.current_user_role() = 'admin'
+  );
+
+CREATE POLICY "Users can update based on role"
   ON public.users FOR UPDATE
-  USING (auth.uid() = id);
+  USING (
+    auth.uid() = id 
+    OR 
+    public.current_user_role() = 'admin'
+  );
+
+CREATE POLICY "Admins can insert users"
+  ON public.users FOR INSERT
+  WITH CHECK (
+    public.current_user_role() = 'admin'
+  );
+
+CREATE POLICY "Admins can delete users"
+  ON public.users FOR DELETE
+  USING (
+    public.current_user_role() = 'admin'
+    AND auth.uid() != id
+  );
 
 -- ============================================
 -- MASTER DATA TABLES
@@ -111,25 +148,47 @@ CREATE TABLE public.institutions (
 );
 
 -- ============================================
--- TRIPS TABLE (Main)
+-- TRIPS TABLE (Main) - UPDATED
 -- ============================================
 
 CREATE TABLE public.trips (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
   institution text NOT NULL,
+  
+  -- NEW: Trip classification
+  trip_category trip_category NOT NULL,  -- domestic or international
+  trip_type trip_type NOT NULL,          -- institute or commercial
+  
   country text NOT NULL,
-  city text NOT NULL,
+  
+  -- CHANGED: Multi-city support (JSONB array of city names)
+  cities jsonb NOT NULL DEFAULT '[]'::jsonb,  -- ["Paris", "Lyon", "Nice"]
+  
   start_date date NOT NULL,
   end_date date NOT NULL,
   total_days int NOT NULL CHECK (total_days > 0),
   total_nights int NOT NULL CHECK (total_nights >= 0),
-  currency text NOT NULL,
+  
+  -- Default currency for the trip (can be overridden per item)
+  default_currency text NOT NULL,
+  
   status trip_status NOT NULL DEFAULT 'draft',
 
-  total_cost numeric NOT NULL DEFAULT 0,
-  total_cost_inr numeric NOT NULL DEFAULT 0,
-  cost_per_student numeric NOT NULL DEFAULT 0,
+  -- Cost calculations
+  subtotal_before_tax numeric NOT NULL DEFAULT 0,
+  
+  -- NEW: Tax fields
+  gst_percentage numeric NOT NULL DEFAULT 5.0,
+  gst_amount numeric NOT NULL DEFAULT 0,
+  
+  tcs_percentage numeric NOT NULL DEFAULT 5.0,  -- Only for international
+  tcs_amount numeric NOT NULL DEFAULT 0,        -- Only for international
+  
+  grand_total numeric NOT NULL DEFAULT 0,
+  grand_total_inr numeric NOT NULL DEFAULT 0,
+  
+  cost_per_participant numeric NOT NULL DEFAULT 0,
 
   created_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
   created_at timestamptz DEFAULT now(),
@@ -139,26 +198,61 @@ CREATE TABLE public.trips (
 CREATE INDEX idx_trips_created_by ON public.trips(created_by);
 CREATE INDEX idx_trips_status ON public.trips(status);
 CREATE INDEX idx_trips_created_at ON public.trips(created_at DESC);
+CREATE INDEX idx_trips_category ON public.trips(trip_category);
+CREATE INDEX idx_trips_type ON public.trips(trip_type);
+CREATE INDEX idx_trips_cities ON public.trips USING gin (cities);
 
 -- Enable RLS
 ALTER TABLE public.trips ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for trips
-CREATE POLICY "Users can view their own trips"
+CREATE POLICY "trips_select_policy"
   ON public.trips FOR SELECT
-  USING (created_by = auth.uid());
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.users
+      WHERE users.id = auth.uid()
+      AND (
+        users.role = 'admin'
+        OR 
+        trips.created_by = auth.uid()
+      )
+    )
+  );
 
-CREATE POLICY "Users can create trips"
+CREATE POLICY "trips_insert_policy"
   ON public.trips FOR INSERT
-  WITH CHECK (created_by = auth.uid());
+  WITH CHECK (
+    created_by = auth.uid()
+  );
 
-CREATE POLICY "Users can update their own trips"
+CREATE POLICY "trips_update_policy"
   ON public.trips FOR UPDATE
-  USING (created_by = auth.uid());
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.users
+      WHERE users.id = auth.uid()
+      AND (
+        users.role = 'admin'
+        OR 
+        trips.created_by = auth.uid()
+      )
+    )
+  );
 
-CREATE POLICY "Users can delete their own trips"
+CREATE POLICY "trips_delete_policy"
   ON public.trips FOR DELETE
-  USING (created_by = auth.uid());
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.users
+      WHERE users.id = auth.uid()
+      AND (
+        users.role = 'admin'
+        OR 
+        trips.created_by = auth.uid()
+      )
+    )
+  );
 
 -- Auto-update updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -174,13 +268,39 @@ CREATE TRIGGER update_trips_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+
+-- Allow authenticated users to insert trips
+CREATE POLICY "Users can insert their own trips"
+  ON public.trips FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    auth.uid() = created_by
+  );
+
+-- Allow users to view their own trips
+CREATE POLICY "Users can view their own trips"
+  ON public.trips FOR SELECT
+  TO authenticated
+  USING (
+    auth.uid() = created_by
+  );
+
+-- Allow users to update their own trips
+CREATE POLICY "Users can update their own trips"
+  ON public.trips FOR UPDATE
+  TO authenticated
+  USING (
+    auth.uid() = created_by
+  );
+
 -- ============================================
--- TRIP PARTICIPANTS
+-- TRIP PARTICIPANTS - UPDATED
 -- ============================================
 
 CREATE TABLE public.trip_participants (
   trip_id uuid PRIMARY KEY REFERENCES public.trips(id) ON DELETE CASCADE,
 
+  -- For INSTITUTE trips
   boys int NOT NULL DEFAULT 0 CHECK (boys >= 0),
   girls int NOT NULL DEFAULT 0 CHECK (girls >= 0),
   male_faculty int NOT NULL DEFAULT 0 CHECK (male_faculty >= 0),
@@ -188,21 +308,79 @@ CREATE TABLE public.trip_participants (
   male_vxplorers int NOT NULL DEFAULT 0 CHECK (male_vxplorers >= 0),
   female_vxplorers int NOT NULL DEFAULT 0 CHECK (female_vxplorers >= 0),
 
+  -- NEW: For COMMERCIAL trips
+  male_count int NOT NULL DEFAULT 0 CHECK (male_count >= 0),
+  female_count int NOT NULL DEFAULT 0 CHECK (female_count >= 0),
+  other_count int NOT NULL DEFAULT 0 CHECK (other_count >= 0),
+  commercial_male_vxplorers int NOT NULL DEFAULT 0 CHECK (commercial_male_vxplorers >= 0),
+  commercial_female_vxplorers int NOT NULL DEFAULT 0 CHECK (commercial_female_vxplorers >= 0),
+
+  -- Totals
   total_students int NOT NULL DEFAULT 0,
   total_faculty int NOT NULL DEFAULT 0,
   total_vxplorers int NOT NULL DEFAULT 0,
+  total_commercial int NOT NULL DEFAULT 0,
   total_participants int NOT NULL DEFAULT 0
 );
 
 -- Enable RLS
 ALTER TABLE public.trip_participants ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Trip participants access"
+CREATE POLICY "trip_participants_policy"
   ON public.trip_participants FOR ALL
   USING (
     EXISTS (
       SELECT 1 FROM public.trips t
-      WHERE t.id = trip_id AND t.created_by = auth.uid()
+      JOIN public.users u ON u.id = auth.uid()
+      WHERE t.id = trip_id
+      AND (
+        u.role = 'admin'
+        OR t.created_by = auth.uid()
+      )
+    )
+  );
+
+-- ============================================
+-- NEW: TRIP EXTRAS (Visa, Tips, Insurance)
+-- ============================================
+
+CREATE TABLE public.trip_extras (
+  trip_id uuid PRIMARY KEY REFERENCES public.trips(id) ON DELETE CASCADE,
+  
+  -- Visa (international only)
+  visa_cost_per_person numeric NOT NULL DEFAULT 0 CHECK (visa_cost_per_person >= 0),
+  visa_currency text NOT NULL DEFAULT 'INR',
+  visa_total_cost numeric NOT NULL DEFAULT 0,
+  visa_total_cost_inr numeric NOT NULL DEFAULT 0,
+  
+  -- Tips (international only)
+  tips_cost_per_person numeric NOT NULL DEFAULT 0 CHECK (tips_cost_per_person >= 0),
+  tips_currency text NOT NULL DEFAULT 'INR',
+  tips_total_cost numeric NOT NULL DEFAULT 0,
+  tips_total_cost_inr numeric NOT NULL DEFAULT 0,
+  
+  -- Insurance (both domestic and international)
+  insurance_cost_per_person numeric NOT NULL DEFAULT 0 CHECK (insurance_cost_per_person >= 0),
+  insurance_currency text NOT NULL DEFAULT 'INR',
+  insurance_total_cost numeric NOT NULL DEFAULT 0,
+  insurance_total_cost_inr numeric NOT NULL DEFAULT 0,
+  
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.trip_extras ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "trip_extras_policy"
+  ON public.trip_extras FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.trips t
+      JOIN public.users u ON u.id = auth.uid()
+      WHERE t.id = trip_id
+      AND (
+        u.role = 'admin'
+        OR t.created_by = auth.uid()
+      )
     )
   );
 
@@ -234,12 +412,17 @@ CREATE INDEX idx_trip_flights_trip ON public.trip_flights(trip_id);
 
 ALTER TABLE public.trip_flights ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Trip flights access"
+CREATE POLICY "trip_flights_policy"
   ON public.trip_flights FOR ALL
   USING (
     EXISTS (
       SELECT 1 FROM public.trips t
-      WHERE t.id = trip_id AND t.created_by = auth.uid()
+      JOIN public.users u ON u.id = auth.uid()
+      WHERE t.id = trip_id
+      AND (
+        u.role = 'admin'
+        OR t.created_by = auth.uid()
+      )
     )
   );
 
@@ -264,12 +447,17 @@ CREATE INDEX idx_trip_buses_trip ON public.trip_buses(trip_id);
 
 ALTER TABLE public.trip_buses ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Trip buses access"
+CREATE POLICY "trip_buses_policy"
   ON public.trip_buses FOR ALL
   USING (
     EXISTS (
       SELECT 1 FROM public.trips t
-      WHERE t.id = trip_id AND t.created_by = auth.uid()
+      JOIN public.users u ON u.id = auth.uid()
+      WHERE t.id = trip_id
+      AND (
+        u.role = 'admin'
+        OR t.created_by = auth.uid()
+      )
     )
   );
 
@@ -295,17 +483,22 @@ CREATE INDEX idx_trip_trains_trip ON public.trip_trains(trip_id);
 
 ALTER TABLE public.trip_trains ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Trip trains access"
+CREATE POLICY "trip_trains_policy"
   ON public.trip_trains FOR ALL
   USING (
     EXISTS (
       SELECT 1 FROM public.trips t
-      WHERE t.id = trip_id AND t.created_by = auth.uid()
+      JOIN public.users u ON u.id = auth.uid()
+      WHERE t.id = trip_id
+      AND (
+        u.role = 'admin'
+        OR t.created_by = auth.uid()
+      )
     )
   );
 
 -- ============================================
--- ACCOMMODATIONS (WITH AUTO-ALLOCATION SUPPORT)
+-- ACCOMMODATIONS - UPDATED WITH ROOM PREFERENCES
 -- ============================================
 
 CREATE TABLE public.trip_accommodations (
@@ -313,14 +506,24 @@ CREATE TABLE public.trip_accommodations (
   trip_id uuid REFERENCES public.trips(id) ON DELETE CASCADE,
 
   hotel_name text NOT NULL,
-  city text NOT NULL,
+  city text NOT NULL,  -- Which city in the multi-city itinerary
   number_of_nights int NOT NULL DEFAULT 1 CHECK (number_of_nights > 0),
   currency text NOT NULL,
   breakfast_included boolean NOT NULL DEFAULT false,
 
-  -- NEW: Room type configurations for auto-allocation
+  -- Room type configurations for auto-allocation
   room_types jsonb NOT NULL DEFAULT '[]'::jsonb,
   -- Structure: [{ roomType: string, capacityPerRoom: number, costPerRoom: number }]
+
+  -- NEW: Room preferences for allocation
+  room_preferences jsonb NOT NULL DEFAULT '{}'::jsonb,
+  -- Structure: {
+  --   "students": ["double", "triple"],
+  --   "faculty": ["single"],
+  --   "boys": ["double", "triple"],
+  --   "girls": ["double", "triple"],
+  --   "commercial": ["double", "single"]
+  -- }
 
   -- Auto-calculated room allocation
   room_allocation jsonb NOT NULL DEFAULT '{
@@ -330,9 +533,11 @@ CREATE TABLE public.trip_accommodations (
     "femaleFacultyRooms": 0,
     "maleVXplorerRooms": 0,
     "femaleVXplorerRooms": 0,
+    "commercialMaleRooms": 0,
+    "commercialFemaleRooms": 0,
+    "commercialOtherRooms": 0,
     "totalRooms": 0
   }'::jsonb,
-  -- Structure includes breakdown: { ..., breakdown: { boys: [...], girls: [...], etc. } }
 
   total_rooms int NOT NULL DEFAULT 0,
   total_cost numeric NOT NULL DEFAULT 0,
@@ -344,24 +549,32 @@ CREATE TABLE public.trip_accommodations (
 CREATE INDEX idx_trip_accommodations_trip ON public.trip_accommodations(trip_id);
 CREATE INDEX idx_trip_accommodations_room_types ON public.trip_accommodations USING gin (room_types);
 CREATE INDEX idx_trip_accommodations_room_allocation ON public.trip_accommodations USING gin (room_allocation);
+CREATE INDEX idx_trip_accommodations_room_preferences ON public.trip_accommodations USING gin (room_preferences);
 
 ALTER TABLE public.trip_accommodations ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Trip accommodations access"
+CREATE POLICY "trip_accommodations_policy"
   ON public.trip_accommodations FOR ALL
   USING (
     EXISTS (
       SELECT 1 FROM public.trips t
-      WHERE t.id = trip_id AND t.created_by = auth.uid()
+      JOIN public.users u ON u.id = auth.uid()
+      WHERE t.id = trip_id
+      AND (
+        u.role = 'admin'
+        OR t.created_by = auth.uid()
+      )
     )
   );
 
--- Comments for documentation
 COMMENT ON COLUMN public.trip_accommodations.room_types IS 
-'JSONB array of room type configurations: [{ roomType: string, capacityPerRoom: number, costPerRoom: number }]. Used for auto-allocation.';
+'JSONB array of room type configurations: [{ roomType: string, capacityPerRoom: number, costPerRoom: number }]';
+
+COMMENT ON COLUMN public.trip_accommodations.room_preferences IS 
+'JSONB object storing room preferences: { students: [roomType1, roomType2], faculty: [single], commercial: [...] }';
 
 COMMENT ON COLUMN public.trip_accommodations.room_allocation IS 
-'JSONB object storing room allocation with breakdown: { boysRooms, girlsRooms, ..., breakdown: { boys: [...], girls: [...] } }';
+'JSONB object storing room allocation with breakdown by category and room type';
 
 -- ============================================
 -- MEALS
@@ -385,12 +598,17 @@ CREATE TABLE public.trip_meals (
 
 ALTER TABLE public.trip_meals ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Trip meals access"
+CREATE POLICY "trip_meals_policy"
   ON public.trip_meals FOR ALL
   USING (
     EXISTS (
       SELECT 1 FROM public.trips t
-      WHERE t.id = trip_id AND t.created_by = auth.uid()
+      JOIN public.users u ON u.id = auth.uid()
+      WHERE t.id = trip_id
+      AND (
+        u.role = 'admin'
+        OR t.created_by = auth.uid()
+      )
     )
   );
 
@@ -403,6 +621,7 @@ CREATE TABLE public.trip_activities (
   trip_id uuid REFERENCES public.trips(id) ON DELETE CASCADE,
 
   name text NOT NULL,
+  city text,  -- Which city in the multi-city itinerary (optional)
   entry_cost numeric NOT NULL DEFAULT 0 CHECK (entry_cost >= 0),
   transport_cost numeric NOT NULL DEFAULT 0 CHECK (transport_cost >= 0),
   guide_cost numeric NOT NULL DEFAULT 0 CHECK (guide_cost >= 0),
@@ -417,12 +636,17 @@ CREATE INDEX idx_trip_activities_trip ON public.trip_activities(trip_id);
 
 ALTER TABLE public.trip_activities ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Trip activities access"
+CREATE POLICY "trip_activities_policy"
   ON public.trip_activities FOR ALL
   USING (
     EXISTS (
       SELECT 1 FROM public.trips t
-      WHERE t.id = trip_id AND t.created_by = auth.uid()
+      JOIN public.users u ON u.id = auth.uid()
+      WHERE t.id = trip_id
+      AND (
+        u.role = 'admin'
+        OR t.created_by = auth.uid()
+      )
     )
   );
 
@@ -445,12 +669,17 @@ CREATE INDEX idx_trip_overheads_trip ON public.trip_overheads(trip_id);
 
 ALTER TABLE public.trip_overheads ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Trip overheads access"
+CREATE POLICY "trip_overheads_policy"
   ON public.trip_overheads FOR ALL
   USING (
     EXISTS (
       SELECT 1 FROM public.trips t
-      WHERE t.id = trip_id AND t.created_by = auth.uid()
+      JOIN public.users u ON u.id = auth.uid()
+      WHERE t.id = trip_id
+      AND (
+        u.role = 'admin'
+        OR t.created_by = auth.uid()
+      )
     )
   );
 
@@ -474,12 +703,17 @@ CREATE TABLE public.post_trip_analysis (
 
 ALTER TABLE public.post_trip_analysis ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Post-trip analysis access"
+CREATE POLICY "post_trip_analysis_policy"
   ON public.post_trip_analysis FOR ALL
   USING (
     EXISTS (
       SELECT 1 FROM public.trips t
-      WHERE t.id = trip_id AND t.created_by = auth.uid()
+      JOIN public.users u ON u.id = auth.uid()
+      WHERE t.id = trip_id
+      AND (
+        u.role = 'admin'
+        OR t.created_by = auth.uid()
+      )
     )
   );
 
@@ -528,6 +762,22 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
+-- Function to validate cities JSONB array
+CREATE OR REPLACE FUNCTION validate_cities_array(cities jsonb)
+RETURNS boolean AS $$
+BEGIN
+  IF jsonb_typeof(cities) != 'array' THEN
+    RETURN false;
+  END IF;
+  
+  IF jsonb_array_length(cities) = 0 THEN
+    RETURN false;
+  END IF;
+  
+  RETURN true;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
 -- Add constraints using validation functions
 ALTER TABLE public.trip_accommodations
   ADD CONSTRAINT valid_room_allocation 
@@ -537,47 +787,372 @@ ALTER TABLE public.trip_accommodations
   ADD CONSTRAINT valid_room_types 
   CHECK (validate_room_types(room_types));
 
+ALTER TABLE public.trips
+  ADD CONSTRAINT valid_cities_array
+  CHECK (validate_cities_array(cities));
+
+-- ============================================
+-- ROOM ALLOCATION FUNCTION WITH PREFERENCES
+-- Faculty always get single rooms
+-- ============================================
+
+CREATE OR REPLACE FUNCTION calculate_room_allocation_with_preferences(
+  p_trip_id uuid,
+  p_accommodation_id uuid,
+  p_room_types jsonb,
+  p_room_preferences jsonb
+)
+RETURNS jsonb AS $$
+DECLARE
+  v_participants record;
+  v_trip record;
+  v_allocation jsonb := '{}'::jsonb;
+  v_room_type jsonb;
+  v_boys_rooms jsonb := '[]'::jsonb;
+  v_girls_rooms jsonb := '[]'::jsonb;
+  v_male_faculty_rooms jsonb := '[]'::jsonb;
+  v_female_faculty_rooms jsonb := '[]'::jsonb;
+  v_male_vxplorer_rooms jsonb := '[]'::jsonb;
+  v_female_vxplorer_rooms jsonb := '[]'::jsonb;
+  v_commercial_male_rooms jsonb := '[]'::jsonb;
+  v_commercial_female_rooms jsonb := '[]'::jsonb;
+  v_commercial_other_rooms jsonb := '[]'::jsonb;
+  v_total_rooms int := 0;
+BEGIN
+  -- Get trip details
+  SELECT * INTO v_trip FROM public.trips WHERE id = p_trip_id;
+  
+  -- Get participant counts
+  SELECT * INTO v_participants FROM public.trip_participants WHERE trip_id = p_trip_id;
+  
+  IF v_trip.trip_type = 'institute' THEN
+    -- Allocate for institute trips
+    
+    -- FACULTY ALWAYS GET SINGLE ROOMS (1 person per room)
+    -- Male Faculty
+    IF v_participants.male_faculty > 0 THEN
+      FOR i IN 1..v_participants.male_faculty LOOP
+        v_male_faculty_rooms := v_male_faculty_rooms || jsonb_build_object('roomType', 'single', 'count', 1);
+        v_total_rooms := v_total_rooms + 1;
+      END LOOP;
+    END IF;
+    
+    -- Female Faculty
+    IF v_participants.female_faculty > 0 THEN
+      FOR i IN 1..v_participants.female_faculty LOOP
+        v_female_faculty_rooms := v_female_faculty_rooms || jsonb_build_object('roomType', 'single', 'count', 1);
+        v_total_rooms := v_total_rooms + 1;
+      END LOOP;
+    END IF;
+    
+    -- TODO: Implement preference-based allocation for students and vxplorers
+    -- This would use p_room_preferences to allocate rooms in preferred order
+    
+  ELSIF v_trip.trip_type = 'commercial' THEN
+    -- TODO: Implement commercial trip allocation with preferences
+    NULL;
+  END IF;
+  
+  -- Build final allocation object
+  v_allocation := jsonb_build_object(
+    'boysRooms', COALESCE(jsonb_array_length(v_boys_rooms), 0),
+    'boys', v_boys_rooms,
+    'girlsRooms', COALESCE(jsonb_array_length(v_girls_rooms), 0),
+    'girls', v_girls_rooms,
+    'maleFacultyRooms', COALESCE(jsonb_array_length(v_male_faculty_rooms), 0),
+    'maleFaculty', v_male_faculty_rooms,
+    'femaleFacultyRooms', COALESCE(jsonb_array_length(v_female_faculty_rooms), 0),
+    'femaleFaculty', v_female_faculty_rooms,
+    'maleVXplorerRooms', COALESCE(jsonb_array_length(v_male_vxplorer_rooms), 0),
+    'maleVXplorer', v_male_vxplorer_rooms,
+    'femaleVXplorerRooms', COALESCE(jsonb_array_length(v_female_vxplorer_rooms), 0),
+    'femaleVXplorer', v_female_vxplorer_rooms,
+    'commercialMaleRooms', COALESCE(jsonb_array_length(v_commercial_male_rooms), 0),
+    'commercialMale', v_commercial_male_rooms,
+    'commercialFemaleRooms', COALESCE(jsonb_array_length(v_commercial_female_rooms), 0),
+    'commercialFemale', v_commercial_female_rooms,
+    'commercialOtherRooms', COALESCE(jsonb_array_length(v_commercial_other_rooms), 0),
+    'commercialOther', v_commercial_other_rooms,
+    'totalRooms', v_total_rooms
+  );
+  
+  RETURN v_allocation;
+END;
+$$ LANGUAGE plpgsql;
+
 -- ============================================
 -- INDEXES FOR PERFORMANCE
 -- ============================================
 
--- Additional indexes for common queries
 CREATE INDEX idx_trips_dates ON public.trips(start_date, end_date);
-CREATE INDEX idx_trips_country_city ON public.trips(country, city);
+CREATE INDEX idx_trips_country ON public.trips(country);
 
 -- ============================================
--- SAMPLE DATA (OPTIONAL - FOR TESTING)
+-- SAMPLE DATA - CURRENCIES
 -- ============================================
 
--- Insert sample currencies
-INSERT INTO public.currencies (code, name, symbol, rate_to_inr, effective_date) VALUES
-  ('INR', 'Indian Rupee', '₹', 1.00, CURRENT_DATE),
-  ('USD', 'US Dollar', '$', 83.50, CURRENT_DATE),
-  ('EUR', 'Euro', '€', 91.20, CURRENT_DATE),
-  ('SGD', 'Singapore Dollar', 'S$', 62.30, CURRENT_DATE),
-  ('AED', 'UAE Dirham', 'د.إ', 22.75, CURRENT_DATE),
-  ('GBP', 'British Pound', '£', 105.80, CURRENT_DATE)
+INSERT INTO public.currencies (code, name, symbol, rate_to_inr, effective_date) VALUES 
+  ('INR', 'Indian Rupee', '₹', 1.0, '2026-02-01'),
+  ('USD', 'United States Dollar', '$', 91.72, '2026-02-01'),
+  ('GBP', 'British Pound Sterling', '£', 125.85, '2026-02-01'),
+  ('EUR', 'Euro', '€', 109.01, '2026-02-01'),
+  ('JPY', 'Japanese Yen', '¥', 0.593, '2026-02-01'),
+  ('AUD', 'Australian Dollar', 'A$', 64.03, '2026-02-01'),
+  ('CAD', 'Canadian Dollar', 'C$', 67.58, '2026-02-01'),
+  ('NZD', 'New Zealand Dollar', 'NZ$', 55.37, '2026-02-01'),
+  ('SGD', 'Singapore Dollar', 'S$', 72.32, '2026-02-01'),
+  ('THB', 'Thai Baht', '฿', 2.93, '2026-02-01'),
+  ('MXN', 'Mexican Peso', '$', 5.25, '2026-02-01'),
+  ('BRL', 'Brazilian Real', 'R$', 17.73, '2026-02-01'),
+  ('CNY', 'Chinese Yuan', '¥', 13.23, '2026-02-01'),
+  ('CHF', 'Swiss Franc', 'CHF', 119.04, '2026-02-01'),
+  ('AED', 'UAE Dirham', 'د.إ', 24.98, '2026-02-01')
 ON CONFLICT (code) DO NOTHING;
 
--- Insert sample countries
-INSERT INTO public.countries (name, code, default_currency) VALUES
+-- ============================================
+-- SAMPLE DATA - COUNTRIES (20 TOP DESTINATIONS)
+-- ============================================
+
+INSERT INTO public.countries (name, code, default_currency) VALUES 
   ('India', 'IN', 'INR'),
   ('United States', 'US', 'USD'),
   ('United Kingdom', 'GB', 'GBP'),
-  ('Singapore', 'SG', 'SGD'),
-  ('United Arab Emirates', 'AE', 'AED'),
-  ('France', 'FR', 'EUR'),
   ('Germany', 'DE', 'EUR'),
+  ('France', 'FR', 'EUR'),
   ('Italy', 'IT', 'EUR'),
   ('Spain', 'ES', 'EUR'),
-  ('Thailand', 'TH', 'THB')
+  ('Japan', 'JP', 'JPY'),
+  ('Australia', 'AU', 'AUD'),
+  ('Canada', 'CA', 'CAD'),
+  ('New Zealand', 'NZ', 'NZD'),
+  ('Singapore', 'SG', 'SGD'),
+  ('Thailand', 'TH', 'THB'),
+  ('Mexico', 'MX', 'MXN'),
+  ('Brazil', 'BR', 'BRL'),
+  ('Portugal', 'PT', 'EUR'),
+  ('Czech Republic', 'CZ', 'EUR'),
+  ('Greece', 'GR', 'EUR'),
+  ('China', 'CN', 'CNY'),
+  ('Switzerland', 'CH', 'CHF')
 ON CONFLICT (name) DO NOTHING;
 
 -- ============================================
--- GRANTS (IF NEEDED FOR SERVICE ROLE)
+-- SAMPLE DATA - CITIES
 -- ============================================
 
--- Grant necessary permissions to authenticated users
+-- United States (10 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('New York', (SELECT id FROM public.countries WHERE code = 'US')),
+  ('Los Angeles', (SELECT id FROM public.countries WHERE code = 'US')),
+  ('Chicago', (SELECT id FROM public.countries WHERE code = 'US')),
+  ('San Francisco', (SELECT id FROM public.countries WHERE code = 'US')),
+  ('Washington D.C.', (SELECT id FROM public.countries WHERE code = 'US')),
+  ('Boston', (SELECT id FROM public.countries WHERE code = 'US')),
+  ('Miami', (SELECT id FROM public.countries WHERE code = 'US')),
+  ('New Orleans', (SELECT id FROM public.countries WHERE code = 'US')),
+  ('Las Vegas', (SELECT id FROM public.countries WHERE code = 'US')),
+  ('Denver', (SELECT id FROM public.countries WHERE code = 'US'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- United Kingdom (7 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('London', (SELECT id FROM public.countries WHERE code = 'GB')),
+  ('Edinburgh', (SELECT id FROM public.countries WHERE code = 'GB')),
+  ('Oxford', (SELECT id FROM public.countries WHERE code = 'GB')),
+  ('Cambridge', (SELECT id FROM public.countries WHERE code = 'GB')),
+  ('Manchester', (SELECT id FROM public.countries WHERE code = 'GB')),
+  ('Dublin', (SELECT id FROM public.countries WHERE code = 'GB')),
+  ('York', (SELECT id FROM public.countries WHERE code = 'GB'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- Germany (6 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Berlin', (SELECT id FROM public.countries WHERE code = 'DE')),
+  ('Munich', (SELECT id FROM public.countries WHERE code = 'DE')),
+  ('Frankfurt', (SELECT id FROM public.countries WHERE code = 'DE')),
+  ('Hamburg', (SELECT id FROM public.countries WHERE code = 'DE')),
+  ('Cologne', (SELECT id FROM public.countries WHERE code = 'DE')),
+  ('Heidelberg', (SELECT id FROM public.countries WHERE code = 'DE'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- France (6 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Paris', (SELECT id FROM public.countries WHERE code = 'FR')),
+  ('Lyon', (SELECT id FROM public.countries WHERE code = 'FR')),
+  ('Marseille', (SELECT id FROM public.countries WHERE code = 'FR')),
+  ('Nice', (SELECT id FROM public.countries WHERE code = 'FR')),
+  ('Versailles', (SELECT id FROM public.countries WHERE code = 'FR')),
+  ('Strasbourg', (SELECT id FROM public.countries WHERE code = 'FR'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- Italy (6 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Rome', (SELECT id FROM public.countries WHERE code = 'IT')),
+  ('Florence', (SELECT id FROM public.countries WHERE code = 'IT')),
+  ('Venice', (SELECT id FROM public.countries WHERE code = 'IT')),
+  ('Milan', (SELECT id FROM public.countries WHERE code = 'IT')),
+  ('Naples', (SELECT id FROM public.countries WHERE code = 'IT')),
+  ('Amalfi', (SELECT id FROM public.countries WHERE code = 'IT'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- Spain (6 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Barcelona', (SELECT id FROM public.countries WHERE code = 'ES')),
+  ('Madrid', (SELECT id FROM public.countries WHERE code = 'ES')),
+  ('Seville', (SELECT id FROM public.countries WHERE code = 'ES')),
+  ('Valencia', (SELECT id FROM public.countries WHERE code = 'ES')),
+  ('Granada', (SELECT id FROM public.countries WHERE code = 'ES')),
+  ('Lisbon', (SELECT id FROM public.countries WHERE code = 'ES'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- Japan (6 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Tokyo', (SELECT id FROM public.countries WHERE code = 'JP')),
+  ('Kyoto', (SELECT id FROM public.countries WHERE code = 'JP')),
+  ('Osaka', (SELECT id FROM public.countries WHERE code = 'JP')),
+  ('Hiroshima', (SELECT id FROM public.countries WHERE code = 'JP')),
+  ('Yokohama', (SELECT id FROM public.countries WHERE code = 'JP')),
+  ('Nara', (SELECT id FROM public.countries WHERE code = 'JP'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- Australia (6 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Sydney', (SELECT id FROM public.countries WHERE code = 'AU')),
+  ('Melbourne', (SELECT id FROM public.countries WHERE code = 'AU')),
+  ('Brisbane', (SELECT id FROM public.countries WHERE code = 'AU')),
+  ('Perth', (SELECT id FROM public.countries WHERE code = 'AU')),
+  ('Gold Coast', (SELECT id FROM public.countries WHERE code = 'AU')),
+  ('Cairns', (SELECT id FROM public.countries WHERE code = 'AU'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- Canada (6 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Toronto', (SELECT id FROM public.countries WHERE code = 'CA')),
+  ('Vancouver', (SELECT id FROM public.countries WHERE code = 'CA')),
+  ('Montreal', (SELECT id FROM public.countries WHERE code = 'CA')),
+  ('Calgary', (SELECT id FROM public.countries WHERE code = 'CA')),
+  ('Niagara Falls', (SELECT id FROM public.countries WHERE code = 'CA')),
+  ('Ottawa', (SELECT id FROM public.countries WHERE code = 'CA'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- New Zealand (5 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Auckland', (SELECT id FROM public.countries WHERE code = 'NZ')),
+  ('Christchurch', (SELECT id FROM public.countries WHERE code = 'NZ')),
+  ('Wellington', (SELECT id FROM public.countries WHERE code = 'NZ')),
+  ('Queenstown', (SELECT id FROM public.countries WHERE code = 'NZ')),
+  ('Rotorua', (SELECT id FROM public.countries WHERE code = 'NZ'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- Singapore (4 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Singapore', (SELECT id FROM public.countries WHERE code = 'SG')),
+  ('Sentosa Island', (SELECT id FROM public.countries WHERE code = 'SG')),
+  ('Marina Bay', (SELECT id FROM public.countries WHERE code = 'SG')),
+  ('Jurong', (SELECT id FROM public.countries WHERE code = 'SG'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- Thailand (5 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Bangkok', (SELECT id FROM public.countries WHERE code = 'TH')),
+  ('Chiang Mai', (SELECT id FROM public.countries WHERE code = 'TH')),
+  ('Phuket', (SELECT id FROM public.countries WHERE code = 'TH')),
+  ('Krabi', (SELECT id FROM public.countries WHERE code = 'TH')),
+  ('Pattaya', (SELECT id FROM public.countries WHERE code = 'TH'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- India (20 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Delhi', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Mumbai', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Agra', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Jaipur', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Kerala', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Goa', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Varanasi', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Bangalore', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Hyderabad', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Kolkata', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Chennai', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Pune', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Ahmedabad', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Udaipur', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Shimla', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Manali', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Darjeeling', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Rishikesh', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Amritsar', (SELECT id FROM public.countries WHERE code = 'IN')),
+  ('Mysore', (SELECT id FROM public.countries WHERE code = 'IN'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- Mexico (6 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Mexico City', (SELECT id FROM public.countries WHERE code = 'MX')),
+  ('Cancun', (SELECT id FROM public.countries WHERE code = 'MX')),
+  ('Playa del Carmen', (SELECT id FROM public.countries WHERE code = 'MX')),
+  ('Los Cabos', (SELECT id FROM public.countries WHERE code = 'MX')),
+  ('Puerto Vallarta', (SELECT id FROM public.countries WHERE code = 'MX')),
+  ('Mérida', (SELECT id FROM public.countries WHERE code = 'MX'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- Brazil (5 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Rio de Janeiro', (SELECT id FROM public.countries WHERE code = 'BR')),
+  ('São Paulo', (SELECT id FROM public.countries WHERE code = 'BR')),
+  ('Salvador', (SELECT id FROM public.countries WHERE code = 'BR')),
+  ('Fortaleza', (SELECT id FROM public.countries WHERE code = 'BR')),
+  ('Manaus', (SELECT id FROM public.countries WHERE code = 'BR'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- Portugal (5 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Lisbon', (SELECT id FROM public.countries WHERE code = 'PT')),
+  ('Porto', (SELECT id FROM public.countries WHERE code = 'PT')),
+  ('Sintra', (SELECT id FROM public.countries WHERE code = 'PT')),
+  ('Cascais', (SELECT id FROM public.countries WHERE code = 'PT')),
+  ('Algarve', (SELECT id FROM public.countries WHERE code = 'PT'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- Czech Republic (4 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Prague', (SELECT id FROM public.countries WHERE code = 'CZ')),
+  ('Brno', (SELECT id FROM public.countries WHERE code = 'CZ')),
+  ('Cesky Krumlov', (SELECT id FROM public.countries WHERE code = 'CZ')),
+  ('Karlovy Vary', (SELECT id FROM public.countries WHERE code = 'CZ'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- Greece (5 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Athens', (SELECT id FROM public.countries WHERE code = 'GR')),
+  ('Mykonos', (SELECT id FROM public.countries WHERE code = 'GR')),
+  ('Santorini', (SELECT id FROM public.countries WHERE code = 'GR')),
+  ('Crete', (SELECT id FROM public.countries WHERE code = 'GR')),
+  ('Rhodes', (SELECT id FROM public.countries WHERE code = 'GR'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- China (6 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Beijing', (SELECT id FROM public.countries WHERE code = 'CN')),
+  ('Shanghai', (SELECT id FROM public.countries WHERE code = 'CN')),
+  ('Xi''an', (SELECT id FROM public.countries WHERE code = 'CN')),
+  ('Guilin', (SELECT id FROM public.countries WHERE code = 'CN')),
+  ('Chengdu', (SELECT id FROM public.countries WHERE code = 'CN')),
+  ('Hong Kong', (SELECT id FROM public.countries WHERE code = 'CN'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- Switzerland (5 cities)
+INSERT INTO public.cities (name, country_id) VALUES 
+  ('Zurich', (SELECT id FROM public.countries WHERE code = 'CH')),
+  ('Geneva', (SELECT id FROM public.countries WHERE code = 'CH')),
+  ('Lucerne', (SELECT id FROM public.countries WHERE code = 'CH')),
+  ('Interlaken', (SELECT id FROM public.countries WHERE code = 'CH')),
+  ('Bern', (SELECT id FROM public.countries WHERE code = 'CH'))
+ON CONFLICT (name, country_id) DO NOTHING;
+
+-- ============================================
+-- GRANTS
+-- ============================================
+
 GRANT USAGE ON SCHEMA public TO authenticated;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;
@@ -589,10 +1164,16 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO authenticated;
 
 DO $$
 BEGIN
-  RAISE NOTICE '✅ Database schema created successfully!';
-  RAISE NOTICE '📋 Tables created: users, trips, trip_participants, trip_flights, trip_buses, trip_trains';
-  RAISE NOTICE '📋 Tables created: trip_accommodations (with auto-allocation), trip_meals, trip_activities, trip_overheads';
-  RAISE NOTICE '📋 Tables created: post_trip_analysis, countries, cities, currencies, institutions';
+  RAISE NOTICE '✅ Database schema V2.0 created successfully!';
+  RAISE NOTICE '📋 NEW: trip_category (domestic/international) and trip_type (institute/commercial)';
+  RAISE NOTICE '📋 NEW: trip_extras table for visa, tips, insurance';
+  RAISE NOTICE '📋 NEW: GST (5%%) and TCS (5%% for international) support';
+  RAISE NOTICE '📋 NEW: Multi-city support with JSONB cities array';
+  RAISE NOTICE '📋 NEW: Commercial trip participant fields (male/female/other)';
+  RAISE NOTICE '📋 NEW: Room preferences for flexible allocation';
+  RAISE NOTICE '📋 NEW: Faculty ALWAYS get single rooms (enforced)';
+  RAISE NOTICE '💰 Currencies: 15 currencies loaded';
+  RAISE NOTICE '🌍 Countries: 20 countries loaded';
+  RAISE NOTICE '🏙️  Cities: 129 cities loaded';
   RAISE NOTICE '🔒 Row Level Security enabled on all tables';
-  RAISE NOTICE '✨ Room auto-allocation system ready!';
 END $$;

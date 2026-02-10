@@ -104,3 +104,50 @@ export const getCountryCurrency = (countries: Country[], countryId: string): str
   const country = countries.find(c => c.id === countryId);
   return country?.default_currency ?? 'INR';
 };
+
+/**
+ * Calculate GST amount (5% of subtotal)
+ */
+export const calculateGST = (subtotal: number, gstPercentage: number = 5): number => {
+  return (subtotal * gstPercentage) / 100;
+};
+
+/**
+ * Calculate TCS amount (5% of subtotal + GST) - Only for international trips
+ */
+export const calculateTCS = (subtotalPlusGST: number, tcsPercentage: number = 5): number => {
+  return (subtotalPlusGST * tcsPercentage) / 100;
+};
+
+/**
+ * Calculate grand total with GST and TCS
+ * @param subtotal - Total cost before taxes
+ * @param isInternational - Whether the trip is international
+ * @returns Object with breakdown of costs
+ */
+export const calculateGrandTotal = (
+  subtotal: number,
+  isInternational: boolean,
+  gstPercentage: number = 5,
+  tcsPercentage: number = 5
+): {
+  subtotal: number;
+  gstAmount: number;
+  tcsAmount: number;
+  grandTotal: number;
+} => {
+  const gstAmount = calculateGST(subtotal, gstPercentage);
+  const subtotalPlusGST = subtotal + gstAmount;
+  
+  // TCS only applies to international trips
+  const tcsAmount = isInternational ? calculateTCS(subtotalPlusGST, tcsPercentage) : 0;
+  
+  const grandTotal = subtotalPlusGST + tcsAmount;
+
+  return {
+    subtotal,
+    gstAmount,
+    tcsAmount,
+    grandTotal,
+  };
+};
