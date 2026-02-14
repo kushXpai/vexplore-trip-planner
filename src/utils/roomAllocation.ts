@@ -9,7 +9,130 @@ import {
 } from '@/types/trip';
 
 /**
- * Allocate rooms for a group based on room preferences
+ * Allocate rooms for a group using COST OPTIMIZATION
+ * Finds the cheapest combination of rooms that accommodates all people
+ */
+function allocateRoomsWithCostOptimization(
+  numberOfPeople: number,
+  roomTypes: RoomTypeConfig[],
+  preferences: string[],
+  isFaculty: boolean = false
+): RoomTypeBreakdown[] {
+  if (numberOfPeople === 0) return [];
+  if (roomTypes.length === 0) {
+    throw new Error('No room types available');
+  }
+
+  // CRITICAL: Faculty ALWAYS get single rooms
+  if (isFaculty) {
+    const singleRoom = roomTypes.find(rt => rt.roomType.toLowerCase() === 'single');
+    if (!singleRoom) {
+      throw new Error('Single room type required for faculty allocation');
+    }
+
+    return [{
+      roomType: singleRoom.roomType,
+      capacityPerRoom: 1,
+      numberOfRooms: numberOfPeople,
+      peopleAccommodated: numberOfPeople,
+      costPerRoom: singleRoom.costPerRoom,
+    }];
+  }
+
+  // Filter room types to only include those in preferences
+  const preferredRoomTypes = preferences
+    .map(pref => roomTypes.find(rt => rt.roomType.toLowerCase() === pref.toLowerCase()))
+    .filter((rt): rt is RoomTypeConfig => rt !== undefined);
+
+  if (preferredRoomTypes.length === 0) {
+    throw new Error('No valid room types found matching preferences');
+  }
+
+  // Dynamic programming approach to find minimum cost allocation
+  // dp[i] = minimum cost to accommodate exactly i people
+  const dp: number[] = new Array(numberOfPeople + 1).fill(Infinity);
+  const parent: Array<{ roomType: RoomTypeConfig; people: number } | null> = new Array(numberOfPeople + 1).fill(null);
+  
+  dp[0] = 0;
+
+  // Build up the solution
+  for (let people = 0; people <= numberOfPeople; people++) {
+    if (dp[people] === Infinity) continue;
+
+    for (const roomType of preferredRoomTypes) {
+      const nextPeople = Math.min(people + roomType.capacityPerRoom, numberOfPeople + roomType.capacityPerRoom);
+      
+      // We can accommodate at most numberOfPeople, but a room might have extra capacity
+      if (people < numberOfPeople) {
+        const newCost = dp[people] + roomType.costPerRoom;
+        const actualPeople = Math.min(people + roomType.capacityPerRoom, numberOfPeople);
+        
+        if (newCost < dp[actualPeople]) {
+          dp[actualPeople] = newCost;
+          parent[actualPeople] = { roomType, people: actualPeople - people };
+        }
+      }
+    }
+  }
+
+  // If we couldn't accommodate everyone with exact capacity, find minimum cost with waste
+  let bestSolution = numberOfPeople;
+  let minCost = dp[numberOfPeople];
+
+  // Check if we need to use rooms with wasted capacity
+  if (minCost === Infinity) {
+    for (let i = numberOfPeople; i <= numberOfPeople + 20; i++) {
+      if (dp[i] !== Infinity && dp[i] < minCost) {
+        minCost = dp[i];
+        bestSolution = i;
+      }
+    }
+
+    // If still no solution, fall back to greedy
+    if (minCost === Infinity) {
+      return allocateRoomsWithPreferences(numberOfPeople, roomTypes, preferences, isFaculty);
+    }
+  }
+
+  // Backtrack to build the allocation
+  const allocation: Map<string, { count: number; config: RoomTypeConfig }> = new Map();
+  let current = bestSolution;
+
+  while (current > 0 && parent[current]) {
+    const { roomType } = parent[current]!;
+    const key = roomType.roomType;
+    
+    if (allocation.has(key)) {
+      allocation.get(key)!.count++;
+    } else {
+      allocation.set(key, { count: 1, config: roomType });
+    }
+
+    const prevPeople = current - Math.min(roomType.capacityPerRoom, current);
+    current = prevPeople;
+  }
+
+  // Convert map to breakdown format
+  const breakdown: RoomTypeBreakdown[] = [];
+  let totalAccommodated = 0;
+
+  for (const [roomTypeName, { count, config }] of allocation.entries()) {
+    const accommodated = Math.min(count * config.capacityPerRoom, numberOfPeople - totalAccommodated);
+    breakdown.push({
+      roomType: config.roomType,
+      capacityPerRoom: config.capacityPerRoom,
+      numberOfRooms: count,
+      peopleAccommodated: accommodated,
+      costPerRoom: config.costPerRoom,
+    });
+    totalAccommodated += accommodated;
+  }
+
+  return breakdown;
+}
+
+/**
+ * Allocate rooms for a group based on PREFERENCE ORDER (greedy)
  * Faculty ALWAYS get single rooms (1 person per room)
  */
 function allocateRoomsWithPreferences(
@@ -188,15 +311,18 @@ function calculateBreakdownCost(breakdown: RoomTypeBreakdown[]): number {
 }
 
 /**
- * Auto-allocate rooms with preference support
+ * Auto-allocate rooms with preference support and optional cost optimization
  * Faculty ALWAYS get single rooms
  * Supports both institute and commercial trips
+ * 
+ * @param optimizeByCost - If true, finds cheapest allocation within preferences. If false, follows strict preference order.
  */
 export function autoAllocateRooms(
   participants: Participants,
   roomTypes: RoomTypeConfig[],
   preferences?: RoomPreferences,
-  tripType?: TripType
+  tripType?: TripType,
+  optimizeByCost: boolean = false  // NEW PARAMETER
 ): RoomAllocation {
   if (roomTypes.length === 0) {
     throw new Error('Please add at least one room type configuration');
@@ -218,6 +344,9 @@ export function autoAllocateRooms(
     throw new Error('Single room type is required for faculty allocation');
   }
 
+  // Choose allocation function based on optimization flag
+  const allocationFunction = optimizeByCost ? allocateRoomsWithCostOptimization : allocateRoomsWithPreferences;
+
   let boysBreakdown: RoomTypeBreakdown[] = [];
   let girlsBreakdown: RoomTypeBreakdown[] = [];
   let maleFacultyBreakdown: RoomTypeBreakdown[] = [];
@@ -231,61 +360,57 @@ export function autoAllocateRooms(
   let commercialFemaleVXplorersBreakdown: RoomTypeBreakdown[] = [];
 
   if (tripType === 'commercial') {
-    // COMMERCIAL TRIP ALLOCATION
+    // Commercial trip allocations
     const participantsPrefs = preferences?.participants || [];
     const commercialVXplorersPrefs = preferences?.commercialVXplorers || [];
 
-    // Allocate participants (male, female, other)
     commercialMaleBreakdown = participants.maleCount > 0
       ? (participantsPrefs.length > 0
-        ? allocateRoomsWithPreferences(participants.maleCount, roomTypes, participantsPrefs)
+        ? allocationFunction(participants.maleCount, roomTypes, participantsPrefs)
         : allocateRoomsForGroup(participants.maleCount, roomTypes))
       : [];
 
     commercialFemaleBreakdown = participants.femaleCount > 0
       ? (participantsPrefs.length > 0
-        ? allocateRoomsWithPreferences(participants.femaleCount, roomTypes, participantsPrefs)
+        ? allocationFunction(participants.femaleCount, roomTypes, participantsPrefs)
         : allocateRoomsForGroup(participants.femaleCount, roomTypes))
       : [];
 
     commercialOtherBreakdown = participants.otherCount > 0
       ? (participantsPrefs.length > 0
-        ? allocateRoomsWithPreferences(participants.otherCount, roomTypes, participantsPrefs)
+        ? allocationFunction(participants.otherCount, roomTypes, participantsPrefs)
         : allocateRoomsForGroup(participants.otherCount, roomTypes))
       : [];
 
-    // NEW: Allocate VXplorers (male, female)
     commercialMaleVXplorersBreakdown = participants.commercialMaleVXplorers > 0
       ? (commercialVXplorersPrefs.length > 0
-        ? allocateRoomsWithPreferences(participants.commercialMaleVXplorers, roomTypes, commercialVXplorersPrefs)
+        ? allocationFunction(participants.commercialMaleVXplorers, roomTypes, commercialVXplorersPrefs)
         : allocateRoomsForGroup(participants.commercialMaleVXplorers, roomTypes))
       : [];
 
     commercialFemaleVXplorersBreakdown = participants.commercialFemaleVXplorers > 0
       ? (commercialVXplorersPrefs.length > 0
-        ? allocateRoomsWithPreferences(participants.commercialFemaleVXplorers, roomTypes, commercialVXplorersPrefs)
+        ? allocationFunction(participants.commercialFemaleVXplorers, roomTypes, commercialVXplorersPrefs)
         : allocateRoomsForGroup(participants.commercialFemaleVXplorers, roomTypes))
       : [];
-
   } else {
-    // INSTITUTE TRIP ALLOCATION
-
-    // Students allocation with preferences
+    // Institute trip allocations
     const studentsPrefs = preferences?.students || [];
+    const vxplorersPrefs = preferences?.vxplorers || [];
 
     boysBreakdown = participants.boys > 0
       ? (studentsPrefs.length > 0
-        ? allocateRoomsWithPreferences(participants.boys, roomTypes, studentsPrefs)
+        ? allocationFunction(participants.boys, roomTypes, studentsPrefs)
         : allocateRoomsForGroup(participants.boys, roomTypes))
       : [];
 
     girlsBreakdown = participants.girls > 0
       ? (studentsPrefs.length > 0
-        ? allocateRoomsWithPreferences(participants.girls, roomTypes, studentsPrefs)
+        ? allocationFunction(participants.girls, roomTypes, studentsPrefs)
         : allocateRoomsForGroup(participants.girls, roomTypes))
       : [];
 
-    // FACULTY ALWAYS GET SINGLE ROOMS
+    // FACULTY ALWAYS GET SINGLE ROOMS (never optimized, always single)
     maleFacultyBreakdown = participants.maleFaculty > 0
       ? allocateRoomsWithPreferences(participants.maleFaculty, roomTypes, ['single'], true)
       : [];
@@ -295,17 +420,15 @@ export function autoAllocateRooms(
       : [];
 
     // VXplorers allocation with preferences
-    const vxplorersPrefs = preferences?.vxplorers || [];
-
     maleVXplorersBreakdown = participants.maleVXplorers > 0
       ? (vxplorersPrefs.length > 0
-        ? allocateRoomsWithPreferences(participants.maleVXplorers, roomTypes, vxplorersPrefs)
+        ? allocationFunction(participants.maleVXplorers, roomTypes, vxplorersPrefs)
         : allocateRoomsForGroup(participants.maleVXplorers, roomTypes))
       : [];
 
     femaleVXplorersBreakdown = participants.femaleVXplorers > 0
       ? (vxplorersPrefs.length > 0
-        ? allocateRoomsWithPreferences(participants.femaleVXplorers, roomTypes, vxplorersPrefs)
+        ? allocationFunction(participants.femaleVXplorers, roomTypes, vxplorersPrefs)
         : allocateRoomsForGroup(participants.femaleVXplorers, roomTypes))
       : [];
   }
@@ -477,18 +600,19 @@ export function getRoomTypePresets(): Record<string, RoomTypeConfig[]> {
 
 /**
  * Get default room preferences based on trip type
+ * RETURNS EMPTY ARRAYS - preferences must be set by user in UI
  */
 export function getDefaultRoomPreferences(tripType: TripType): RoomPreferences {
   if (tripType === 'commercial') {
     return {
-      participants: ['double', 'triple'],
-      commercialVXplorers: ['double', 'triple']
+      participants: [],
+      commercialVXplorers: []
     };
   } else {
     return {
-      students: ['double', 'triple'],
-      faculty: ['single'],  // ALWAYS single for faculty
-      vxplorers: ['double', 'triple']
+      students: [],
+      faculty: ['single'],  // ALWAYS single for faculty (non-negotiable)
+      vxplorers: []
     };
   }
 }

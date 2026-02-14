@@ -31,6 +31,7 @@ export interface ActualExpenses {
   accommodation: number;
   meals: number;
   activities: number;
+  extras: number;  // NEW: Added extras
   overheads: number;
   explanation: string;
 }
@@ -43,6 +44,12 @@ export function ActualExpensesEntry({ trip, onSubmit }: ActualExpensesEntryProps
   const accommodationExpected = trip.accommodation.reduce((sum, h) => sum + h.totalCostINR, 0);
   const mealsExpected = trip.meals.totalCostINR;
   const activitiesExpected = trip.activities.reduce((sum, a) => sum + a.totalCostINR, 0);
+  
+  // NEW: Calculate extras expected
+  const extrasExpected = trip.extras 
+    ? (trip.extras.visaTotalCostINR + trip.extras.tipsTotalCostINR + trip.extras.insuranceTotalCostINR)
+    : 0;
+  
   const overheadsExpected = trip.overheads.reduce((sum, o) => sum + o.totalCostINR, 0);
 
   const [actuals, setActuals] = useState<ActualExpenses>({
@@ -50,14 +57,15 @@ export function ActualExpensesEntry({ trip, onSubmit }: ActualExpensesEntryProps
     accommodation: accommodationExpected,
     meals: mealsExpected,
     activities: activitiesExpected,
+    extras: extrasExpected,  // NEW: Initialize with expected extras
     overheads: overheadsExpected,
     explanation: '',
   });
 
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const totalExpected = transportExpected + accommodationExpected + mealsExpected + activitiesExpected + overheadsExpected;
-  const totalActual = actuals.transport + actuals.accommodation + actuals.meals + actuals.activities + actuals.overheads;
+  const totalExpected = transportExpected + accommodationExpected + mealsExpected + activitiesExpected + extrasExpected + overheadsExpected;
+  const totalActual = actuals.transport + actuals.accommodation + actuals.meals + actuals.activities + actuals.extras + actuals.overheads;
   const profitLoss = totalExpected - totalActual;
   const profitLossPercentage = totalExpected > 0 ? (profitLoss / totalExpected) * 100 : 0;
 
@@ -72,6 +80,7 @@ export function ActualExpensesEntry({ trip, onSubmit }: ActualExpensesEntryProps
     { name: 'Accommodation', expected: accommodationExpected, key: 'accommodation' as const },
     { name: 'Meals', expected: mealsExpected, key: 'meals' as const },
     { name: 'Activities', expected: activitiesExpected, key: 'activities' as const },
+    { name: 'Extras (Visa, Tips, Insurance)', expected: extrasExpected, key: 'extras' as const },  // NEW: Added extras category
     { name: 'Overheads', expected: overheadsExpected, key: 'overheads' as const },
   ];
 

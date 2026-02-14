@@ -91,6 +91,7 @@ export default function CreateTrip() {
   });
   const [activities, setActivities] = useState<Activity[]>([]);
   const [overheads, setOverheads] = useState<Overhead[]>([]);
+  const [profit, setProfit] = useState(0);
 
   // NEW: Extras state
   const [extras, setExtras] = useState<TripExtras>({
@@ -113,6 +114,9 @@ export default function CreateTrip() {
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [filteredCities, setFilteredCities] = useState<City[]>([]);
   const [isLoadingMasterData, setIsLoadingMasterData] = useState(true);
+
+  // NEW: Cost optimization toggle state
+  const [optimizeRoomsByCost, setOptimizeRoomsByCost] = useState(false);
 
   // NEW: Multi-city selection state
   const [selectedCityForAdd, setSelectedCityForAdd] = useState('');
@@ -234,6 +238,9 @@ export default function CreateTrip() {
           commercialMaleVXplorers: participants?.commercial_male_vxplorers || 0,  // NEW
           commercialFemaleVXplorers: participants?.commercial_female_vxplorers || 0,  // NEW
         });
+
+        // NEW: Load profit from trip
+        setProfit(trip.profit || 0);
 
         // Load extras if available
         if (dbExtras) {
@@ -688,7 +695,8 @@ export default function CreateTrip() {
         participants,
         accommodation.roomTypes,
         accommodation.roomPreferences,
-        tripType
+        tripType,
+        optimizeRoomsByCost  // NEW: Pass the cost optimization flag
       );
 
       const costs = calculateAccommodationCost(
@@ -803,7 +811,7 @@ export default function CreateTrip() {
     const subtotal = transportTotal + accommodationTotal + mealsTotal + activitiesTotal + overheadsTotal + extrasTotal;
 
     // Calculate GST and TCS
-    const taxCalc = calculateGrandTotal(subtotal, tripCategory === 'international', 5, 5);
+    const taxCalc = calculateGrandTotal(subtotal, profit, tripCategory === 'international', 5, 5);
 
     return {
       transport: transportTotal,
@@ -813,10 +821,22 @@ export default function CreateTrip() {
       overheads: overheadsTotal,
       extras: extrasTotal,
       subtotalBeforeTax: taxCalc.subtotal,
+      profit: taxCalc.profit,
+      adminSubtotal: taxCalc.adminSubtotal,
       gstAmount: taxCalc.gstAmount,
       tcsAmount: taxCalc.tcsAmount,
       grandTotal: taxCalc.grandTotal,
-      costPerParticipant: totalParticipants > 0 ? taxCalc.grandTotal / totalParticipants : 0,
+      costPerParticipant: (() => {
+        if (tripType === 'institute') {
+          // For institute: divide by students only (boys + girls)
+          const studentCount = formData.boys + formData.girls;
+          return studentCount > 0 ? taxCalc.grandTotal / studentCount : 0;
+        } else {
+          // For commercial: divide by participants only (male + female + other, NOT VXplorers)
+          const participantCount = formData.maleCount + formData.femaleCount + formData.otherCount;
+          return participantCount > 0 ? taxCalc.grandTotal / participantCount : 0;
+        }
+      })(),
     };
   };
 
@@ -916,6 +936,7 @@ export default function CreateTrip() {
         extras: (tripCategory === 'international' || extras.insuranceCostPerPerson > 0) ? extras : undefined,
 
         subtotalBeforeTax: totals.subtotalBeforeTax,
+        profit: profit,
         gstPercentage: 5,
         gstAmount: totals.gstAmount,
         tcsPercentage: 5,
@@ -2267,6 +2288,22 @@ export default function CreateTrip() {
 
                 {/* Auto-allocate button and results */}
                 <div className="space-y-4 pt-4 border-t">
+                  {/* Cost Optimization Toggle */}
+                  <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+                    <Switch
+                      checked={optimizeRoomsByCost}
+                      onCheckedChange={setOptimizeRoomsByCost}
+                    />
+                    <div className="flex-1">
+                      <Label className="text-sm font-medium">Optimize by Cost</Label>
+                      <p className="text-xs text-muted-foreground">
+                        {optimizeRoomsByCost 
+                          ? "Finding cheapest room combination within preferences" 
+                          : "Following strict preference order (greedy allocation)"}
+                      </p>
+                    </div>
+                  </div>
+
                   <Button
                     onClick={() => autoAllocateAccommodationRooms(index)}
                     variant="outline"
@@ -2883,6 +2920,24 @@ export default function CreateTrip() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* NEW: Profit Input */}
+          <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg space-y-2">
+            <Label className="text-sm font-semibold">Profit Amount</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                placeholder="0"
+                value={profit || ''}
+                onChange={(e) => setProfit(parseFloat(e.target.value) || 0)}
+                className="flex-1"
+              />
+              <span className="text-sm text-muted-foreground">₹</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Profit will be added to subtotal before calculating GST and TCS
+            </p>
+          </div>
+
           <div className="space-y-3">
             <div className="flex justify-between items-center pb-2 border-b">
               <span className="text-muted-foreground">Transport</span>
@@ -2912,8 +2967,23 @@ export default function CreateTrip() {
 
           <div className="pt-4 border-t space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-base font-semibold">Subtotal (Before Tax)</span>
+              <span className="text-base font-semibold">Subtotal (Before Profit)</span>
               <span className="text-lg font-bold">{formatCurrency(totals.subtotalBeforeTax, 'INR')}</span>
+            </div>
+
+            {/* NEW: Profit */}
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground flex items-center gap-2">
+                <BadgePercent className="w-4 h-4" />
+                Profit
+              </span>
+              <span className="font-semibold">{formatCurrency(totals.profit, 'INR')}</span>
+            </div>
+
+            {/* NEW: Admin Subtotal */}
+            <div className="flex justify-between items-center">
+              <span className="text-base font-semibold">Admin Subtotal (Subtotal + Profit)</span>
+              <span className="text-lg font-bold">{formatCurrency(totals.adminSubtotal, 'INR')}</span>
             </div>
 
             {/* GST */}

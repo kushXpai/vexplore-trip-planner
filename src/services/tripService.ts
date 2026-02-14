@@ -43,6 +43,7 @@ interface DbTrip {
   
   // Cost fields
   subtotal_before_tax: number;
+  profit: number;
   
   // NEW: Tax fields
   gst_percentage: number;
@@ -255,6 +256,7 @@ export async function createTrip(tripData: {
   
   // Costs
   subtotalBeforeTax: number;
+  profit: number;
   gstPercentage: number;
   gstAmount: number;
   tcsPercentage: number;
@@ -285,6 +287,7 @@ export async function createTrip(tripData: {
       default_currency: tripData.defaultCurrency,
       status: 'draft',
       subtotal_before_tax: tripData.subtotalBeforeTax,
+      profit: tripData.profit,
       gst_percentage: tripData.gstPercentage,
       gst_amount: tripData.gstAmount,
       tcs_percentage: tripData.tcsPercentage,
@@ -546,6 +549,7 @@ export async function updateTrip(tripId: string, tripData: Parameters<typeof cre
       default_currency: tripData.defaultCurrency,
       status: 'draft',
       subtotal_before_tax: tripData.subtotalBeforeTax,
+      profit: tripData.profit,
       gst_percentage: tripData.gstPercentage,
       gst_amount: tripData.gstAmount,
       tcs_percentage: tripData.tcsPercentage,
@@ -709,6 +713,31 @@ export async function updateTrip(tripId: string, tripData: Parameters<typeof cre
       .upsert(dbMeals, { onConflict: 'trip_id' });
 
     if (mealsError) throw mealsError;
+
+    // NEW: 8.5. Update or insert extras (upsert like meals)
+    if (tripData.extras) {
+      const dbExtras: DbTripExtras = {
+        trip_id: tripId,
+        visa_cost_per_person: tripData.extras.visaCostPerPerson,
+        visa_currency: tripData.extras.visaCurrency,
+        visa_total_cost: tripData.extras.visaTotalCost,
+        visa_total_cost_inr: tripData.extras.visaTotalCostINR,
+        tips_cost_per_person: tripData.extras.tipsCostPerPerson,
+        tips_currency: tripData.extras.tipsCurrency,
+        tips_total_cost: tripData.extras.tipsTotalCost,
+        tips_total_cost_inr: tripData.extras.tipsTotalCostINR,
+        insurance_cost_per_person: tripData.extras.insuranceCostPerPerson,
+        insurance_currency: tripData.extras.insuranceCurrency,
+        insurance_total_cost: tripData.extras.insuranceTotalCost,
+        insurance_total_cost_inr: tripData.extras.insuranceTotalCostINR,
+      };
+
+      const { error: extrasError } = await supabase
+        .from('trip_extras')
+        .upsert(dbExtras, { onConflict: 'trip_id' });
+
+      if (extrasError) throw extrasError;
+    }
 
     // 9. Delete and re-insert activities
     await supabase.from('trip_activities').delete().eq('trip_id', tripId);

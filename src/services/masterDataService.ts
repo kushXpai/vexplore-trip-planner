@@ -127,17 +127,24 @@ export const calculateTCS = (subtotalPlusGST: number, tcsPercentage: number = 5)
  */
 export const calculateGrandTotal = (
   subtotal: number,
+  profit: number,
   isInternational: boolean,
   gstPercentage: number = 5,
   tcsPercentage: number = 5
 ): {
   subtotal: number;
+  profit: number;
+  adminSubtotal: number;
   gstAmount: number;
   tcsAmount: number;
   grandTotal: number;
 } => {
-  const gstAmount = calculateGST(subtotal, gstPercentage);
-  const subtotalPlusGST = subtotal + gstAmount;
+  // Admin subtotal = base subtotal + profit
+  const adminSubtotal = subtotal + profit;
+  
+  // Calculate GST on admin subtotal (subtotal + profit)
+  const gstAmount = calculateGST(adminSubtotal, gstPercentage);
+  const subtotalPlusGST = adminSubtotal + gstAmount;
   
   // TCS only applies to international trips
   const tcsAmount = isInternational ? calculateTCS(subtotalPlusGST, tcsPercentage) : 0;
@@ -146,6 +153,8 @@ export const calculateGrandTotal = (
 
   return {
     subtotal,
+    profit,
+    adminSubtotal,
     gstAmount,
     tcsAmount,
     grandTotal,

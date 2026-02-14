@@ -67,6 +67,7 @@ export interface Trip {
 
   // Cost calculations
   subtotalBeforeTax: number;
+  profit: number;
   
   // NEW: Tax fields
   gstPercentage: number;
