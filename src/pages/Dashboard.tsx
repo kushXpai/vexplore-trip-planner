@@ -59,7 +59,7 @@ type DashboardTrip = {
   name: string;
   institution: string;
   country: string;
-  city: string;
+  cities: string[];
   startDate: string;
   endDate: string;
   totalDays: number;
@@ -97,11 +97,11 @@ export default function Dashboard() {
           name,
           institution,
           country,
-          city,
+          cities,
           start_date,
           end_date,
           total_days,
-          total_cost_inr,
+          grand_total_inr,
           status,
           created_by,
           trip_participants (
@@ -129,11 +129,11 @@ export default function Dashboard() {
         name: t.name,
         institution: t.institution,
         country: t.country,
-        city: t.city,
+        cities: t.cities || [],
         startDate: t.start_date,
         endDate: t.end_date,
         totalDays: t.total_days,
-        totalCostINR: t.total_cost_inr,
+        totalCostINR: t.grand_total_inr,
         status: t.status,
         createdBy: t.created_by,
         participants: {
@@ -141,7 +141,7 @@ export default function Dashboard() {
         },
       }));
     },
-    enabled: !!user, // Only run query if user is available
+    enabled: !!user,
   });
 
   /* -------------------- FILTERED TRIPS -------------------- */
@@ -149,7 +149,7 @@ export default function Dashboard() {
     const matchesSearch =
       trip.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       trip.institution.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      trip.city.toLowerCase().includes(searchQuery.toLowerCase());
+      trip.cities.some(city => city.toLowerCase().includes(searchQuery.toLowerCase()));  // CHANGED: search in cities array
     const matchesStatus = statusFilter === 'all' || trip.status === statusFilter;
     return matchesSearch && matchesStatus;
   }) || [];
@@ -316,7 +316,7 @@ function TripTable({ trips }: { trips: DashboardTrip[] }) {
               <TableCell className="text-muted-foreground">{trip.institution}</TableCell>
               <TableCell className="flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
-                <span>{trip.city}, {trip.country}</span>
+                <span>{trip.cities.join(', ')}{trip.cities.length > 0 ? ', ' : ''}{trip.country}</span>
               </TableCell>
               <TableCell className="text-muted-foreground">
                 {new Date(trip.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} - {new Date(trip.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -353,7 +353,7 @@ function TripCards({ trips }: { trips: DashboardTrip[] }) {
             <div className="space-y-2 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <MapPin className="w-4 h-4" />
-                <span>{trip.city}, {trip.country}</span>
+                <span>{trip.cities.join(', ')}{trip.cities.length > 0 ? ', ' : ''}{trip.country}</span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="w-4 h-4" />
