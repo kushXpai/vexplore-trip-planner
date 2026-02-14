@@ -119,7 +119,10 @@ export default function UserManagement() {
     e.preventDefault();
 
     try {
-      // 1. Create auth user
+      // Save current session before creating new user
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      
+      // 1. Create auth user (this will auto-login as the new user)
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -151,6 +154,14 @@ export default function UserManagement() {
       if (insertError) {
         console.error('Insert error:', insertError);
         throw new Error(`Failed to create user in database: ${insertError.message}`);
+      }
+
+      // 3. IMPORTANT: Log back in as the admin who created the user
+      if (currentSession?.access_token) {
+        await supabase.auth.setSession({
+          access_token: currentSession.access_token,
+          refresh_token: currentSession.refresh_token,
+        });
       }
 
       toast.success('User created successfully');
