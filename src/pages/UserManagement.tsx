@@ -106,7 +106,24 @@ export default function UserManagement() {
 
       if (error) throw error;
 
-      setUsers(data || []);
+      // Sort by role hierarchy (superadmin > admin > manager), then alphabetically by name
+      const sortedUsers = (data || []).sort((a, b) => {
+        // Define role hierarchy
+        const roleOrder: Record<UserRole, number> = {
+          superadmin: 1,
+          admin: 2,
+          manager: 3,
+        };
+
+        // First sort by role
+        const roleComparison = roleOrder[a.role] - roleOrder[b.role];
+        if (roleComparison !== 0) return roleComparison;
+
+        // Then sort alphabetically by name
+        return a.name.localeCompare(b.name);
+      });
+
+      setUsers(sortedUsers);
     } catch (error: any) {
       console.error('Error fetching users:', error);
       toast.error('Failed to load users');
