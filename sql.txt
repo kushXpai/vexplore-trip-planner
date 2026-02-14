@@ -65,41 +65,49 @@ CREATE TABLE public.users (
 -- Enable RLS
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
--- Create security definer function to avoid RLS recursion
 CREATE OR REPLACE FUNCTION public.current_user_role()
 RETURNS user_role AS $$
   SELECT role FROM public.users WHERE id = auth.uid()
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
--- RLS Policies for users
-CREATE POLICY "Users can view based on role"
-  ON public.users FOR SELECT
-  USING (
-    auth.uid() = id 
-    OR 
-    public.current_user_role() = 'admin'
-  );
+-- SELECT: Users can always see their own record
+CREATE POLICY "Users can view own record"
+ON public.users
+FOR SELECT
+USING (auth.uid() = id);
 
-CREATE POLICY "Users can update based on role"
-  ON public.users FOR UPDATE
-  USING (
-    auth.uid() = id 
-    OR 
-    public.current_user_role() = 'admin'
-  );
+-- SELECT: Admins/superadmins can see all users (uses SECURITY DEFINER function)
+CREATE POLICY "Admins can view all users"
+ON public.users
+FOR SELECT
+USING (current_user_role() IN ('admin'::user_role, 'superadmin'::user_role));
 
+-- INSERT: Only admins/superadmins can create users
 CREATE POLICY "Admins can insert users"
-  ON public.users FOR INSERT
-  WITH CHECK (
-    public.current_user_role() = 'admin'
-  );
+ON public.users
+FOR INSERT
+WITH CHECK (current_user_role() IN ('admin'::user_role, 'superadmin'::user_role));
 
+-- UPDATE: Users can update their own record
+CREATE POLICY "Users can update own record"
+ON public.users
+FOR UPDATE
+USING (auth.uid() = id);
+
+-- UPDATE: Admins can update any user
+CREATE POLICY "Admins can update any user"
+ON public.users
+FOR UPDATE
+USING (current_user_role() IN ('admin'::user_role, 'superadmin'::user_role));
+
+-- DELETE: Admins can delete users (except themselves)
 CREATE POLICY "Admins can delete users"
-  ON public.users FOR DELETE
-  USING (
-    public.current_user_role() = 'admin'
-    AND auth.uid() != id
-  );
+ON public.users
+FOR DELETE
+USING (
+  auth.uid() <> id 
+  AND current_user_role() IN ('admin'::user_role, 'superadmin'::user_role)
+);
 
 -- ============================================
 -- MASTER DATA TABLES
@@ -683,6 +691,80 @@ CREATE POLICY "trip_overheads_policy"
       )
     )
   );
+
+-- ============================================
+-- Taxes
+-- ============================================
+
+-- Create tax_rates table
+CREATE TABLE IF NOT EXISTS public.tax_rates (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    rate_type TEXT NOT NULL CHECK (rate_type IN ('gst', 'tcs')),
+    rate_percentage DECIMAL(5,2) NOT NULL CHECK (rate_percentage >= 0 AND rate_percentage <= 100),
+    effective_from DATE NOT NULL,
+    effective_to DATE,
+    is_current BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- Drop the incorrect policies first
+DROP POLICY IF EXISTS "Allow authenticated users to read tax rates" ON public.tax_rates;
+DROP POLICY IF EXISTS "Allow admins to manage tax rates" ON public.tax_rates;
+
+CREATE POLICY "Anyone can read tax rates"
+    ON public.tax_rates
+    FOR SELECT
+    TO authenticated
+    USING (true);
+
+CREATE POLICY "Admins can insert tax rates"
+    ON public.tax_rates
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        public.current_user_role() IN ('admin', 'superadmin')
+    );
+
+CREATE POLICY "Admins can update tax rates"
+    ON public.tax_rates
+    FOR UPDATE
+    TO authenticated
+    USING (
+        public.current_user_role() IN ('admin', 'superadmin')
+    )
+    WITH CHECK (
+        public.current_user_role() IN ('admin', 'superadmin')
+    );
+
+CREATE POLICY "Superadmins can delete tax rates"
+    ON public.tax_rates
+    FOR DELETE
+    TO authenticated
+    USING (
+        public.current_user_role() = 'superadmin'
+    );
+
+CREATE POLICY "Superadmins can manage all users"
+ON public.users
+FOR ALL
+USING (
+  EXISTS (
+    SELECT 1 FROM public.users
+    WHERE id = auth.uid()
+    AND role = 'superadmin'
+  )
+);
+
+-- Allow users to see their own record
+CREATE POLICY "Users can view own record"
+ON public.users
+FOR SELECT
+USING (auth.uid() = id);
+
+GRANT SELECT ON public.tax_rates TO authenticated;
+GRANT INSERT, UPDATE, DELETE ON public.tax_rates TO authenticated;
+GRANT ALL ON public.tax_rates TO service_role;
 
 -- ============================================
 -- POST-TRIP ANALYSIS

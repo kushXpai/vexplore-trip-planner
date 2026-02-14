@@ -137,14 +137,21 @@ export default function UserManagement() {
       }
 
       // 2. Insert into users table
-      const { error: insertError } = await supabase.from('users').insert({
-        id: authData.user.id,
-        email: formData.email,
-        name: formData.name,
-        role: formData.role,
-      });
+      const { data: insertData, error: insertError } = await supabase
+        .from('users')
+        .insert({
+          id: authData.user.id,
+          email: formData.email,
+          name: formData.name,
+          role: formData.role,
+        })
+        .select()
+        .single();
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('Insert error:', insertError);
+        throw new Error(`Failed to create user in database: ${insertError.message}`);
+      }
 
       toast.success('User created successfully');
       setIsCreateDialogOpen(false);
