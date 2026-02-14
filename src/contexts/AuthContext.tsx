@@ -9,6 +9,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
   isAuthenticated: boolean;
 }
 
@@ -113,8 +114,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem('user');
   };
 
-  // Role helpers
-  const isAdmin = user?.role === 'admin';
+  // Role helpers - UPDATED to include superadmin
+  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+  const isSuperAdmin = user?.role === 'superadmin';
   const isAuthenticated = !!user;
 
   // Return loading state so UI waits before rendering
@@ -123,7 +125,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       user, 
       login, 
       logout, 
-      isAdmin, 
+      isAdmin,
+      isSuperAdmin,
       isAuthenticated 
     }}>
       {loading ? <div className="text-center py-12">Loading...</div> : children}

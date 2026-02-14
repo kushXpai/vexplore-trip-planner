@@ -4,7 +4,7 @@
    Auth / User Types
 ========================= */
 
-export type UserRole = 'admin' | 'manager';
+export type UserRole = 'superadmin' | 'admin' | 'manager';
 
 export interface User {
   id: string;

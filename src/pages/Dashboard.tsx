@@ -3,73 +3,44 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { StatCard } from '@/components/shared/StatCard';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Plane,
   TrendingUp,
   Users,
   IndianRupee,
   Plus,
-  Search,
-  LayoutGrid,
-  List,
-  MoreHorizontal,
-  Eye,
-  Pencil,
-  Copy,
-  FileDown,
-  Trash2,
   Calendar,
-  MapPin,
+  Globe,
+  Building2,
+  BarChart3,
+  ArrowUpRight,
+  ArrowDownRight,
+  Clock,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/supabase/client';
 import { useQuery } from '@tanstack/react-query';
+import { Badge } from '@/components/ui/badge';
 
 /* -------------------- TYPES -------------------- */
 
-// Dashboard only needs partial Trip info
 type DashboardTrip = {
   id: string;
   name: string;
   institution: string;
   country: string;
-  cities: string[];
+  tripCategory: 'domestic' | 'international';
+  tripType: 'institute' | 'commercial';
   startDate: string;
   endDate: string;
   totalDays: number;
   totalCostINR: number;
   status: 'draft' | 'sent' | 'approved' | 'completed' | 'locked';
   participants: { totalParticipants: number };
-  createdBy?: string; // Added to track creator
+  createdAt: string;
 };
-
-type ViewMode = 'table' | 'cards';
 
 /* -------------------- COMPONENT -------------------- */
 
@@ -77,19 +48,14 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [viewMode, setViewMode] = useState<ViewMode>('table');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-
   /* -------------------- FETCH TRIPS WITH ROLE-BASED ACCESS -------------------- */
   const { data: trips, isLoading } = useQuery<DashboardTrip[], Error>({
-    queryKey: ['trips', user?.id, user?.role],
+    queryKey: ['dashboard-trips', user?.id, user?.role],
     queryFn: async () => {
       if (!user) {
         throw new Error('User not authenticated');
       }
 
-      // Start building the query
       let query = supabase
         .from('trips')
         .select(`
@@ -97,26 +63,23 @@ export default function Dashboard() {
           name,
           institution,
           country,
-          cities,
+          trip_category,
+          trip_type,
           start_date,
           end_date,
           total_days,
           grand_total_inr,
           status,
-          created_by,
+          created_at,
           trip_participants (
             total_participants
           )
         `);
 
-      // Apply role-based filtering
       if (user.role === 'manager') {
-        // manager can only see trips they created
         query = query.eq('created_by', user.id);
       }
-      // Admin sees all trips (no additional filter needed)
 
-      // Execute query with ordering
       const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
@@ -129,13 +92,14 @@ export default function Dashboard() {
         name: t.name,
         institution: t.institution,
         country: t.country,
-        cities: t.cities || [],
+        tripCategory: t.trip_category || 'domestic',
+        tripType: t.trip_type || 'institute',
         startDate: t.start_date,
         endDate: t.end_date,
         totalDays: t.total_days,
         totalCostINR: t.grand_total_inr,
         status: t.status,
-        createdBy: t.created_by,
+        createdAt: t.created_at,
         participants: {
           totalParticipants: t.trip_participants?.total_participants || 0
         },
@@ -144,269 +108,301 @@ export default function Dashboard() {
     enabled: !!user,
   });
 
-  /* -------------------- FILTERED TRIPS -------------------- */
-  const filteredTrips = trips?.filter(trip => {
-    const matchesSearch =
-      trip.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      trip.institution.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      trip.cities.some(city => city.toLowerCase().includes(searchQuery.toLowerCase()));  // CHANGED: search in cities array
-    const matchesStatus = statusFilter === 'all' || trip.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  }) || [];
-
-  /* -------------------- DASHBOARD STATS -------------------- */
+  /* -------------------- CALCULATE STATS -------------------- */
   const stats = {
     totalTrips: trips?.length || 0,
     activeTrips: trips?.filter(t => ['draft', 'sent', 'approved'].includes(t.status)).length || 0,
+    completedTrips: trips?.filter(t => t.status === 'completed').length || 0,
     totalRevenue: trips?.reduce((sum, t) => sum + t.totalCostINR, 0) || 0,
-    avgProfit: 0, // Placeholder
+    domesticTrips: trips?.filter(t => t.tripCategory === 'domestic').length || 0,
+    internationalTrips: trips?.filter(t => t.tripCategory === 'international').length || 0,
+    instituteTrips: trips?.filter(t => t.tripType === 'institute').length || 0,
+    commercialTrips: trips?.filter(t => t.tripType === 'commercial').length || 0,
+    totalParticipants: trips?.reduce((sum, t) => sum + t.participants.totalParticipants, 0) || 0,
   };
+
+  // Recent trips (last 5)
+  const recentTrips = trips?.slice(0, 5) || [];
+
+  // Upcoming trips (next 5 by start date)
+  const upcomingTrips = trips
+    ?.filter(t => new Date(t.startDate) > new Date() && ['approved', 'sent'].includes(t.status))
+    .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+    .slice(0, 5) || [];
 
   return (
     <div className="p-6 space-y-6 animate-fade-in">
       {/* Greeting */}
-      {user && (
-        <div className="text-sm text-muted-foreground">
-          Hi <span className="font-medium text-foreground">{user.name}</span> ({user.role})
-          {user.role === 'manager' && (
-            <span className="ml-2 text-xs">(Viewing your trips only)</span>
-          )}
-          {user.role === 'admin' && (
-            <span className="ml-2 text-xs">(Viewing all trips)</span>
-          )}
-        </div>
-      )}
+      <div>
+        <h1 className="text-3xl font-bold">
+          Welcome back, {user?.name}! 👋
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Here's what's happening with your trips today.
+        </p>
+      </div>
 
-      {/* Stats Row */}
+      {/* Main Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Trips"
           value={stats.totalTrips}
-          subtitle={user?.role === 'admin' ? 'All time' : 'Your trips'}
+          subtitle={user?.role === 'admin' ? 'All trips' : 'Your trips'}
           icon={Plane}
+          trend={stats.totalTrips > 0 ? { value: 12, isPositive: true } : undefined}
         />
         <StatCard
           title="Active Trips"
           value={stats.activeTrips}
           subtitle="In progress"
           icon={Calendar}
+          trend={stats.activeTrips > 0 ? { value: 8, isPositive: true } : undefined}
         />
         <StatCard
           title="Total Revenue"
           value={formatINR(stats.totalRevenue)}
-          subtitle="This quarter"
+          subtitle="All time"
           icon={IndianRupee}
         />
         <StatCard
-          title="Avg. Profit Margin"
-          value={`${stats.avgProfit}%`}
+          title="Total Participants"
+          value={stats.totalParticipants.toLocaleString()}
           subtitle="Across all trips"
-          icon={TrendingUp}
+          icon={Users}
         />
       </div>
 
-      {/* Trips Section */}
-      <Card className="shadow-card">
-        <CardHeader className="pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <CardTitle className="text-xl font-semibold">
-            Trip Cost Sheets
-            {user?.role === 'manager' && (
-              <span className="ml-2 text-sm font-normal text-muted-foreground">
-                (Your Trips)
-              </span>
+      {/* Secondary Stats Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Domestic Trips</p>
+                <p className="text-2xl font-bold">{stats.domesticTrips}</p>
+              </div>
+              <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
+                <Globe className="w-6 h-6 text-blue-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">International Trips</p>
+                <p className="text-2xl font-bold">{stats.internationalTrips}</p>
+              </div>
+              <div className="w-12 h-12 rounded-full bg-purple-500/10 flex items-center justify-center">
+                <Plane className="w-6 h-6 text-purple-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Institute Trips</p>
+                <p className="text-2xl font-bold">{stats.instituteTrips}</p>
+              </div>
+              <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
+                <Building2 className="w-6 h-6 text-green-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Commercial Trips</p>
+                <p className="text-2xl font-bold">{stats.commercialTrips}</p>
+              </div>
+              <div className="w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center">
+                <BarChart3 className="w-6 h-6 text-orange-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent and Upcoming Trips */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Trips */}
+        <Card className="shadow-card">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <CardTitle className="text-lg font-semibold">Recent Trips</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/trips')}
+              className="text-primary hover:text-primary"
+            >
+              View All
+              <ArrowUpRight className="w-4 h-4 ml-1" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="text-center py-8 text-muted-foreground">Loading...</div>
+            ) : recentTrips.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground mb-4">No trips yet</p>
+                <Button
+                  onClick={() => navigate('/trips/create')}
+                  size="sm"
+                  className="gradient-primary text-primary-foreground"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Your First Trip
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentTrips.map(trip => (
+                  <div
+                    key={trip.id}
+                    className="p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                    onClick={() => navigate(`/trips/${trip.id}`)}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-sm">{trip.name}</h4>
+                        <p className="text-xs text-muted-foreground">{trip.institution}</p>
+                      </div>
+                      <StatusBadge status={trip.status} />
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        <span>{trip.totalDays}d</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        <span>{trip.participants.totalParticipants}</span>
+                      </div>
+                      <div className="flex gap-1">
+                        <Badge variant="outline" className="text-[10px] px-1 py-0">
+                          {trip.tripCategory}
+                        </Badge>
+                        <Badge variant="outline" className="text-[10px] px-1 py-0">
+                          {trip.tripType}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
-          </CardTitle>
-          <Button
-            onClick={() => navigate('/trips/create')}
-            className="gradient-primary text-primary-foreground hover:opacity-90 transition-opacity"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Create New Trip
-          </Button>
+          </CardContent>
+        </Card>
+
+        {/* Upcoming Trips */}
+        <Card className="shadow-card">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <CardTitle className="text-lg font-semibold">Upcoming Trips</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/trips')}
+              className="text-primary hover:text-primary"
+            >
+              View All
+              <ArrowUpRight className="w-4 h-4 ml-1" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="text-center py-8 text-muted-foreground">Loading...</div>
+            ) : upcomingTrips.length === 0 ? (
+              <div className="text-center py-8">
+                <Clock className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-muted-foreground text-sm">No upcoming trips scheduled</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {upcomingTrips.map(trip => (
+                  <div
+                    key={trip.id}
+                    className="p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                    onClick={() => navigate(`/trips/${trip.id}`)}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-sm">{trip.name}</h4>
+                        <p className="text-xs text-muted-foreground">{trip.institution}</p>
+                      </div>
+                      <StatusBadge status={trip.status} />
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        <span>{new Date(trip.startDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        <span>{trip.totalDays}d</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        <span>{trip.participants.totalParticipants}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Quick Actions */}
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold">Quick Actions</CardTitle>
         </CardHeader>
-
         <CardContent>
-          {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-6">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search trips, institutions, destinations..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent className="bg-popover">
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="sent">Sent</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="locked">Locked</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <div className="flex border rounded-lg overflow-hidden">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setViewMode('table')}
-                className={cn('rounded-none', viewMode === 'table' && 'bg-muted')}
-              >
-                <List className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setViewMode('cards')}
-                className={cn('rounded-none', viewMode === 'cards' && 'bg-muted')}
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </Button>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Button
+              onClick={() => navigate('/trips/create')}
+              className="h-24 flex flex-col items-center justify-center gap-2 gradient-primary text-primary-foreground hover:opacity-90"
+            >
+              <Plus className="w-6 h-6" />
+              <span>Create New Trip</span>
+            </Button>
+            <Button
+              onClick={() => navigate('/trips')}
+              variant="outline"
+              className="h-24 flex flex-col items-center justify-center gap-2"
+            >
+              <Plane className="w-6 h-6" />
+              <span>View All Trips</span>
+            </Button>
+            <Button
+              onClick={() => navigate('/masters')}
+              variant="outline"
+              className="h-24 flex flex-col items-center justify-center gap-2"
+            >
+              <BarChart3 className="w-6 h-6" />
+              <span>Manage Masters</span>
+            </Button>
           </div>
-
-          {/* Content */}
-          {isLoading ? (
-            <div className="text-center py-12 text-muted-foreground">Loading trips...</div>
-          ) : filteredTrips.length === 0 ? (
-            <EmptyState />
-          ) : viewMode === 'table' ? (
-            <TripTable trips={filteredTrips} />
-          ) : (
-            <TripCards trips={filteredTrips} />
-          )}
         </CardContent>
       </Card>
     </div>
   );
 }
 
-/* -------------------- TRIP TABLE -------------------- */
-function TripTable({ trips }: { trips: DashboardTrip[] }) {
-  const navigate = useNavigate();
-  return (
-    <div className="border rounded-lg overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/50">
-            <TableHead>Trip Name</TableHead>
-            <TableHead>Institution</TableHead>
-            <TableHead>Destination</TableHead>
-            <TableHead>Dates</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Total Cost</TableHead>
-            <TableHead className="w-12"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {trips.map(trip => (
-            <TableRow
-              key={trip.id}
-              className="cursor-pointer hover:bg-muted/30 transition-colors"
-              onClick={() => navigate(`/trips/${trip.id}`)}
-            >
-              <TableCell className="font-medium">{trip.name}</TableCell>
-              <TableCell className="text-muted-foreground">{trip.institution}</TableCell>
-              <TableCell className="flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
-                <span>{trip.cities.join(', ')}{trip.cities.length > 0 ? ', ' : ''}{trip.country}</span>
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {new Date(trip.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} - {new Date(trip.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </TableCell>
-              <TableCell><StatusBadge status={trip.status} /></TableCell>
-              <TableCell className="text-right font-semibold">{formatINR(trip.totalCostINR)}</TableCell>
-              <TableCell><TripActions trip={trip} /></TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-/* -------------------- TRIP CARDS -------------------- */
-function TripCards({ trips }: { trips: DashboardTrip[] }) {
-  const navigate = useNavigate();
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {trips.map(trip => (
-        <Card
-          key={trip.id}
-          className="cursor-pointer hover:shadow-card-hover transition-all duration-200 group"
-          onClick={() => navigate(`/trips/${trip.id}`)}
-        >
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between mb-3">
-              <StatusBadge status={trip.status} />
-              <TripActions trip={trip} />
-            </div>
-            <h3 className="font-semibold text-foreground mb-1 group-hover:text-primary transition-colors">{trip.name}</h3>
-            <p className="text-sm text-muted-foreground mb-3">{trip.institution}</p>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <MapPin className="w-4 h-4" />
-                <span>{trip.cities.join(', ')}{trip.cities.length > 0 ? ', ' : ''}{trip.country}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Calendar className="w-4 h-4" />
-                <span>{trip.totalDays} days • {new Date(trip.startDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Users className="w-4 h-4" />
-                <span>{trip.participants.totalParticipants} participants</span>
-              </div>
-            </div>
-            <div className="mt-4 pt-4 border-t flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Total Cost</span>
-              <span className="font-bold text-lg text-foreground">{formatINR(trip.totalCostINR)}</span>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
-/* -------------------- TRIP ACTIONS -------------------- */
-function TripActions({ trip }: { trip: DashboardTrip }) {
-  const navigate = useNavigate();
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <MoreHorizontal className="w-4 h-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="bg-popover">
-        <DropdownMenuItem onClick={e => { e.stopPropagation(); navigate(`/trips/${trip.id}`); }}>
-          <Eye className="w-4 h-4 mr-2" /> View
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={e => { e.stopPropagation(); navigate(`/trips/create?edit=${trip.id}`); }}>
-          <Pencil className="w-4 h-4 mr-2" /> Edit
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={e => e.stopPropagation()}>
-          <Copy className="w-4 h-4 mr-2" /> Duplicate
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={e => e.stopPropagation()}>
-          <FileDown className="w-4 h-4 mr-2" /> Export PDF
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={e => e.stopPropagation()} className="text-destructive focus:text-destructive">
-          <Trash2 className="w-4 h-4 mr-2" /> Delete
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 /* -------------------- UTILITY -------------------- */
 function formatINR(value: number) {
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value);
+  return new Intl.NumberFormat('en-IN', { 
+    style: 'currency', 
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(value);
 }

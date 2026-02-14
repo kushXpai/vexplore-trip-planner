@@ -9,6 +9,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import DashboardLayout from "@/components/DashboardLayout";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
+import Trips from "@/pages/Trips";
 import TripDetail from "@/pages/TripDetail";
 import CreateTrip from "@/pages/CreateTrip";
 import Masters from "@/pages/Masters";
@@ -44,6 +45,10 @@ const router = createBrowserRouter([
       {
         path: "/dashboard",
         element: <Dashboard />
+      },
+      {
+        path: "/trips",
+        element: <Trips />
       },
       {
         path: "/trips/create",
