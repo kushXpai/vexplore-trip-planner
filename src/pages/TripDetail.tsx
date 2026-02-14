@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-// import { PDFPreview } from '@/components/trip/PDFPreview';
+import { Badge } from '@/components/ui/badge';
 import { ActualExpensesEntry, ActualExpenses } from '@/components/trip/ActualExpensesEntry';
 import { toast } from 'sonner';
 import {
@@ -26,8 +26,14 @@ import {
   Calculator,
   BarChart3,
   ClipboardEdit,
+  Globe,
+  Building2,
+  Shield,
+  IdCard,
+  Heart,
+  BadgePercent,
 } from 'lucide-react';
-import { Trip, PostTripAnalysis } from '@/types/trip';
+import { Trip, PostTripAnalysis, TripCategory, TripType } from '@/types/trip';
 import { supabase } from '@/supabase/client';
 import { fetchCurrencies, Currency } from '@/services/masterDataService';
 
@@ -83,6 +89,7 @@ export default function TripDetail() {
           trip_meals (*),
           trip_activities (*),
           trip_overheads (*),
+          trip_extras (*),
           post_trip_analysis (*)
         `)
         .eq('id', id)
@@ -99,29 +106,46 @@ export default function TripDetail() {
           id: data.id,
           name: data.name,
           institution: data.institution,
+          
+          // NEW: Trip classification
+          tripCategory: data.trip_category || 'domestic',
+          tripType: data.trip_type || 'institute',
+          
           country: data.country,
-          city: data.city,
+          
+          // NEW: Multi-city support
+          cities: data.cities || [],
+          
           startDate: data.start_date,
           endDate: data.end_date,
           totalDays: data.total_days ?? 0,
           totalNights: data.total_nights ?? 0,
-          currency: data.currency ?? 'INR',
+          defaultCurrency: data.default_currency ?? 'INR',
           status: data.status ?? 'draft',
-          totalCost: data.total_cost ?? 0,
-          totalCostINR: data.total_cost_inr ?? 0,
-          costPerStudent: data.cost_per_student ?? 0,
+          
           participants: {
+            // Institute participants
             boys: data.trip_participants?.boys ?? 0,
             girls: data.trip_participants?.girls ?? 0,
             maleFaculty: data.trip_participants?.male_faculty ?? 0,
             femaleFaculty: data.trip_participants?.female_faculty ?? 0,
             maleVXplorers: data.trip_participants?.male_vxplorers ?? 0,
             femaleVXplorers: data.trip_participants?.female_vxplorers ?? 0,
+            
+            // NEW: Commercial participants
+            maleCount: data.trip_participants?.male_count ?? 0,
+            femaleCount: data.trip_participants?.female_count ?? 0,
+            otherCount: data.trip_participants?.other_count ?? 0,
+            commercialMaleVXplorers: data.trip_participants?.commercial_male_vxplorers ?? 0,
+            commercialFemaleVXplorers: data.trip_participants?.commercial_female_vxplorers ?? 0,
+            
             totalStudents: data.trip_participants?.total_students ?? 0,
             totalFaculty: data.trip_participants?.total_faculty ?? 0,
             totalVXplorers: data.trip_participants?.total_vxplorers ?? 0,
+            totalCommercial: data.trip_participants?.total_commercial ?? 0,
             totalParticipants: data.trip_participants?.total_participants ?? 0,
           },
+          
           transport: {
             flights: (data.trip_flights || []).map((f: any) => ({
               id: f.id,
@@ -162,12 +186,14 @@ export default function TripDetail() {
               totalCostINR: t.total_cost_inr ?? 0,
             })),
           },
+          
           accommodation: (data.trip_accommodations || []).map((a: any) => ({
             id: a.id,
             hotelName: a.hotel_name ?? '',
             city: a.city ?? '',
             numberOfNights: a.number_of_nights ?? 0,
-            costPerRoom: a.cost_per_room ?? 0,
+            roomTypes: a.room_types ?? [],
+            roomPreferences: a.room_preferences ?? {},
             currency: a.currency ?? 'INR',
             breakfastIncluded: a.breakfast_included ?? false,
             totalRooms: a.total_rooms ?? 0,
@@ -178,12 +204,19 @@ export default function TripDetail() {
               girlsRooms: 0,
               maleFacultyRooms: 0,
               femaleFacultyRooms: 0,
+              maleVXplorerRooms: 0,
+              femaleVXplorerRooms: 0,
+              commercialMaleRooms: 0,
+              commercialFemaleRooms: 0,
+              commercialOtherRooms: 0,
+              commercialMaleVXplorerRooms: 0,
+              commercialFemaleVXplorerRooms: 0,
+              totalRooms: 0,
             },
           })),
+          
           meals: (() => {
-            // Find the meals data from the query
             const mealsData = data.trip_meals?.[0] || data.trip_meals;
-
             if (mealsData) {
               return {
                 breakfastCostPerPerson: mealsData.breakfast_cost_per_person ?? 0,
@@ -201,17 +234,19 @@ export default function TripDetail() {
               breakfastCostPerPerson: 0,
               lunchCostPerPerson: 0,
               dinnerCostPerPerson: 0,
-              currency: data.currency ?? 'INR',
-              totalDays: data.total_days ?? 0,
-              totalParticipants: data.trip_participants?.total_participants ?? 0,
+              currency: 'INR',
+              totalDays: 0,
+              totalParticipants: 0,
               dailyCostPerPerson: 0,
               totalCost: 0,
               totalCostINR: 0,
             };
           })(),
+          
           activities: (data.trip_activities || []).map((a: any) => ({
             id: a.id,
             name: a.name ?? '',
+            city: a.city,  // NEW: City for multi-city trips
             entryCost: a.entry_cost ?? 0,
             transportCost: a.transport_cost ?? 0,
             guideCost: a.guide_cost ?? 0,
@@ -220,20 +255,66 @@ export default function TripDetail() {
             totalCost: a.total_cost ?? 0,
             totalCostINR: a.total_cost_inr ?? 0,
           })),
-          overheads: (data.overheads || []).map((o: any) => ({
-            ...o,
+          
+          overheads: (data.trip_overheads || []).map((o: any) => ({
+            id: o.id,
+            name: o.name ?? '',
+            amount: o.amount ?? 0,
+            currency: o.currency ?? 'INR',
+            hideFromClient: o.hide_from_client ?? false,
             totalCostINR: o.total_cost_inr ?? 0,
           })),
-          analysis: data.post_trip_analysis || null,
-          createdAt: data.created_at,
-          updatedAt: data.updated_at,
+          
+          // NEW: Extras (visa, tips, insurance)
+          extras: data.trip_extras ? {
+            visaCostPerPerson: data.trip_extras.visa_cost_per_person ?? 0,
+            visaCurrency: data.trip_extras.visa_currency ?? 'INR',
+            visaTotalCost: data.trip_extras.visa_total_cost ?? 0,
+            visaTotalCostINR: data.trip_extras.visa_total_cost_inr ?? 0,
+            tipsCostPerPerson: data.trip_extras.tips_cost_per_person ?? 0,
+            tipsCurrency: data.trip_extras.tips_currency ?? 'INR',
+            tipsTotalCost: data.trip_extras.tips_total_cost ?? 0,
+            tipsTotalCostINR: data.trip_extras.tips_total_cost_inr ?? 0,
+            insuranceCostPerPerson: data.trip_extras.insurance_cost_per_person ?? 0,
+            insuranceCurrency: data.trip_extras.insurance_currency ?? 'INR',
+            insuranceTotalCost: data.trip_extras.insurance_total_cost ?? 0,
+            insuranceTotalCostINR: data.trip_extras.insurance_total_cost_inr ?? 0,
+          } : undefined,
+          
+          // Cost calculations
+          subtotalBeforeTax: data.subtotal_before_tax ?? 0,
+          profit: data.profit ?? 0,
+          
+          // NEW: Tax fields
+          gstPercentage: data.gst_percentage ?? 5,
+          gstAmount: data.gst_amount ?? 0,
+          tcsPercentage: data.tcs_percentage ?? 5,
+          tcsAmount: data.tcs_amount ?? 0,
+          
+          grandTotal: data.grand_total ?? 0,
+          grandTotalINR: data.grand_total_inr ?? 0,
+          costPerParticipant: data.cost_per_participant ?? 0,
+          
+          createdAt: data.created_at ?? '',
+          updatedAt: data.updated_at ?? '',
+          
+          analysis: data.post_trip_analysis ? {
+            categories: data.post_trip_analysis.categories || [],
+            totalExpected: data.post_trip_analysis.total_expected ?? 0,
+            totalActual: data.post_trip_analysis.total_actual ?? 0,
+            profitLoss: data.post_trip_analysis.profit_loss ?? 0,
+            profitLossPercentage: data.post_trip_analysis.profit_loss_percentage ?? 0,
+            varianceExplanation: data.post_trip_analysis.variance_explanation ?? '',
+            isFinalized: data.post_trip_analysis.is_finalized ?? false,
+          } : undefined,
         };
 
-
         setTrip(mappedTrip);
-        setTripAnalysis(mappedTrip.analysis || null);
         setTripStatus(mappedTrip.status);
         setIsLocked(mappedTrip.status === 'locked');
+        if (mappedTrip.analysis) {
+          setTripAnalysis(mappedTrip.analysis);
+        }
       }
 
       setLoading(false);
@@ -242,323 +323,475 @@ export default function TripDetail() {
     fetchTrip();
   }, [id]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96 text-muted-foreground">
-        Loading...
-      </div>
-    );
-  }
-
-  if (!trip) {
-    return (
-      <div className="flex flex-col items-center justify-center h-96">
-        <p className="text-muted-foreground mb-4">Trip not found</p>
-        <Button onClick={() => navigate('/')}>Back to Dashboard</Button>
-      </div>
-    );
-  }
-
-  // Handlers
-  const handleLockTrip = () => {
-    setTripStatus('locked');
-    setIsLocked(true);
-    toast.success('Trip has been locked. No further edits are allowed.');
+  const handleEdit = () => {
+    navigate(`/create-trip?edit=${id}`);
   };
 
-  const handleSendForApproval = () => {
+  const handleSendForApproval = async () => {
+    if (!trip) return;
+    
+    const { error } = await supabase
+      .from('trips')
+      .update({ status: 'sent' })
+      .eq('id', trip.id);
+
+    if (error) {
+      toast.error('Failed to send for approval');
+      return;
+    }
+
     setTripStatus('sent');
     toast.success('Trip sent for approval');
   };
 
-  const handleLockExchangeRate = () => {
-    toast.success('Exchange rate locked at current rates');
+  const handleLockTrip = async () => {
+    if (!trip) return;
+    
+    const { error } = await supabase
+      .from('trips')
+      .update({ status: 'locked' })
+      .eq('id', trip.id);
+
+    if (error) {
+      toast.error('Failed to lock trip');
+      return;
+    }
+
+    setTripStatus('locked');
+    setIsLocked(true);
+    toast.success('Trip locked successfully');
   };
 
-  const handleActualExpensesSubmit = (actuals: ActualExpenses) => {
-    const transportExpected =
+  const handleActualExpensesSubmit = async (actuals: ActualExpenses) => {
+    if (!trip) return;
+
+    const transportExpected = 
       trip.transport.flights.reduce((sum, f) => sum + f.totalCostINR, 0) +
       trip.transport.buses.reduce((sum, b) => sum + b.totalCostINR, 0) +
       trip.transport.trains.reduce((sum, t) => sum + t.totalCostINR, 0);
     const accommodationExpected = trip.accommodation.reduce((sum, h) => sum + h.totalCostINR, 0);
     const mealsExpected = trip.meals.totalCostINR;
     const activitiesExpected = trip.activities.reduce((sum, a) => sum + a.totalCostINR, 0);
+    const extrasExpected = trip.extras 
+      ? (trip.extras.visaTotalCostINR + trip.extras.tipsTotalCostINR + trip.extras.insuranceTotalCostINR)
+      : 0;
     const overheadsExpected = trip.overheads.reduce((sum, o) => sum + o.totalCostINR, 0);
-    const totalExpected = transportExpected + accommodationExpected + mealsExpected + activitiesExpected + overheadsExpected;
-    const totalActual = actuals.transport + actuals.accommodation + actuals.meals + actuals.activities + actuals.overheads;
 
-    const newAnalysis: PostTripAnalysis = {
-      categories: [
-        { name: 'Transport', expected: transportExpected, actual: actuals.transport, difference: actuals.transport - transportExpected, variancePercentage: transportExpected > 0 ? ((actuals.transport - transportExpected) / transportExpected) * 100 : 0 },
-        { name: 'Accommodation', expected: accommodationExpected, actual: actuals.accommodation, difference: actuals.accommodation - accommodationExpected, variancePercentage: accommodationExpected > 0 ? ((actuals.accommodation - accommodationExpected) / accommodationExpected) * 100 : 0 },
-        { name: 'Meals', expected: mealsExpected, actual: actuals.meals, difference: actuals.meals - mealsExpected, variancePercentage: mealsExpected > 0 ? ((actuals.meals - mealsExpected) / mealsExpected) * 100 : 0 },
-        { name: 'Activities', expected: activitiesExpected, actual: actuals.activities, difference: actuals.activities - activitiesExpected, variancePercentage: activitiesExpected > 0 ? ((actuals.activities - activitiesExpected) / activitiesExpected) * 100 : 0 },
-        { name: 'Overheads', expected: overheadsExpected, actual: actuals.overheads, difference: actuals.overheads - overheadsExpected, variancePercentage: overheadsExpected > 0 ? ((actuals.overheads - overheadsExpected) / overheadsExpected) * 100 : 0 },
-      ],
+    const totalExpected = transportExpected + accommodationExpected + mealsExpected + activitiesExpected + extrasExpected + overheadsExpected;
+    const totalActual = actuals.transport + actuals.accommodation + actuals.meals + actuals.activities + actuals.extras + actuals.overheads;
+    const profitLoss = totalExpected - totalActual;
+    const profitLossPercentage = totalExpected > 0 ? (profitLoss / totalExpected) * 100 : 0;
+
+    const categories = [
+      {
+        name: 'Transport',
+        expected: transportExpected,
+        actual: actuals.transport,
+        difference: transportExpected - actuals.transport,
+        variancePercentage: transportExpected > 0 ? ((transportExpected - actuals.transport) / transportExpected) * 100 : 0,
+      },
+      {
+        name: 'Accommodation',
+        expected: accommodationExpected,
+        actual: actuals.accommodation,
+        difference: accommodationExpected - actuals.accommodation,
+        variancePercentage: accommodationExpected > 0 ? ((accommodationExpected - actuals.accommodation) / accommodationExpected) * 100 : 0,
+      },
+      {
+        name: 'Meals',
+        expected: mealsExpected,
+        actual: actuals.meals,
+        difference: mealsExpected - actuals.meals,
+        variancePercentage: mealsExpected > 0 ? ((mealsExpected - actuals.meals) / mealsExpected) * 100 : 0,
+      },
+      {
+        name: 'Activities',
+        expected: activitiesExpected,
+        actual: actuals.activities,
+        difference: activitiesExpected - actuals.activities,
+        variancePercentage: activitiesExpected > 0 ? ((activitiesExpected - actuals.activities) / activitiesExpected) * 100 : 0,
+      },
+      {
+        name: 'Extras (Visa, Tips, Insurance)',
+        expected: extrasExpected,
+        actual: actuals.extras,
+        difference: extrasExpected - actuals.extras,
+        variancePercentage: extrasExpected > 0 ? ((extrasExpected - actuals.extras) / extrasExpected) * 100 : 0,
+      },
+      {
+        name: 'Overheads',
+        expected: overheadsExpected,
+        actual: actuals.overheads,
+        difference: overheadsExpected - actuals.overheads,
+        variancePercentage: overheadsExpected > 0 ? ((overheadsExpected - actuals.overheads) / overheadsExpected) * 100 : 0,
+      },
+    ];
+
+    const analysisData = {
+      trip_id: trip.id,
+      categories,
+      total_expected: totalExpected,
+      total_actual: totalActual,
+      profit_loss: profitLoss,
+      profit_loss_percentage: profitLossPercentage,
+      variance_explanation: actuals.explanation,
+      is_finalized: false,
+    };
+
+    const { error } = await supabase
+      .from('post_trip_analysis')
+      .upsert(analysisData, { onConflict: 'trip_id' });
+
+    if (error) {
+      toast.error('Failed to save analysis');
+      return;
+    }
+
+    setTripAnalysis({
+      categories,
       totalExpected,
       totalActual,
-      profitLoss: totalExpected - totalActual,
-      profitLossPercentage: totalExpected > 0 ? ((totalExpected - totalActual) / totalExpected) * 100 : 0,
+      profitLoss,
+      profitLossPercentage,
       varianceExplanation: actuals.explanation,
-      isFinalized: true,
-    };
-    setTripAnalysis(newAnalysis);
+      isFinalized: false,
+    });
+
+    toast.success('Analysis saved successfully');
   };
 
-  // Currency formatting helper functions
-  const formatINR = (amount: number): string => {
-    return `₹${amount.toLocaleString('en-IN')}`;
-  };
+  if (loading) {
+    return (
+      <div className="p-8">
+        <div className="flex items-center justify-center">
+          <div className="text-center">Loading...</div>
+        </div>
+      </div>
+    );
+  }
 
-  const formatCurrency = (amount: number, currencyCode: string): string => {
-    const currency = currencies.find(c => c.code === currencyCode);
-    const symbol = currency?.symbol || '₹';
-    return `${symbol}${amount.toLocaleString('en-IN')}`;
-  };
+  if (!trip) {
+    return (
+      <div className="p-8">
+        <div className="text-center">Trip not found</div>
+      </div>
+    );
+  }
 
   return (
-
-    <div className="p-6 space-y-6 animate-fade-in">
-      {/* Header Actions */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <Button variant="ghost" onClick={() => navigate('/')} className="gap-2">
-          <ArrowLeft className="w-4 h-4" />
-          Back to Dashboard
-        </Button>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" className="gap-2" onClick={() => setShowPDFPreview(true)}>
-            <FileDown className="w-4 h-4" />
-            Export PDF
+    <div className="p-8 max-w-7xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" onClick={() => navigate('/dashboard')}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
           </Button>
-          {!isLocked && (
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() => navigate(`/trips/create?edit=${trip.id}`)}
-            >
-              <Pencil className="w-4 h-4" />
-              Edit
-            </Button>
+          <div>
+            <h1 className="text-3xl font-bold">{trip.name}</h1>
+            <p className="text-muted-foreground">{trip.institution}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <StatusBadge status={tripStatus} />
+          {!isLocked && tripStatus === 'draft' && (
+            <>
+              <Button variant="outline" onClick={handleEdit}>
+                <Pencil className="w-4 h-4 mr-2" />
+                Edit
+              </Button>
+              <Button onClick={handleSendForApproval}>
+                <Send className="w-4 h-4 mr-2" />
+                Send for Approval
+              </Button>
+            </>
           )}
-          {trip.status === 'draft' && (
-            <Button className="gradient-primary text-primary-foreground gap-2" onClick={handleSendForApproval}>
-              <Send className="w-4 h-4" />
-              Send for Approval
-            </Button>
-          )}
-          {trip.status === 'approved' && (
-            <Button variant="secondary" className="gap-2" onClick={handleLockExchangeRate}>
-              <Lock className="w-4 h-4" />
-              Lock Exchange Rate
-            </Button>
-          )}
-          {(trip.status === 'completed' || tripAnalysis) && !isLocked && (
-            <Button variant="destructive" className="gap-2" onClick={handleLockTrip}>
-              <Lock className="w-4 h-4" />
+          {!isLocked && tripStatus === 'approved' && (
+            <Button onClick={handleLockTrip} variant="destructive">
+              <Lock className="w-4 h-4 mr-2" />
               Lock Trip
             </Button>
-          )}
-          {isLocked && (
-            <span className="inline-flex items-center gap-2 px-3 py-2 bg-destructive/10 text-destructive rounded-md text-sm font-medium">
-              <Lock className="w-4 h-4" />
-              Trip Locked
-            </span>
           )}
         </div>
       </div>
 
       {/* Trip Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="shadow-card lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-primary" />
-              Trip Overview
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <InfoItem label="Institution" value={trip.institution} />
-              <InfoItem
-                label="Destination"
-                value={`${trip.city}, ${trip.country}`}
-                icon={<MapPin className="w-4 h-4" />}
-              />
-              <InfoItem
-                label="Duration"
-                value={`${trip.totalDays} Days / ${trip.totalNights} Nights`}
-              />
-              <InfoItem label="Currency" value={trip.currency} />
-              <InfoItem
-                label="Start Date"
-                value={new Date(trip.startDate).toLocaleDateString('en-IN', {
-                  day: 'numeric', month: 'long', year: 'numeric'
-                })}
-              />
-              <InfoItem
-                label="End Date"
-                value={new Date(trip.endDate).toLocaleDateString('en-IN', {
-                  day: 'numeric', month: 'long', year: 'numeric'
-                })}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-primary" />
-              Participants
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Boys</span>
-                <span className="font-medium">{trip.participants.boys}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Girls</span>
-                <span className="font-medium">{trip.participants.girls}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Male Faculty</span>
-                <span className="font-medium">{trip.participants.maleFaculty}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Female Faculty</span>
-                <span className="font-medium">{trip.participants.femaleFaculty}</span>
-              </div>
-              <div className="border-t pt-3 mt-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Total Students</span>
-                  <span className="font-semibold">{trip.participants.totalStudents}</span>
-                </div>
-                <div className="flex justify-between text-sm mt-1">
-                  <span className="text-muted-foreground">Total Faculty</span>
-                  <span className="font-semibold">{trip.participants.totalFaculty}</span>
-                </div>
-                <div className="flex justify-between mt-2 pt-2 border-t">
-                  <span className="font-medium">Total Participants</span>
-                  <span className="font-bold text-primary">{trip.participants.totalParticipants}</span>
-                </div>
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle>Trip Overview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* NEW: Trip Category */}
+            <div className="flex items-start gap-3">
+              <Globe className="w-5 h-5 text-primary mt-1" />
+              <div>
+                <p className="text-sm text-muted-foreground">Trip Category</p>
+                <p className="font-semibold capitalize">{trip.tripCategory}</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+            
+            {/* NEW: Trip Type */}
+            <div className="flex items-start gap-3">
+              <Building2 className="w-5 h-5 text-primary mt-1" />
+              <div>
+                <p className="text-sm text-muted-foreground">Trip Type</p>
+                <p className="font-semibold capitalize">{trip.tripType}</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-3">
+              <Calendar className="w-5 h-5 text-primary mt-1" />
+              <div>
+                <p className="text-sm text-muted-foreground">Duration</p>
+                <p className="font-semibold">
+                  {trip.totalDays} Days, {trip.totalNights} Nights
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {new Date(trip.startDate).toLocaleDateString()} - {new Date(trip.endDate).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-3">
+              <MapPin className="w-5 h-5 text-primary mt-1" />
+              <div>
+                <p className="text-sm text-muted-foreground">Destination</p>
+                <p className="font-semibold">{trip.country}</p>
+                {/* NEW: Multi-city display */}
+                {trip.cities && trip.cities.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {trip.cities.map((city, idx) => (
+                      <Badge key={idx} variant="outline" className="text-xs">
+                        {city}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-3">
+              <Users className="w-5 h-5 text-primary mt-1" />
+              <div>
+                <p className="text-sm text-muted-foreground">Participants</p>
+                <p className="font-semibold">{trip.participants.totalParticipants} Total</p>
+                {trip.tripType === 'institute' ? (
+                  <p className="text-xs text-muted-foreground">
+                    {trip.participants.totalStudents} Students, {trip.participants.totalFaculty} Faculty, {trip.participants.totalVXplorers} VXplorers
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {trip.participants.totalCommercial} Participants, {trip.participants.totalVXplorers} VXplorers
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Detailed Sections */}
-      <Tabs defaultValue="transport" className="space-y-4">
-        <TabsList className="bg-muted/50 flex-wrap h-auto gap-1 p-1">
-          <TabsTrigger value="transport" className="gap-2">
-            <Plane className="w-4 h-4" />
-            Transport
-          </TabsTrigger>
-          <TabsTrigger value="accommodation" className="gap-2">
-            <Hotel className="w-4 h-4" />
-            Accommodation
-          </TabsTrigger>
-          <TabsTrigger value="meals" className="gap-2">
-            <Utensils className="w-4 h-4" />
-            Meals
-          </TabsTrigger>
-          <TabsTrigger value="activities" className="gap-2">
-            <Ticket className="w-4 h-4" />
-            Activities
-          </TabsTrigger>
-          <TabsTrigger value="summary" className="gap-2">
-            <Calculator className="w-4 h-4" />
-            Cost Summary
-          </TabsTrigger>
-          <TabsTrigger value="actuals" className="gap-2">
-            <ClipboardEdit className="w-4 h-4" />
-            Enter Actuals
-          </TabsTrigger>
-          {trip.analysis && (
-            <TabsTrigger value="analysis" className="gap-2">
-              <BarChart3 className="w-4 h-4" />
-              Analysis
-            </TabsTrigger>
-          )}
+      {/* Tabs */}
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="transport">Transport</TabsTrigger>
+          <TabsTrigger value="accommodation">Accommodation</TabsTrigger>
+          <TabsTrigger value="activities">Activities</TabsTrigger>
+          <TabsTrigger value="costs">Costs</TabsTrigger>
+          <TabsTrigger value="analysis">Analysis</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="transport">
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-6">
+          <ParticipantsSection trip={trip} />
+          <MealsSection trip={trip} currencies={currencies} />
+          {trip.extras && <ExtrasSection trip={trip} currencies={currencies} />}
+          <OverheadsSection trip={trip} currencies={currencies} />
+        </TabsContent>
+
+        {/* Transport Tab */}
+        <TabsContent value="transport" className="space-y-6">
           <TransportSection trip={trip} currencies={currencies} />
         </TabsContent>
-        <TabsContent value="accommodation">
+
+        {/* Accommodation Tab */}
+        <TabsContent value="accommodation" className="space-y-6">
           <AccommodationSection trip={trip} currencies={currencies} />
         </TabsContent>
-        <TabsContent value="meals">
-          <MealsSection trip={trip} currencies={currencies} />
-        </TabsContent>
-        <TabsContent value="activities">
+
+        {/* Activities Tab */}
+        <TabsContent value="activities" className="space-y-6">
           <ActivitiesSection trip={trip} currencies={currencies} />
         </TabsContent>
-        <TabsContent value="summary">
+
+        {/* Costs Tab */}
+        <TabsContent value="costs" className="space-y-6">
           <CostSummarySection trip={trip} />
         </TabsContent>
-        <TabsContent value="actuals">
-          <ActualExpensesEntry trip={trip} onSubmit={handleActualExpensesSubmit} />
+
+        {/* Analysis Tab */}
+        <TabsContent value="analysis" className="space-y-6">
+          {tripStatus === 'completed' || tripStatus === 'locked' ? (
+            tripAnalysis ? (
+              <AnalysisSection trip={trip} />
+            ) : (
+              <ActualExpensesEntry trip={trip} onSubmit={handleActualExpensesSubmit} />
+            )
+          ) : (
+            <Card className="shadow-card">
+              <CardContent className="p-6">
+                <p className="text-center text-muted-foreground">
+                  Analysis is only available for completed trips
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
-        {trip.analysis && (
-          <TabsContent value="analysis">
-            <AnalysisSection trip={trip} />
-          </TabsContent>
-        )}
       </Tabs>
     </div>
   );
 }
 
-function InfoItem({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+function ParticipantsSection({ trip }: { trip: Trip }) {
+  const { participants, tripType } = trip;
+
   return (
-    <div>
-      <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className="font-medium flex items-center gap-1.5">
-        {icon}
-        {value}
-      </p>
-    </div>
+    <Card className="shadow-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Users className="w-5 h-5 text-primary" />
+          Participants Breakdown
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {tripType === 'institute' ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="p-4 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground">Boys</p>
+              <p className="text-2xl font-bold">{participants.boys}</p>
+            </div>
+            <div className="p-4 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground">Girls</p>
+              <p className="text-2xl font-bold">{participants.girls}</p>
+            </div>
+            <div className="p-4 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground">Male Faculty</p>
+              <p className="text-2xl font-bold">{participants.maleFaculty}</p>
+            </div>
+            <div className="p-4 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground">Female Faculty</p>
+              <p className="text-2xl font-bold">{participants.femaleFaculty}</p>
+            </div>
+            <div className="p-4 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground">Male VXplorers</p>
+              <p className="text-2xl font-bold">{participants.maleVXplorers}</p>
+            </div>
+            <div className="p-4 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground">Female VXplorers</p>
+              <p className="text-2xl font-bold">{participants.femaleVXplorers}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="p-4 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground">Male Participants</p>
+              <p className="text-2xl font-bold">{participants.maleCount}</p>
+            </div>
+            <div className="p-4 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground">Female Participants</p>
+              <p className="text-2xl font-bold">{participants.femaleCount}</p>
+            </div>
+            <div className="p-4 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground">Other</p>
+              <p className="text-2xl font-bold">{participants.otherCount}</p>
+            </div>
+            <div className="p-4 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground">Male VXplorers</p>
+              <p className="text-2xl font-bold">{participants.commercialMaleVXplorers}</p>
+            </div>
+            <div className="p-4 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground">Female VXplorers</p>
+              <p className="text-2xl font-bold">{participants.commercialFemaleVXplorers}</p>
+            </div>
+          </div>
+        )}
+        
+        <div className="mt-6 pt-6 border-t grid grid-cols-2 md:grid-cols-4 gap-4">
+          {tripType === 'institute' && (
+            <>
+              <div className="p-4 bg-primary/5 rounded-lg">
+                <p className="text-sm text-muted-foreground">Total Students</p>
+                <p className="text-xl font-bold">{participants.totalStudents}</p>
+              </div>
+              <div className="p-4 bg-primary/5 rounded-lg">
+                <p className="text-sm text-muted-foreground">Total Faculty</p>
+                <p className="text-xl font-bold">{participants.totalFaculty}</p>
+              </div>
+            </>
+          )}
+          {tripType === 'commercial' && (
+            <div className="p-4 bg-primary/5 rounded-lg">
+              <p className="text-sm text-muted-foreground">Total Participants</p>
+              <p className="text-xl font-bold">{participants.totalCommercial}</p>
+            </div>
+          )}
+          <div className="p-4 bg-primary/5 rounded-lg">
+            <p className="text-sm text-muted-foreground">Total VXplorers</p>
+            <p className="text-xl font-bold">{participants.totalVXplorers}</p>
+          </div>
+          <div className="p-4 bg-primary/10 rounded-lg">
+            <p className="text-sm text-muted-foreground">Grand Total</p>
+            <p className="text-xl font-bold text-primary">{participants.totalParticipants}</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
 function TransportSection({ trip, currencies }: { trip: Trip; currencies: Currency[] }) {
+  const { flights, buses, trains } = trip.transport;
+
   return (
-    <div className="grid gap-4">
-      {trip.transport.flights.length > 0 && (
+    <div className="space-y-6">
+      {/* Flights */}
+      {flights.length > 0 && (
         <Card className="shadow-card">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Plane className="w-4 h-4 text-primary" />
-              Flights
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Plane className="w-5 h-5 text-primary" />
+              Flights ({flights.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {trip.transport.flights.map((flight) => (
-                <div key={flight.id} className="p-4 bg-muted/30 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold">{flight.from} → {flight.to}</span>
-                    <StatusBadge status="approved" />
+              {flights.map((flight, index) => (
+                <div key={flight.id} className="p-4 border rounded-lg">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h4 className="font-semibold">{flight.airline} - {flight.flightNumber}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {flight.from} → {flight.to}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">{formatCurrencyWithSymbol(flight.totalCost, flight.currency, currencies)}</p>
+                      <p className="text-sm text-muted-foreground">{formatINR(flight.totalCostINR)}</p>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <p className="text-muted-foreground">Airline</p>
-                      <p className="font-medium">{flight.airline}</p>
+                      <span className="text-muted-foreground">Departure:</span>
+                      <span className="ml-2 font-medium">{flight.departureTime}</span>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Flight No.</p>
-                      <p className="font-medium">{flight.flightNumber}</p>
+                      <span className="text-muted-foreground">Arrival:</span>
+                      <span className="ml-2 font-medium">{flight.arrivalTime}</span>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Cost/Person</p>
-                      <p className="font-medium">{formatCurrencyWithSymbol(flight.costPerPerson, flight.currency, currencies)}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Total (INR)</p>
-                      <p className="font-semibold text-primary">{formatINR(flight.totalCostINR)}</p>
+                      <span className="text-muted-foreground">Cost/Person:</span>
+                      <span className="ml-2 font-medium">{formatCurrencyWithSymbol(flight.costPerPerson, flight.currency, currencies)}</span>
                     </div>
                   </div>
                   {flight.description && (
@@ -571,40 +804,48 @@ function TransportSection({ trip, currencies }: { trip: Trip; currencies: Curren
         </Card>
       )}
 
-      {trip.transport.buses.length > 0 && (
+      {/* Buses */}
+      {buses.length > 0 && (
         <Card className="shadow-card">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Bus className="w-4 h-4 text-primary" />
-              Buses
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bus className="w-5 h-5 text-primary" />
+              Buses ({buses.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {trip.transport.buses.map((bus) => (
-                <div key={bus.id} className="p-4 bg-muted/30 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold">{bus.name}</span>
-                    <span className="text-sm text-muted-foreground">×{bus.quantity}</span>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              {buses.map((bus, index) => (
+                <div key={bus.id} className="p-4 border rounded-lg">
+                  <div className="flex justify-between items-start mb-3">
                     <div>
-                      <p className="text-muted-foreground">Capacity</p>
-                      <p className="font-medium">{bus.seatingCapacity} seats</p>
+                      <h4 className="font-semibold">{bus.name}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Capacity: {bus.seatingCapacity} seats
+                      </p>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground">Cost/Bus/Day</p>
-                      <p className="font-medium">{formatCurrencyWithSymbol(bus.costPerBus, bus.currency, currencies)}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Days</p>
-                      <p className="font-medium">{bus.numberOfDays}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Total (INR)</p>
-                      <p className="font-semibold text-primary">{formatINR(bus.totalCostINR)}</p>
+                    <div className="text-right">
+                      <p className="font-semibold">{formatCurrencyWithSymbol(bus.totalCost, bus.currency, currencies)}</p>
+                      <p className="text-sm text-muted-foreground">{formatINR(bus.totalCostINR)}</p>
                     </div>
                   </div>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Quantity:</span>
+                      <span className="ml-2 font-medium">{bus.quantity}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Days:</span>
+                      <span className="ml-2 font-medium">{bus.numberOfDays}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Cost/Bus:</span>
+                      <span className="ml-2 font-medium">{formatCurrencyWithSymbol(bus.costPerBus, bus.currency, currencies)}</span>
+                    </div>
+                  </div>
+                  {bus.description && (
+                    <p className="text-sm text-muted-foreground mt-2">{bus.description}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -612,40 +853,44 @@ function TransportSection({ trip, currencies }: { trip: Trip; currencies: Curren
         </Card>
       )}
 
-      {trip.transport.trains.length > 0 && (
+      {/* Trains */}
+      {trains.length > 0 && (
         <Card className="shadow-card">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Train className="w-4 h-4 text-primary" />
-              Trains
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Train className="w-5 h-5 text-primary" />
+              Trains ({trains.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {trip.transport.trains.map((train) => (
-                <div key={train.id} className="p-4 bg-muted/30 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold">{train.name}</span>
-                    <span className="text-sm text-muted-foreground">{train.trainNumber}</span>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              {trains.map((train, index) => (
+                <div key={train.id} className="p-4 border rounded-lg">
+                  <div className="flex justify-between items-start mb-3">
                     <div>
-                      <p className="text-muted-foreground">Class</p>
-                      <p className="font-medium">{train.class}</p>
+                      <h4 className="font-semibold">{train.name} - {train.trainNumber}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Class: {train.class}
+                      </p>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground">Timing</p>
-                      <p className="font-medium">{train.timing}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Cost/Person</p>
-                      <p className="font-medium">{formatCurrencyWithSymbol(train.costPerPerson, train.currency, currencies)}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Total (INR)</p>
-                      <p className="font-semibold text-primary">{formatINR(train.totalCostINR)}</p>
+                    <div className="text-right">
+                      <p className="font-semibold">{formatCurrencyWithSymbol(train.totalCost, train.currency, currencies)}</p>
+                      <p className="text-sm text-muted-foreground">{formatINR(train.totalCostINR)}</p>
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Timing:</span>
+                      <span className="ml-2 font-medium">{train.timing}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Cost/Person:</span>
+                      <span className="ml-2 font-medium">{formatCurrencyWithSymbol(train.costPerPerson, train.currency, currencies)}</span>
+                    </div>
+                  </div>
+                  {train.description && (
+                    <p className="text-sm text-muted-foreground mt-2">{train.description}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -659,60 +904,127 @@ function TransportSection({ trip, currencies }: { trip: Trip; currencies: Curren
 function AccommodationSection({ trip, currencies }: { trip: Trip; currencies: Currency[] }) {
   return (
     <Card className="shadow-card">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Hotel className="w-4 h-4 text-primary" />
-          Hotels & Accommodation
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Hotel className="w-5 h-5 text-primary" />
+          Accommodation ({trip.accommodation.length})
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {trip.accommodation.map((hotel) => (
-            <div key={hotel.id} className="p-4 bg-muted/30 rounded-lg">
-              <div className="flex items-center justify-between mb-3">
+        <div className="space-y-6">
+          {trip.accommodation.map((hotel, index) => (
+            <div key={hotel.id} className="p-4 border rounded-lg">
+              <div className="flex justify-between items-start mb-4">
                 <div>
-                  <span className="font-semibold">{hotel.hotelName}</span>
-                  <span className="text-sm text-muted-foreground ml-2">• {hotel.city}</span>
+                  <h4 className="font-semibold text-lg">{hotel.hotelName}</h4>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge variant="outline">{hotel.city}</Badge>
+                    <Badge variant="outline">{hotel.numberOfNights} {hotel.numberOfNights === 1 ? 'Night' : 'Nights'}</Badge>
+                    {hotel.breakfastIncluded && <Badge variant="outline">Breakfast Included</Badge>}
+                  </div>
                 </div>
-                {hotel.breakfastIncluded && (
-                  <span className="text-xs bg-success/10 text-success px-2 py-0.5 rounded">
-                    Breakfast Included
-                  </span>
-                )}
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm mb-3">
-                <div>
-                  <p className="text-muted-foreground">Nights</p>
-                  <p className="font-medium">{hotel.numberOfNights}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Cost/Room</p>
-                  <p className="font-medium">{formatCurrencyWithSymbol(hotel.totalCostINR / hotel.totalRooms, hotel.currency, currencies)}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Total Rooms</p>
-                  <p className="font-medium">{hotel.totalRooms}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Total (INR)</p>
-                  <p className="font-semibold text-primary">{formatINR(hotel.totalCostINR)}</p>
+                <div className="text-right">
+                  <p className="font-semibold">{formatCurrencyWithSymbol(hotel.totalCost, hotel.currency, currencies)}</p>
+                  <p className="text-sm text-muted-foreground">{formatINR(hotel.totalCostINR)}</p>
                 </div>
               </div>
-              <div className="pt-3 border-t">
-                <p className="text-xs text-muted-foreground mb-2">Room Allocation</p>
-                <div className="flex flex-wrap gap-3 text-xs">
-                  <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded">
-                    Boys: {hotel.roomAllocation.boysRooms} rooms
-                  </span>
-                  <span className="bg-pink-50 text-pink-700 px-2 py-1 rounded">
-                    Girls: {hotel.roomAllocation.girlsRooms} rooms
-                  </span>
-                  <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded">
-                    Male Faculty: {hotel.roomAllocation.maleFacultyRooms} rooms
-                  </span>
-                  <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded">
-                    Female Faculty: {hotel.roomAllocation.femaleFacultyRooms} rooms
-                  </span>
+
+              {/* Room Types */}
+              <div className="mb-4">
+                <p className="text-sm font-semibold mb-2">Room Types:</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {hotel.roomTypes.map((rt, idx) => (
+                    <div key={idx} className="p-2 bg-muted/30 rounded text-sm">
+                      <p className="font-medium">{rt.roomType}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Capacity: {rt.capacityPerRoom} | {formatCurrencyWithSymbol(rt.costPerRoom, hotel.currency, currencies)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Room Allocation Summary */}
+              <div className="p-3 bg-muted/20 rounded-lg">
+                <p className="text-sm font-semibold mb-2">Room Allocation:</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                  {trip.tripType === 'institute' ? (
+                    <>
+                      {hotel.roomAllocation.boysRooms > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Boys:</span>
+                          <span className="ml-2 font-medium">{hotel.roomAllocation.boysRooms} rooms</span>
+                        </div>
+                      )}
+                      {hotel.roomAllocation.girlsRooms > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Girls:</span>
+                          <span className="ml-2 font-medium">{hotel.roomAllocation.girlsRooms} rooms</span>
+                        </div>
+                      )}
+                      {hotel.roomAllocation.maleFacultyRooms > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Male Faculty:</span>
+                          <span className="ml-2 font-medium">{hotel.roomAllocation.maleFacultyRooms} rooms</span>
+                        </div>
+                      )}
+                      {hotel.roomAllocation.femaleFacultyRooms > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Female Faculty:</span>
+                          <span className="ml-2 font-medium">{hotel.roomAllocation.femaleFacultyRooms} rooms</span>
+                        </div>
+                      )}
+                      {hotel.roomAllocation.maleVXplorerRooms > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Male VXplorers:</span>
+                          <span className="ml-2 font-medium">{hotel.roomAllocation.maleVXplorerRooms} rooms</span>
+                        </div>
+                      )}
+                      {hotel.roomAllocation.femaleVXplorerRooms > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Female VXplorers:</span>
+                          <span className="ml-2 font-medium">{hotel.roomAllocation.femaleVXplorerRooms} rooms</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {hotel.roomAllocation.commercialMaleRooms > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Male:</span>
+                          <span className="ml-2 font-medium">{hotel.roomAllocation.commercialMaleRooms} rooms</span>
+                        </div>
+                      )}
+                      {hotel.roomAllocation.commercialFemaleRooms > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Female:</span>
+                          <span className="ml-2 font-medium">{hotel.roomAllocation.commercialFemaleRooms} rooms</span>
+                        </div>
+                      )}
+                      {hotel.roomAllocation.commercialOtherRooms > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Other:</span>
+                          <span className="ml-2 font-medium">{hotel.roomAllocation.commercialOtherRooms} rooms</span>
+                        </div>
+                      )}
+                      {hotel.roomAllocation.commercialMaleVXplorerRooms > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Male VXplorers:</span>
+                          <span className="ml-2 font-medium">{hotel.roomAllocation.commercialMaleVXplorerRooms} rooms</span>
+                        </div>
+                      )}
+                      {hotel.roomAllocation.commercialFemaleVXplorerRooms > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Female VXplorers:</span>
+                          <span className="ml-2 font-medium">{hotel.roomAllocation.commercialFemaleVXplorerRooms} rooms</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div className="col-span-2 md:col-span-1">
+                    <span className="text-muted-foreground">Total:</span>
+                    <span className="ml-2 font-bold text-primary">{hotel.roomAllocation.totalRooms} rooms</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -724,36 +1036,170 @@ function AccommodationSection({ trip, currencies }: { trip: Trip; currencies: Cu
 }
 
 function MealsSection({ trip, currencies }: { trip: Trip; currencies: Currency[] }) {
+  const { meals } = trip;
+
   return (
     <Card className="shadow-card">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Utensils className="w-4 h-4 text-primary" />
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Utensils className="w-5 h-5 text-primary" />
           Meals
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="p-4 bg-muted/30 rounded-lg">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-4 bg-muted/30 rounded-lg">
+            <p className="text-sm text-muted-foreground">Breakfast/Person</p>
+            <p className="text-lg font-semibold">
+              {formatCurrencyWithSymbol(meals.breakfastCostPerPerson, meals.currency, currencies)}
+            </p>
+          </div>
+          <div className="p-4 bg-muted/30 rounded-lg">
+            <p className="text-sm text-muted-foreground">Lunch/Person</p>
+            <p className="text-lg font-semibold">
+              {formatCurrencyWithSymbol(meals.lunchCostPerPerson, meals.currency, currencies)}
+            </p>
+          </div>
+          <div className="p-4 bg-muted/30 rounded-lg">
+            <p className="text-sm text-muted-foreground">Dinner/Person</p>
+            <p className="text-lg font-semibold">
+              {formatCurrencyWithSymbol(meals.dinnerCostPerPerson, meals.currency, currencies)}
+            </p>
+          </div>
+          <div className="p-4 bg-muted/30 rounded-lg">
+            <p className="text-sm text-muted-foreground">Daily Cost/Person</p>
+            <p className="text-lg font-semibold">
+              {formatCurrencyWithSymbol(meals.dailyCostPerPerson, meals.currency, currencies)}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 p-4 bg-primary/5 rounded-lg">
+          <div className="flex justify-between items-center">
             <div>
-              <p className="text-muted-foreground text-sm">Lunch Cost/Person</p>
-              <p className="font-semibold text-lg">{formatCurrencyWithSymbol(trip.meals.lunchCostPerPerson, trip.meals.currency, currencies)}</p>
+              <p className="text-sm text-muted-foreground">Total Meals Cost</p>
+              <p className="text-xs text-muted-foreground">
+                {meals.totalDays} days × {meals.totalParticipants} participants
+              </p>
             </div>
-            <div>
-              <p className="text-muted-foreground text-sm">Dinner Cost/Person</p>
-              <p className="font-semibold text-lg">{formatCurrencyWithSymbol(trip.meals.dinnerCostPerPerson, trip.meals.currency, currencies)}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground text-sm">Daily Total</p>
-              <p className="font-semibold text-lg">{formatCurrencyWithSymbol(trip.meals.dailyCostPerPerson, trip.meals.currency, currencies)}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground text-sm">Total ({trip.meals.totalDays} days)</p>
-              <p className="font-bold text-xl text-primary">{formatINR(trip.meals.totalCostINR)}</p>
+            <div className="text-right">
+              <p className="text-xl font-bold">{formatCurrencyWithSymbol(meals.totalCost, meals.currency, currencies)}</p>
+              <p className="text-sm text-muted-foreground">{formatINR(meals.totalCostINR)}</p>
             </div>
           </div>
-          <div className="mt-4 pt-4 border-t text-sm text-muted-foreground">
-            <p>Calculation: ({trip.meals.lunchCostPerPerson} + {trip.meals.dinnerCostPerPerson}) × {trip.meals.totalParticipants} participants × {trip.meals.totalDays} days</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ExtrasSection({ trip, currencies }: { trip: Trip; currencies: Currency[] }) {
+  const { extras } = trip;
+  if (!extras) return null;
+
+  const hasVisa = extras.visaCostPerPerson > 0;
+  const hasTips = extras.tipsCostPerPerson > 0;
+  const hasInsurance = extras.insuranceCostPerPerson > 0;
+
+  if (!hasVisa && !hasTips && !hasInsurance) return null;
+
+  return (
+    <Card className="shadow-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Shield className="w-5 h-5 text-primary" />
+          Extras (Visa, Tips, Insurance)
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {hasVisa && (
+            <div className="p-4 border rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <IdCard className="w-4 h-4 text-primary" />
+                <h4 className="font-semibold">Visa</h4>
+              </div>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Per Person:</span>
+                  <span className="font-medium">
+                    {formatCurrencyWithSymbol(extras.visaCostPerPerson, extras.visaCurrency, currencies)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total:</span>
+                  <span className="font-semibold">
+                    {formatCurrencyWithSymbol(extras.visaTotalCost, extras.visaCurrency, currencies)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">In INR:</span>
+                  <span>{formatINR(extras.visaTotalCostINR)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {hasTips && (
+            <div className="p-4 border rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Heart className="w-4 h-4 text-primary" />
+                <h4 className="font-semibold">Tips</h4>
+              </div>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Per Person:</span>
+                  <span className="font-medium">
+                    {formatCurrencyWithSymbol(extras.tipsCostPerPerson, extras.tipsCurrency, currencies)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total:</span>
+                  <span className="font-semibold">
+                    {formatCurrencyWithSymbol(extras.tipsTotalCost, extras.tipsCurrency, currencies)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">In INR:</span>
+                  <span>{formatINR(extras.tipsTotalCostINR)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {hasInsurance && (
+            <div className="p-4 border rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Shield className="w-4 h-4 text-primary" />
+                <h4 className="font-semibold">Insurance</h4>
+              </div>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Per Person:</span>
+                  <span className="font-medium">
+                    {formatCurrencyWithSymbol(extras.insuranceCostPerPerson, extras.insuranceCurrency, currencies)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total:</span>
+                  <span className="font-semibold">
+                    {formatCurrencyWithSymbol(extras.insuranceTotalCost, extras.insuranceCurrency, currencies)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">In INR:</span>
+                  <span>{formatINR(extras.insuranceTotalCostINR)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 p-4 bg-primary/5 rounded-lg">
+          <div className="flex justify-between items-center">
+            <p className="font-semibold">Total Extras Cost</p>
+            <p className="text-xl font-bold">
+              {formatINR(extras.visaTotalCostINR + extras.tipsTotalCostINR + extras.insuranceTotalCostINR)}
+            </p>
           </div>
         </div>
       </CardContent>
@@ -762,28 +1208,31 @@ function MealsSection({ trip, currencies }: { trip: Trip; currencies: Currency[]
 }
 
 function ActivitiesSection({ trip, currencies }: { trip: Trip; currencies: Currency[] }) {
-  const totalActivitiesCost = trip.activities.reduce((sum, a) => sum + a.totalCostINR, 0);
-
   return (
     <Card className="shadow-card">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Ticket className="w-4 h-4 text-primary" />
-            Activities & Site Visits
-          </CardTitle>
-          <span className="font-semibold text-primary">{formatINR(totalActivitiesCost)}</span>
-        </div>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Ticket className="w-5 h-5 text-primary" />
+          Activities ({trip.activities.length})
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
-          {trip.activities.map((activity) => (
-            <div key={activity.id} className="p-4 bg-muted/30 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold">{activity.name}</span>
-                <span className="font-semibold text-primary">{formatINR(activity.totalCostINR)}</span>
+        <div className="space-y-4">
+          {trip.activities.map((activity, index) => (
+            <div key={activity.id} className="p-4 border rounded-lg">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <h4 className="font-semibold">{activity.name}</h4>
+                  {activity.city && (
+                    <Badge variant="outline" className="mt-1">{activity.city}</Badge>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold">{formatCurrencyWithSymbol(activity.totalCost, activity.currency, currencies)}</p>
+                  <p className="text-sm text-muted-foreground">{formatINR(activity.totalCostINR)}</p>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+              <div className="flex flex-wrap gap-4 text-sm">
                 <span>Entry: {formatCurrencyWithSymbol(activity.entryCost, activity.currency, currencies)}</span>
                 {activity.transportCost > 0 && (
                   <span>Transport: {formatCurrencyWithSymbol(activity.transportCost, activity.currency, currencies)}</span>
@@ -803,6 +1252,57 @@ function ActivitiesSection({ trip, currencies }: { trip: Trip; currencies: Curre
   );
 }
 
+function OverheadsSection({ trip, currencies }: { trip: Trip; currencies: Currency[] }) {
+  const visibleOverheads = trip.overheads.filter(o => !o.hideFromClient);
+  const hiddenOverheads = trip.overheads.filter(o => o.hideFromClient);
+
+  return (
+    <Card className="shadow-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Calculator className="w-5 h-5 text-primary" />
+          Overheads
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {visibleOverheads.length > 0 && (
+          <div>
+            <p className="text-sm font-semibold mb-3">Client-Visible Overheads:</p>
+            <div className="space-y-2">
+              {visibleOverheads.map((overhead) => (
+                <div key={overhead.id} className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                  <span className="font-medium">{overhead.name}</span>
+                  <div className="text-right">
+                    <p className="font-semibold">{formatCurrencyWithSymbol(overhead.amount, overhead.currency, currencies)}</p>
+                    <p className="text-xs text-muted-foreground">{formatINR(overhead.totalCostINR)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {hiddenOverheads.length > 0 && (
+          <div>
+            <p className="text-sm font-semibold mb-3 text-warning">Hidden Overheads (Admin Only):</p>
+            <div className="space-y-2">
+              {hiddenOverheads.map((overhead) => (
+                <div key={overhead.id} className="flex justify-between items-center p-3 bg-warning/5 border border-warning/20 rounded-lg">
+                  <span className="font-medium">{overhead.name}</span>
+                  <div className="text-right">
+                    <p className="font-semibold">{formatCurrencyWithSymbol(overhead.amount, overhead.currency, currencies)}</p>
+                    <p className="text-xs text-muted-foreground">{formatINR(overhead.totalCostINR)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function CostSummarySection({ trip }: { trip: Trip }) {
   const transportTotal =
     trip.transport.flights.reduce((sum, f) => sum + f.totalCostINR, 0) +
@@ -810,6 +1310,9 @@ function CostSummarySection({ trip }: { trip: Trip }) {
     trip.transport.trains.reduce((sum, t) => sum + t.totalCostINR, 0);
   const accommodationTotal = trip.accommodation.reduce((sum, h) => sum + h.totalCostINR, 0);
   const activitiesTotal = trip.activities.reduce((sum, a) => sum + a.totalCostINR, 0);
+  const extrasTotal = trip.extras 
+    ? (trip.extras.visaTotalCostINR + trip.extras.tipsTotalCostINR + trip.extras.insuranceTotalCostINR)
+    : 0;
   const overheadsTotal = trip.overheads.reduce((sum, o) => sum + o.totalCostINR, 0);
   const visibleOverheadsTotal = trip.overheads.filter(o => !o.hideFromClient).reduce((sum, o) => sum + o.totalCostINR, 0);
 
@@ -818,25 +1321,68 @@ function CostSummarySection({ trip }: { trip: Trip }) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Calculator className="w-5 h-5 text-primary" />
-          Cost Summary
+          Cost Summary & Breakdown
         </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
+          {/* Cost Components */}
           <CostRow label="Transport" sublabel="Flights, Buses, Trains" amount={transportTotal} />
           <CostRow label="Accommodation" sublabel="Hotels & Stay" amount={accommodationTotal} />
-          <CostRow label="Meals" sublabel="Lunch & Dinner" amount={trip.meals.totalCostINR} />
+          <CostRow label="Meals" sublabel="Breakfast, Lunch & Dinner" amount={trip.meals.totalCostINR} />
           <CostRow label="Activities" sublabel="Entry, Transport, Guides" amount={activitiesTotal} />
+          {extrasTotal > 0 && (
+            <CostRow label="Extras" sublabel="Visa, Tips, Insurance" amount={extrasTotal} />
+          )}
           <CostRow label="Overheads" sublabel="All overheads" amount={overheadsTotal} />
 
-          <div className="pt-4 border-t border-dashed">
+          {/* Subtotal Before Tax */}
+          <div className="pt-4 border-t">
             <CostRow
-              label="Subtotal (Client View)"
-              amount={transportTotal + accommodationTotal + trip.meals.totalCostINR + activitiesTotal + visibleOverheadsTotal}
+              label="Subtotal (Before Profit & Tax)"
+              amount={trip.subtotalBeforeTax}
               isSubtotal
             />
           </div>
 
+          {/* NEW: Profit */}
+          {trip.profit > 0 && (
+            <div className="flex justify-between items-center text-sm">
+              <div className="flex items-center gap-2">
+                <BadgePercent className="w-4 h-4 text-primary" />
+                <span className="font-medium">Profit</span>
+              </div>
+              <span className="font-semibold">{formatINR(trip.profit)}</span>
+            </div>
+          )}
+
+          {/* Admin Subtotal (Subtotal + Profit) */}
+          <div className="flex justify-between items-center py-2 border-t border-dashed">
+            <span className="font-semibold">Admin Subtotal (Subtotal + Profit)</span>
+            <span className="font-semibold text-lg">{formatINR(trip.subtotalBeforeTax + trip.profit)}</span>
+          </div>
+
+          {/* NEW: GST */}
+          <div className="flex justify-between items-center text-sm">
+            <div className="flex items-center gap-2">
+              <BadgePercent className="w-4 h-4 text-primary" />
+              <span className="font-medium">GST ({trip.gstPercentage}%)</span>
+            </div>
+            <span className="font-semibold">{formatINR(trip.gstAmount)}</span>
+          </div>
+
+          {/* NEW: TCS (for international trips only) */}
+          {trip.tripCategory === 'international' && trip.tcsAmount > 0 && (
+            <div className="flex justify-between items-center text-sm">
+              <div className="flex items-center gap-2">
+                <BadgePercent className="w-4 h-4 text-primary" />
+                <span className="font-medium">TCS ({trip.tcsPercentage}% on Subtotal + GST)</span>
+              </div>
+              <span className="font-semibold">{formatINR(trip.tcsAmount)}</span>
+            </div>
+          )}
+
+          {/* Hidden Overheads Warning */}
           {overheadsTotal > visibleOverheadsTotal && (
             <div className="p-3 bg-warning/5 border border-warning/20 rounded-lg">
               <CostRow
@@ -848,17 +1394,25 @@ function CostSummarySection({ trip }: { trip: Trip }) {
             </div>
           )}
 
+          {/* Grand Total */}
           <div className="pt-4 border-t-2">
             <div className="flex justify-between items-center">
               <div>
                 <p className="font-bold text-lg">Grand Total</p>
-                <p className="text-sm text-muted-foreground">Including all overheads</p>
+                <p className="text-sm text-muted-foreground">
+                  {trip.tripCategory === 'international' 
+                    ? 'Including GST, TCS & all charges' 
+                    : 'Including GST & all charges'}
+                </p>
               </div>
-              <p className="text-2xl font-bold text-primary">{formatINR(trip.totalCostINR)}</p>
+              <p className="text-2xl font-bold text-primary">{formatINR(trip.grandTotalINR)}</p>
             </div>
+            
             <div className="flex justify-between items-center mt-4 p-3 bg-primary/5 rounded-lg">
-              <span className="font-medium">Cost per Student</span>
-              <span className="text-lg font-bold">{formatINR(trip.costPerStudent)}</span>
+              <span className="font-medium">
+                Cost per {trip.tripType === 'institute' ? 'Student' : 'Participant'}
+              </span>
+              <span className="text-lg font-bold">{formatINR(trip.costPerParticipant)}</span>
             </div>
           </div>
         </div>
@@ -956,11 +1510,11 @@ function AnalysisSection({ trip }: { trip: Trip }) {
                     <td className="p-3 font-medium">{cat.name}</td>
                     <td className="p-3 text-right">{formatINR(cat.expected)}</td>
                     <td className="p-3 text-right">{formatINR(cat.actual)}</td>
-                    <td className={`p-3 text-right ${cat.difference <= 0 ? 'text-success' : 'text-destructive'}`}>
-                      {cat.difference <= 0 ? '' : '+'}{formatINR(cat.difference)}
+                    <td className={`p-3 text-right ${cat.difference >= 0 ? 'text-success' : 'text-destructive'}`}>
+                      {cat.difference >= 0 ? '+' : ''}{formatINR(cat.difference)}
                     </td>
-                    <td className={`p-3 text-right ${cat.variancePercentage <= 0 ? 'text-success' : 'text-destructive'}`}>
-                      {cat.variancePercentage <= 0 ? '' : '+'}{cat.variancePercentage.toFixed(2)}%
+                    <td className={`p-3 text-right ${cat.variancePercentage >= 0 ? 'text-success' : 'text-destructive'}`}>
+                      {cat.variancePercentage >= 0 ? '+' : ''}{cat.variancePercentage.toFixed(2)}%
                     </td>
                   </tr>
                 ))}
