@@ -198,9 +198,10 @@ interface DbOverhead {
   id?: string;
   trip_id: string;
   name: string;
-  amount: number;
+  amount_per_participant: number;  // CHANGED: Per participant pricing
   currency: string;
   hide_from_client: boolean;
+  total_cost: number;
   total_cost_inr: number;
 }
 
@@ -500,9 +501,10 @@ export async function createTrip(tripData: {
       const dbOverheads: DbOverhead[] = tripData.overheads.map(overhead => ({
         trip_id: tripId,
         name: overhead.name,
-        amount: overhead.amount,
+        amount_per_participant: overhead.amountPerParticipant,  // CHANGED
         currency: overhead.currency,
         hide_from_client: overhead.hideFromClient,
+        total_cost: overhead.totalCost,
         total_cost_inr: overhead.totalCostINR,
       }));
 
@@ -763,9 +765,10 @@ export async function updateTrip(tripId: string, tripData: Parameters<typeof cre
       const dbOverheads: DbOverhead[] = tripData.overheads.map(overhead => ({
         trip_id: tripId,
         name: overhead.name,
-        amount: overhead.amount,
+        amount_per_participant: overhead.amountPerParticipant,  // CHANGED
         currency: overhead.currency,
         hide_from_client: overhead.hideFromClient,
+        total_cost: overhead.totalCost,
         total_cost_inr: overhead.totalCostINR,
       }));
       await supabase.from('trip_overheads').insert(dbOverheads);

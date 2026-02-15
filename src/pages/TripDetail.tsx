@@ -288,9 +288,10 @@ export default function TripDetail() {
           overheads: (data.trip_overheads || []).map((o: any) => ({
             id: o.id,
             name: o.name ?? '',
-            amount: o.amount ?? 0,
+            amountPerParticipant: o.amount_per_participant ?? 0,  // CHANGED
             currency: o.currency ?? 'INR',
             hideFromClient: o.hide_from_client ?? false,
+            totalCost: o.total_cost ?? 0,  // NEW
             totalCostINR: o.total_cost_inr ?? 0,
           })),
 
@@ -1435,7 +1436,7 @@ function OverheadsSection({ trip, currencies }: { trip: Trip; currencies: Curren
                 <div key={overhead.id} className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
                   <span className="font-medium">{overhead.name}</span>
                   <div className="text-right">
-                    <p className="font-semibold">{formatCurrencyWithSymbol(overhead.amount, overhead.currency, currencies)}</p>
+                    <p className="font-semibold">{formatCurrencyWithSymbol(overhead.totalCost, overhead.currency, currencies)}</p>
                     <p className="text-xs text-muted-foreground">{formatINR(overhead.totalCostINR)}</p>
                   </div>
                 </div>
@@ -1452,7 +1453,7 @@ function OverheadsSection({ trip, currencies }: { trip: Trip; currencies: Curren
                 <div key={overhead.id} className="flex justify-between items-center p-3 bg-warning/5 border border-warning/20 rounded-lg">
                   <span className="font-medium">{overhead.name}</span>
                   <div className="text-right">
-                    <p className="font-semibold">{formatCurrencyWithSymbol(overhead.amount, overhead.currency, currencies)}</p>
+                    <p className="font-semibold">{formatCurrencyWithSymbol(overhead.totalCost, overhead.currency, currencies)}</p>
                     <p className="text-xs text-muted-foreground">{formatINR(overhead.totalCostINR)}</p>
                   </div>
                 </div>

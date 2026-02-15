@@ -338,9 +338,10 @@ export default function CreateTrip() {
         setOverheads(dbOverheads.map(o => ({
           id: o.id!,
           name: o.name,
-          amount: o.amount,
+          amountPerParticipant: o.amount_per_participant,  // CHANGED
           currency: o.currency,
           hideFromClient: o.hide_from_client,
+          totalCost: o.total_cost,  // NEW
           totalCostINR: o.total_cost_inr,
         })));
 
@@ -764,9 +765,10 @@ export default function CreateTrip() {
     setOverheads([...overheads, {
       id: `overhead-${Date.now()}`,
       name: '',
-      amount: 0,
+      amountPerParticipant: 0,
       currency: defaultCurrency,
       hideFromClient: false,
+      totalCost: 0,
       totalCostINR: 0,
     }]);
   };
@@ -775,10 +777,13 @@ export default function CreateTrip() {
     const updated = [...overheads];
     updated[index] = { ...updated[index], [field]: value };
 
-    if (field === 'amount' || field === 'currency') {
-      const amount = field === 'amount' ? value : updated[index].amount;
+    if (field === 'amountPerParticipant' || field === 'currency') {
+      const totalParticipants = calculateTotalParticipants();
+      const amountPerParticipant = field === 'amountPerParticipant' ? value : updated[index].amountPerParticipant;
       const currency = field === 'currency' ? value : updated[index].currency;
-      updated[index].totalCostINR = amount * getCurrencyRate(currency);
+
+      updated[index].totalCost = amountPerParticipant * totalParticipants;
+      updated[index].totalCostINR = amountPerParticipant * totalParticipants * getCurrencyRate(currency);
     }
 
     setOverheads(updated);
@@ -2199,8 +2204,8 @@ export default function CreateTrip() {
                     <div className="flex-1">
                       <Label className="text-sm font-medium">Optimize by Cost</Label>
                       <p className="text-xs text-muted-foreground">
-                        {optimizeRoomsByCost 
-                          ? "Finding cheapest room combination within preferences" 
+                        {optimizeRoomsByCost
+                          ? "Finding cheapest room combination within preferences"
                           : "Following strict preference order (greedy allocation)"}
                       </p>
                     </div>
@@ -2765,12 +2770,12 @@ export default function CreateTrip() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Amount</Label>
+                    <Label>Amount Per Participant</Label>
                     <Input
                       type="number"
                       placeholder="0"
-                      value={overhead.amount || ''}
-                      onChange={(e) => updateOverhead(index, 'amount', parseFloat(e.target.value) || 0)}
+                      value={overhead.amountPerParticipant || ''}
+                      onChange={(e) => updateOverhead(index, 'amountPerParticipant', parseFloat(e.target.value) || 0)}
                     />
                   </div>
                   <div className="space-y-2">
@@ -2803,6 +2808,9 @@ export default function CreateTrip() {
                 </div>
 
                 <div className="pt-2 border-t">
+                  <p className="text-sm text-muted-foreground">
+                    {formatCurrency(overhead.amountPerParticipant, overhead.currency)} × {calculateTotalParticipants()} participants
+                  </p>
                   <p className="text-sm font-semibold text-primary">
                     Total: {formatCurrency(overhead.totalCostINR, 'INR')}
                   </p>
