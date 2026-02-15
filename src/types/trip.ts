@@ -369,3 +369,18 @@ export interface Institution {
   type: 'school' | 'college';
   city: string;
 }
+
+/* =========================
+   NEW: Tax Rates
+========================= */
+
+export interface TaxRate {
+  id: string;
+  rate_type: 'gst' | 'tcs';
+  rate_percentage: number;
+  effective_from: string;
+  effective_to: string | null;
+  is_current: boolean;
+  created_at: string;
+  updated_at: string;
+}
