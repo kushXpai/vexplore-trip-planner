@@ -126,6 +126,11 @@ export default function TripDetail() {
       }
 
       if (data) {
+        // ✅ FIX: Supabase returns related tables as arrays, access first element
+        const participantsData = Array.isArray(data.trip_participants) 
+          ? data.trip_participants[0] 
+          : data.trip_participants;
+
         const mappedTrip: Trip = {
           id: data.id,
           name: data.name,
@@ -149,25 +154,25 @@ export default function TripDetail() {
 
           participants: {
             // Institute participants
-            boys: data.trip_participants?.boys ?? 0,
-            girls: data.trip_participants?.girls ?? 0,
-            maleFaculty: data.trip_participants?.male_faculty ?? 0,
-            femaleFaculty: data.trip_participants?.female_faculty ?? 0,
-            maleVXplorers: data.trip_participants?.male_vxplorers ?? 0,
-            femaleVXplorers: data.trip_participants?.female_vxplorers ?? 0,
+            boys: participantsData?.boys ?? 0,
+            girls: participantsData?.girls ?? 0,
+            maleFaculty: participantsData?.male_faculty ?? 0,
+            femaleFaculty: participantsData?.female_faculty ?? 0,
+            maleVXplorers: participantsData?.male_vxplorers ?? 0,
+            femaleVXplorers: participantsData?.female_vxplorers ?? 0,
 
             // NEW: Commercial participants
-            maleCount: data.trip_participants?.male_count ?? 0,
-            femaleCount: data.trip_participants?.female_count ?? 0,
-            otherCount: data.trip_participants?.other_count ?? 0,
-            commercialMaleVXplorers: data.trip_participants?.commercial_male_vxplorers ?? 0,
-            commercialFemaleVXplorers: data.trip_participants?.commercial_female_vxplorers ?? 0,
+            maleCount: participantsData?.male_count ?? 0,
+            femaleCount: participantsData?.female_count ?? 0,
+            otherCount: participantsData?.other_count ?? 0,
+            commercialMaleVXplorers: participantsData?.commercial_male_vxplorers ?? 0,
+            commercialFemaleVXplorers: participantsData?.commercial_female_vxplorers ?? 0,
 
-            totalStudents: data.trip_participants?.total_students ?? 0,
-            totalFaculty: data.trip_participants?.total_faculty ?? 0,
-            totalVXplorers: data.trip_participants?.total_vxplorers ?? 0,
-            totalCommercial: data.trip_participants?.total_commercial ?? 0,
-            totalParticipants: data.trip_participants?.total_participants ?? 0,
+            totalStudents: participantsData?.total_students ?? 0,
+            totalFaculty: participantsData?.total_faculty ?? 0,
+            totalVXplorers: participantsData?.total_vxplorers ?? 0,
+            totalCommercial: participantsData?.total_commercial ?? 0,
+            totalParticipants: participantsData?.total_participants ?? 0,
           },
 
           transport: {
@@ -290,20 +295,27 @@ export default function TripDetail() {
           })),
 
           // NEW: Extras (visa, tips, insurance)
-          extras: data.trip_extras ? {
-            visaCostPerPerson: data.trip_extras.visa_cost_per_person ?? 0,
-            visaCurrency: data.trip_extras.visa_currency ?? 'INR',
-            visaTotalCost: data.trip_extras.visa_total_cost ?? 0,
-            visaTotalCostINR: data.trip_extras.visa_total_cost_inr ?? 0,
-            tipsCostPerPerson: data.trip_extras.tips_cost_per_person ?? 0,
-            tipsCurrency: data.trip_extras.tips_currency ?? 'INR',
-            tipsTotalCost: data.trip_extras.tips_total_cost ?? 0,
-            tipsTotalCostINR: data.trip_extras.tips_total_cost_inr ?? 0,
-            insuranceCostPerPerson: data.trip_extras.insurance_cost_per_person ?? 0,
-            insuranceCurrency: data.trip_extras.insurance_currency ?? 'INR',
-            insuranceTotalCost: data.trip_extras.insurance_total_cost ?? 0,
-            insuranceTotalCostINR: data.trip_extras.insurance_total_cost_inr ?? 0,
-          } : undefined,
+          // ✅ FIX: Handle trip_extras as array
+          extras: (() => {
+            const extrasData = Array.isArray(data.trip_extras) 
+              ? data.trip_extras[0] 
+              : data.trip_extras;
+            
+            return extrasData ? {
+              visaCostPerPerson: extrasData.visa_cost_per_person ?? 0,
+              visaCurrency: extrasData.visa_currency ?? 'INR',
+              visaTotalCost: extrasData.visa_total_cost ?? 0,
+              visaTotalCostINR: extrasData.visa_total_cost_inr ?? 0,
+              tipsCostPerPerson: extrasData.tips_cost_per_person ?? 0,
+              tipsCurrency: extrasData.tips_currency ?? 'INR',
+              tipsTotalCost: extrasData.tips_total_cost ?? 0,
+              tipsTotalCostINR: extrasData.tips_total_cost_inr ?? 0,
+              insuranceCostPerPerson: extrasData.insurance_cost_per_person ?? 0,
+              insuranceCurrency: extrasData.insurance_currency ?? 'INR',
+              insuranceTotalCost: extrasData.insurance_total_cost ?? 0,
+              insuranceTotalCostINR: extrasData.insurance_total_cost_inr ?? 0,
+            } : undefined;
+          })(),
 
           // Cost calculations
           subtotalBeforeTax: data.subtotal_before_tax ?? 0,
