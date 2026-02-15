@@ -40,7 +40,8 @@ export interface Trip {
   tripCategory: TripCategory;
   tripType: TripType;
   
-  country: string;
+  // CHANGED: Now supports multiple countries
+  countries: string[];
   
   cities: string[];
   

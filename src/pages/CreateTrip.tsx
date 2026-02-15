@@ -58,7 +58,7 @@ export default function CreateTrip() {
   const [formData, setFormData] = useState({
     name: '',
     institution: '',
-    country: '',
+    countries: [] as string[],
     cities: [] as string[], // CHANGED: Multi-city array
     startDate: '',
     endDate: '',
@@ -121,6 +121,9 @@ export default function CreateTrip() {
   // NEW: Multi-city selection state
   const [selectedCityForAdd, setSelectedCityForAdd] = useState('');
 
+  // NEW: Multi-country selection state
+  const [selectedCountryForAdd, setSelectedCountryForAdd] = useState('');
+
   // Load trip data when editing
   useEffect(() => {
     if (editId && countries.length > 0 && cities.length > 0) {
@@ -161,15 +164,15 @@ export default function CreateTrip() {
     loadMasterData();
   }, []);
 
-  // Update filtered cities when country changes
+  // Update filtered cities when countries change
   useEffect(() => {
-    if (formData.country) {
-      const filtered = cities.filter(c => c.country_id === formData.country);
+    if (formData.countries.length > 0) {
+      const filtered = cities.filter(c => formData.countries.includes(c.country_id));
       setFilteredCities(filtered);
     } else {
       setFilteredCities([]);
     }
-  }, [formData.country, cities]);
+  }, [formData.countries, cities]);
 
   // NEW: Auto-calculate extras totals
   useEffect(() => {
@@ -214,7 +217,7 @@ export default function CreateTrip() {
         setTripCategory(trip.trip_category);
         setTripType(trip.trip_type);
 
-        const country = countries.find(c => c.name === trip.country);
+        const tripCountries = Array.isArray(trip.countries) ? trip.countries : (trip.country ? [trip.country] : []);
 
         // NEW: Handle multi-city array
         const cityNames = Array.isArray(trip.cities) ? trip.cities : [trip.cities];
@@ -222,7 +225,7 @@ export default function CreateTrip() {
         setFormData({
           name: trip.name,
           institution: trip.institution,
-          country: country?.id || '',  // ✅ FIXED: Use country ID, not name
+          countries: trip.countries || [],
           cities: trip.cities || [],
           startDate: trip.start_date,
           endDate: trip.end_date,
@@ -391,8 +394,11 @@ export default function CreateTrip() {
     return formatCurrencyHelper(currencies, amount, currencyCode);
   };
 
-  const getCountryCurrency = (countryId: string): string => {
-    return getCountryCurrencyHelper(countries, countryId);
+  const getCountryCurrency = (countryIds: string | string[]): string => {
+    // Convert to array and filter out empty strings
+    const idArray = Array.isArray(countryIds) ? countryIds.filter(id => id) : (countryIds ? [countryIds] : []);
+    if (idArray.length === 0) return 'INR';
+    return getCountryCurrencyHelper(countries, idArray);
   };
 
   const calculateTripDuration = () => {
@@ -442,7 +448,7 @@ export default function CreateTrip() {
 
   // Transport functions
   const addFlight = () => {
-    const defaultCurrency = getCountryCurrency(formData.country) || 'INR';
+    const defaultCurrency = getCountryCurrency(formData.countries.length > 0 ? formData.countries[0] : '') || 'INR';
     setFlights([...flights, {
       id: `flight-${Date.now()}`,
       from: '',
@@ -480,7 +486,7 @@ export default function CreateTrip() {
   };
 
   const addBus = () => {
-    const defaultCurrency = getCountryCurrency(formData.country) || 'INR';
+    const defaultCurrency = getCountryCurrency(formData.countries.length > 0 ? formData.countries[0] : '') || 'INR';
     setBuses([...buses, {
       id: `bus-${Date.now()}`,
       name: '',
@@ -517,7 +523,7 @@ export default function CreateTrip() {
   };
 
   const addTrain = () => {
-    const defaultCurrency = getCountryCurrency(formData.country) || 'INR';
+    const defaultCurrency = getCountryCurrency(formData.countries.length > 0 ? formData.countries[0] : '') || 'INR';
     setTrains([...trains, {
       id: `train-${Date.now()}`,
       name: '',
@@ -554,7 +560,7 @@ export default function CreateTrip() {
 
   // Accommodation functions
   const addAccommodation = () => {
-    const defaultCurrency = getCountryCurrency(formData.country) || 'INR';
+    const defaultCurrency = getCountryCurrency(formData.countries.length > 0 ? formData.countries[0] : '') || 'INR';
     const firstCity = formData.cities[0] || '';
 
     setAccommodations([...accommodations, {
@@ -721,7 +727,7 @@ export default function CreateTrip() {
 
   // Activity functions
   const addActivity = () => {
-    const defaultCurrency = getCountryCurrency(formData.country) || 'INR';
+    const defaultCurrency = getCountryCurrency(formData.countries.length > 0 ? formData.countries[0] : '') || 'INR';
     setActivities([...activities, {
       id: `activity-${Date.now()}`,
       name: '',
@@ -761,7 +767,7 @@ export default function CreateTrip() {
 
   // Overhead functions
   const addOverhead = () => {
-    const defaultCurrency = getCountryCurrency(formData.country) || 'INR';
+    const defaultCurrency = getCountryCurrency(formData.countries.length > 0 ? formData.countries[0] : '') || 'INR';
     setOverheads([...overheads, {
       id: `overhead-${Date.now()}`,
       name: '',
@@ -904,8 +910,8 @@ export default function CreateTrip() {
       toast.error('Please enter institution name');
       return;
     }
-    if (!formData.country) {
-      toast.error('Please select a country');
+    if (formData.countries.length === 0) {
+      toast.error('Please select at least one country');
       return;
     }
     if (formData.cities.length === 0) {
@@ -926,7 +932,12 @@ export default function CreateTrip() {
     try {
       const { days, nights } = calculateTripDuration();
       const totalParticipants = calculateTotalParticipants();
-      const selectedCountry = countries.find(c => c.id === formData.country);
+      
+      // Get country names from IDs
+      const countryNames = formData.countries.map(countryId => {
+        const country = countries.find(c => c.id === countryId);
+        return country?.name || countryId;
+      });
 
       // Get city names from IDs
       const cityNames = formData.cities;
@@ -936,13 +947,13 @@ export default function CreateTrip() {
         institution: formData.institution,
         tripCategory,
         tripType,
-        country: selectedCountry?.name || '',
+        countries: countryNames,
         cities: cityNames,
         startDate: formData.startDate,
         endDate: formData.endDate,
         totalDays: days,
         totalNights: nights,
-        defaultCurrency: getCountryCurrency(formData.country) || 'INR',
+        defaultCurrency: getCountryCurrency(formData.countries[0] || '') || 'INR',
 
         participants: {
           boys: formData.boys,
@@ -1174,25 +1185,77 @@ export default function CreateTrip() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
+            {/* Countries - Multi-select */}
             <div className="space-y-2">
-              <Label>Country *</Label>
-              <Select
-                value={formData.country}
-                onValueChange={(value) => setFormData({ ...formData, country: value, cities: [] })}
-                disabled={isLoadingMasterData}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select country"} />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  {countries.map((country) => (
-                    <SelectItem key={country.id} value={country.id}>
-                      {country.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Countries *</Label>
+              <div className="flex gap-2">
+                <Select
+                  value={selectedCountryForAdd}
+                  onValueChange={setSelectedCountryForAdd}
+                  disabled={isLoadingMasterData}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select country to add"} />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {countries
+                      .filter(c => !formData.countries.includes(c.id))
+                      .map((country) => (
+                        <SelectItem key={country.id} value={country.id}>
+                          {country.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (selectedCountryForAdd && !formData.countries.includes(selectedCountryForAdd)) {
+                      setFormData(prev => ({
+                        ...prev,
+                        countries: [...prev.countries, selectedCountryForAdd],
+                        cities: [] // Reset cities when countries change
+                      }));
+                      setSelectedCountryForAdd('');
+                    }
+                  }}
+                  disabled={!selectedCountryForAdd}
+                  size="sm"
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              
+              {/* Display selected countries */}
+              {formData.countries.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {formData.countries.map((countryId) => {
+                    const country = countries.find(c => c.id === countryId);
+                    return (
+                      <Badge key={countryId} variant="secondary" className="flex items-center gap-1">
+                        {country?.name}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({
+                              ...prev,
+                              countries: prev.countries.filter(id => id !== countryId),
+                              cities: prev.cities.filter(cityName => {
+                                const city = cities.find(c => c.name === cityName);
+                                return city && city.country_id !== countryId;
+                              })
+                            }));
+                          }}
+                          className="ml-1 hover:text-destructive"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* NEW: Multi-City Selection */}
@@ -1202,10 +1265,10 @@ export default function CreateTrip() {
                 <Select
                   value={selectedCityForAdd}
                   onValueChange={setSelectedCityForAdd}
-                  disabled={!formData.country || isLoadingMasterData}
+                  disabled={formData.countries.length === 0 || isLoadingMasterData}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={!formData.country ? "Select country first" : "Select city"} />
+                    <SelectValue placeholder={formData.countries.length === 0 ? "Select countries first" : "Select city"} />
                   </SelectTrigger>
                   <SelectContent className="bg-popover">
                     {filteredCities.map((city) => (

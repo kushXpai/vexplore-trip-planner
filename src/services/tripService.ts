@@ -28,7 +28,8 @@ interface DbTrip {
   trip_category: TripCategory;
   trip_type: TripType;
   
-  country: string;
+  // CHANGED: Now supports multiple countries as JSONB array
+  countries: string[];
   
   // CHANGED: Multi-city support (JSONB array)
   cities: string[];  // PostgreSQL JSONB array
@@ -214,7 +215,7 @@ export async function createTrip(tripData: {
   institution: string;
   tripCategory: TripCategory;  // NEW
   tripType: TripType;          // NEW
-  country: string;
+  countries: string[];         // CHANGED: Now accepts multiple countries
   cities: string[];            // CHANGED: Multi-city array
   startDate: string;
   endDate: string;
@@ -279,8 +280,8 @@ export async function createTrip(tripData: {
       institution: tripData.institution,
       trip_category: tripData.tripCategory,
       trip_type: tripData.tripType,
-      country: tripData.country,
-      cities: tripData.cities,  // JSONB array
+      countries: tripData.countries,  // CHANGED: Now stores array of countries
+      cities: tripData.cities,        // JSONB array
       start_date: tripData.startDate,
       end_date: tripData.endDate,
       total_days: tripData.totalDays,
@@ -312,7 +313,7 @@ export async function createTrip(tripData: {
 
     // 2. Create participants record
     const dbParticipants: DbParticipants = {
-      trip_id: trip.id,
+      trip_id: tripId,
       boys: tripData.participants.boys,
       girls: tripData.participants.girls,
       male_faculty: tripData.participants.maleFaculty,
@@ -322,8 +323,8 @@ export async function createTrip(tripData: {
       male_count: tripData.participants.maleCount,
       female_count: tripData.participants.femaleCount,
       other_count: tripData.participants.otherCount,
-      commercial_male_vxplorers: tripData.participants.commercialMaleVXplorers,  // NEW
-      commercial_female_vxplorers: tripData.participants.commercialFemaleVXplorers,  // NEW
+      commercial_male_vxplorers: tripData.participants.commercialMaleVXplorers,
+      commercial_female_vxplorers: tripData.participants.commercialFemaleVXplorers,
       total_students: tripData.participants.totalStudents,
       total_faculty: tripData.participants.totalFaculty,
       total_vxplorers: tripData.participants.totalVXplorers,
@@ -337,7 +338,119 @@ export async function createTrip(tripData: {
 
     if (participantsError) throw participantsError;
 
-    // 3. Insert extras (visa, tips, insurance) if provided
+    // 3. Create flights
+    if (tripData.flights.length > 0) {
+      const dbFlights: DbFlight[] = tripData.flights.map(flight => ({
+        trip_id: tripId,
+        from_city: flight.from,
+        to_city: flight.to,
+        airline: flight.airline,
+        flight_number: flight.flightNumber,
+        departure_time: flight.departureTime,
+        arrival_time: flight.arrivalTime,
+        cost_per_person: flight.costPerPerson,
+        currency: flight.currency,
+        description: flight.description || '',
+        total_cost: flight.totalCost,
+        total_cost_inr: flight.totalCostINR,
+      }));
+
+      const { error: flightsError } = await supabase
+        .from('trip_flights')
+        .insert(dbFlights);
+
+      if (flightsError) throw flightsError;
+    }
+
+    // 4. Create buses
+    if (tripData.buses.length > 0) {
+      const dbBuses: DbBus[] = tripData.buses.map(bus => ({
+        trip_id: tripId,
+        name: bus.name,
+        seating_capacity: bus.seatingCapacity,
+        cost_per_bus: bus.costPerBus,
+        currency: bus.currency,
+        number_of_days: bus.numberOfDays,
+        quantity: bus.quantity,
+        description: bus.description || '',
+        total_cost: bus.totalCost,
+        total_cost_inr: bus.totalCostINR,
+      }));
+
+      const { error: busesError } = await supabase
+        .from('trip_buses')
+        .insert(dbBuses);
+
+      if (busesError) throw busesError;
+    }
+
+    // 5. Create trains
+    if (tripData.trains.length > 0) {
+      const dbTrains: DbTrain[] = tripData.trains.map(train => ({
+        trip_id: tripId,
+        name: train.name,
+        train_number: train.trainNumber,
+        class: train.class,
+        timing: train.timing,
+        cost_per_person: train.costPerPerson,
+        currency: train.currency,
+        description: train.description || '',
+        total_cost: train.totalCost,
+        total_cost_inr: train.totalCostINR,
+      }));
+
+      const { error: trainsError } = await supabase
+        .from('trip_trains')
+        .insert(dbTrains);
+
+      if (trainsError) throw trainsError;
+    }
+
+    // 6. Create accommodations
+    if (tripData.accommodations.length > 0) {
+      const dbAccommodations: DbAccommodation[] = tripData.accommodations.map(acc => ({
+        trip_id: tripId,
+        hotel_name: acc.hotelName,
+        city: acc.city,
+        number_of_nights: acc.numberOfNights,
+        currency: acc.currency,
+        breakfast_included: acc.breakfastIncluded,
+        total_rooms: acc.totalRooms,
+        total_cost: acc.totalCost,
+        total_cost_inr: acc.totalCostINR,
+        room_allocation: acc.roomAllocation,
+        room_types: acc.roomTypes,
+        room_preferences: acc.roomPreferences,
+      }));
+
+      const { error: accommodationsError } = await supabase
+        .from('trip_accommodations')
+        .insert(dbAccommodations);
+
+      if (accommodationsError) throw accommodationsError;
+    }
+
+    // 7. Create meals
+    const dbMeals: DbMeals = {
+      trip_id: tripId,
+      breakfast_cost_per_person: tripData.meals.breakfastCostPerPerson,
+      lunch_cost_per_person: tripData.meals.lunchCostPerPerson,
+      dinner_cost_per_person: tripData.meals.dinnerCostPerPerson,
+      currency: tripData.meals.currency,
+      total_days: tripData.meals.totalDays,
+      total_participants: tripData.meals.totalParticipants,
+      daily_cost_per_person: tripData.meals.dailyCostPerPerson,
+      total_cost: tripData.meals.totalCost,
+      total_cost_inr: tripData.meals.totalCostINR,
+    };
+
+    const { error: mealsError } = await supabase
+      .from('trip_meals')
+      .insert(dbMeals);
+
+    if (mealsError) throw mealsError;
+
+    // NEW: 7.5. Create extras (visa, tips, insurance)
     if (tripData.extras) {
       const dbExtras: DbTripExtras = {
         trip_id: tripId,
@@ -362,124 +475,12 @@ export async function createTrip(tripData: {
       if (extrasError) throw extrasError;
     }
 
-    // 4. Insert flights
-    if (tripData.flights.length > 0) {
-      const dbFlights: DbFlight[] = tripData.flights.map(flight => ({
-        trip_id: tripId,
-        from_city: flight.from,
-        to_city: flight.to,
-        airline: flight.airline,
-        flight_number: flight.flightNumber,
-        departure_time: flight.departureTime,
-        arrival_time: flight.arrivalTime,
-        cost_per_person: flight.costPerPerson,
-        currency: flight.currency,
-        description: flight.description || '',
-        total_cost: flight.totalCost,
-        total_cost_inr: flight.totalCostINR,
-      }));
-
-      const { error: flightsError } = await supabase
-        .from('trip_flights')
-        .insert(dbFlights);
-
-      if (flightsError) throw flightsError;
-    }
-
-    // 5. Insert buses
-    if (tripData.buses.length > 0) {
-      const dbBuses: DbBus[] = tripData.buses.map(bus => ({
-        trip_id: tripId,
-        name: bus.name,
-        seating_capacity: bus.seatingCapacity,
-        cost_per_bus: bus.costPerBus,
-        currency: bus.currency,
-        number_of_days: bus.numberOfDays,
-        quantity: bus.quantity,
-        description: bus.description || '',
-        total_cost: bus.totalCost,
-        total_cost_inr: bus.totalCostINR,
-      }));
-
-      const { error: busesError } = await supabase
-        .from('trip_buses')
-        .insert(dbBuses);
-
-      if (busesError) throw busesError;
-    }
-
-    // 6. Insert trains
-    if (tripData.trains.length > 0) {
-      const dbTrains: DbTrain[] = tripData.trains.map(train => ({
-        trip_id: tripId,
-        name: train.name,
-        train_number: train.trainNumber,
-        class: train.class,
-        timing: train.timing,
-        cost_per_person: train.costPerPerson,
-        currency: train.currency,
-        description: train.description || '',
-        total_cost: train.totalCost,
-        total_cost_inr: train.totalCostINR,
-      }));
-
-      const { error: trainsError } = await supabase
-        .from('trip_trains')
-        .insert(dbTrains);
-
-      if (trainsError) throw trainsError;
-    }
-
-    // 7. Insert accommodations
-    if (tripData.accommodations.length > 0) {
-      const dbAccommodations: DbAccommodation[] = tripData.accommodations.map(acc => ({
-        trip_id: tripId,
-        hotel_name: acc.hotelName,
-        city: acc.city,
-        number_of_nights: acc.numberOfNights,
-        currency: acc.currency,
-        breakfast_included: acc.breakfastIncluded,
-        total_rooms: acc.totalRooms,
-        total_cost: acc.totalCost,
-        total_cost_inr: acc.totalCostINR,
-        room_allocation: acc.roomAllocation,
-        room_types: acc.roomTypes,
-        room_preferences: acc.roomPreferences,  // NEW
-      }));
-
-      const { error: accommodationsError } = await supabase
-        .from('trip_accommodations')
-        .insert(dbAccommodations);
-
-      if (accommodationsError) throw accommodationsError;
-    }
-
-    // 8. Insert meals
-    const dbMeals: DbMeals = {
-      trip_id: tripId,
-      breakfast_cost_per_person: tripData.meals.breakfastCostPerPerson,
-      lunch_cost_per_person: tripData.meals.lunchCostPerPerson,
-      dinner_cost_per_person: tripData.meals.dinnerCostPerPerson,
-      currency: tripData.meals.currency,
-      total_days: tripData.meals.totalDays,
-      total_participants: tripData.meals.totalParticipants,
-      daily_cost_per_person: tripData.meals.dailyCostPerPerson,
-      total_cost: tripData.meals.totalCost,
-      total_cost_inr: tripData.meals.totalCostINR,
-    };
-
-    const { error: mealsError } = await supabase
-      .from('trip_meals')
-      .insert(dbMeals);
-
-    if (mealsError) throw mealsError;
-
-    // 9. Insert activities
+    // 8. Create activities
     if (tripData.activities.length > 0) {
       const dbActivities: DbActivity[] = tripData.activities.map(activity => ({
         trip_id: tripId,
         name: activity.name,
-        city: activity.city,  // NEW: Optional city
+        city: activity.city,
         entry_cost: activity.entryCost,
         transport_cost: activity.transportCost,
         guide_cost: activity.guideCost,
@@ -496,12 +497,12 @@ export async function createTrip(tripData: {
       if (activitiesError) throw activitiesError;
     }
 
-    // 10. Insert overheads
+    // 9. Create overheads
     if (tripData.overheads.length > 0) {
       const dbOverheads: DbOverhead[] = tripData.overheads.map(overhead => ({
         trip_id: tripId,
         name: overhead.name,
-        amount_per_participant: overhead.amountPerParticipant,  // CHANGED
+        amount_per_participant: overhead.amountPerParticipant,
         currency: overhead.currency,
         hide_from_client: overhead.hideFromClient,
         total_cost: overhead.totalCost,
@@ -528,28 +529,78 @@ export async function createTrip(tripData: {
 /**
  * Update an existing trip with all related data
  */
-export async function updateTrip(tripId: string, tripData: Parameters<typeof createTrip>[0]) {
+export async function updateTrip(tripId: string, tripData: {
+  // Basic Info
+  name: string;
+  institution: string;
+  tripCategory: TripCategory;
+  tripType: TripType;
+  countries: string[];         // CHANGED: Now accepts multiple countries
+  cities: string[];
+  startDate: string;
+  endDate: string;
+  totalDays: number;
+  totalNights: number;
+  defaultCurrency: string;
+  
+  // Participants
+  participants: Participants;
+  
+  // Transport
+  flights: Flight[];
+  buses: Bus[];
+  trains: Train[];
+  
+  // Accommodation
+  accommodations: Accommodation[];
+  
+  // Meals
+  meals: {
+    breakfastCostPerPerson: number;
+    lunchCostPerPerson: number;
+    dinnerCostPerPerson: number;
+    currency: string;
+    totalDays: number;
+    totalParticipants: number;
+    dailyCostPerPerson: number;
+    totalCost: number;
+    totalCostINR: number;
+  };
+  
+  // Activities
+  activities: Activity[];
+  
+  // Overheads
+  overheads: Overhead[];
+  
+  // NEW: Extras
+  extras?: TripExtras;
+  
+  // Costs
+  subtotalBeforeTax: number;
+  profit: number;
+  gstPercentage: number;
+  gstAmount: number;
+  tcsPercentage: number;
+  tcsAmount: number;
+  grandTotal: number;
+  grandTotalINR: number;
+  costPerParticipant: number;
+}) {
   try {
-    // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      throw new Error('User not authenticated');
-    }
-
     // 1. Update the main trip record
-    const dbTrip: Omit<DbTrip, 'created_by'> = {
+    const dbTrip: Partial<DbTrip> = {
       name: tripData.name,
       institution: tripData.institution,
       trip_category: tripData.tripCategory,
       trip_type: tripData.tripType,
-      country: tripData.country,
+      countries: tripData.countries,  // CHANGED: Now stores array of countries
       cities: tripData.cities,
       start_date: tripData.startDate,
       end_date: tripData.endDate,
       total_days: tripData.totalDays,
       total_nights: tripData.totalNights,
       default_currency: tripData.defaultCurrency,
-      status: 'draft',
       subtotal_before_tax: tripData.subtotalBeforeTax,
       profit: tripData.profit,
       gst_percentage: tripData.gstPercentage,
@@ -580,8 +631,8 @@ export async function updateTrip(tripId: string, tripData: Parameters<typeof cre
       male_count: tripData.participants.maleCount,
       female_count: tripData.participants.femaleCount,
       other_count: tripData.participants.otherCount,
-      commercial_male_vxplorers: tripData.participants.commercialMaleVXplorers,  // NEW
-      commercial_female_vxplorers: tripData.participants.commercialFemaleVXplorers,  // NEW
+      commercial_male_vxplorers: tripData.participants.commercialMaleVXplorers,
+      commercial_female_vxplorers: tripData.participants.commercialFemaleVXplorers,
       total_students: tripData.participants.totalStudents,
       total_faculty: tripData.participants.totalFaculty,
       total_vxplorers: tripData.participants.totalVXplorers,
@@ -595,32 +646,7 @@ export async function updateTrip(tripId: string, tripData: Parameters<typeof cre
 
     if (participantsError) throw participantsError;
 
-    // NEW: Update extras (upsert) - if provided
-    if (tripData.extras) {
-      const dbExtras: DbTripExtras = {
-        trip_id: tripId,
-        visa_cost_per_person: tripData.extras.visaCostPerPerson,
-        visa_currency: tripData.extras.visaCurrency,
-        visa_total_cost: tripData.extras.visaTotalCost,
-        visa_total_cost_inr: tripData.extras.visaTotalCostINR,
-        tips_cost_per_person: tripData.extras.tipsCostPerPerson,
-        tips_currency: tripData.extras.tipsCurrency,
-        tips_total_cost: tripData.extras.tipsTotalCost,
-        tips_total_cost_inr: tripData.extras.tipsTotalCostINR,
-        insurance_cost_per_person: tripData.extras.insuranceCostPerPerson,
-        insurance_currency: tripData.extras.insuranceCurrency,
-        insurance_total_cost: tripData.extras.insuranceTotalCost,
-        insurance_total_cost_inr: tripData.extras.insuranceTotalCostINR,
-      };
-
-      const { error: extrasError } = await supabase
-        .from('trip_extras')
-        .upsert(dbExtras, { onConflict: 'trip_id' });
-
-      if (extrasError) throw extrasError;
-    }
-
-    // 4. Delete and re-insert flights
+    // 3. Delete and re-insert flights
     await supabase.from('trip_flights').delete().eq('trip_id', tripId);
     if (tripData.flights.length > 0) {
       const dbFlights: DbFlight[] = tripData.flights.map(flight => ({
@@ -640,7 +666,7 @@ export async function updateTrip(tripId: string, tripData: Parameters<typeof cre
       await supabase.from('trip_flights').insert(dbFlights);
     }
 
-    // 5. Delete and re-insert buses
+    // 4. Delete and re-insert buses
     await supabase.from('trip_buses').delete().eq('trip_id', tripId);
     if (tripData.buses.length > 0) {
       const dbBuses: DbBus[] = tripData.buses.map(bus => ({
@@ -658,7 +684,7 @@ export async function updateTrip(tripId: string, tripData: Parameters<typeof cre
       await supabase.from('trip_buses').insert(dbBuses);
     }
 
-    // 6. Delete and re-insert trains
+    // 5. Delete and re-insert trains
     await supabase.from('trip_trains').delete().eq('trip_id', tripId);
     if (tripData.trains.length > 0) {
       const dbTrains: DbTrain[] = tripData.trains.map(train => ({
@@ -676,7 +702,7 @@ export async function updateTrip(tripId: string, tripData: Parameters<typeof cre
       await supabase.from('trip_trains').insert(dbTrains);
     }
 
-    // 7. Delete and re-insert accommodations
+    // 6. Delete and re-insert accommodations
     await supabase.from('trip_accommodations').delete().eq('trip_id', tripId);
     if (tripData.accommodations.length > 0) {
       const dbAccommodations: DbAccommodation[] = tripData.accommodations.map(acc => ({

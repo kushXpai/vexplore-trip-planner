@@ -140,7 +140,7 @@ export default function TripDetail() {
           tripCategory: data.trip_category || 'domestic',
           tripType: data.trip_type || 'institute',
 
-          country: data.country,
+          countries: data.countries || [],
 
           // NEW: Multi-city support
           cities: data.cities || [],
@@ -720,8 +720,18 @@ export default function TripDetail() {
               <MapPin className="w-5 h-5 text-primary mt-1" />
               <div>
                 <p className="text-sm text-muted-foreground">Destination</p>
-                <p className="font-semibold">{trip.country}</p>
-                {/* NEW: Multi-city display */}
+                {/* Countries */}
+                {trip.countries && trip.countries.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {trip.countries.map((country, idx) => (
+                      <Badge key={idx} variant="default" className="text-xs">
+                        <Globe className="w-3 h-3 mr-1" />
+                        {country}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                {/* Cities */}
                 {trip.cities && trip.cities.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1">
                     {trip.cities.map((city, idx) => (

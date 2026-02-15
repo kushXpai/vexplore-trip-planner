@@ -85,6 +85,26 @@ export const fetchCitiesByCountry = async (countryId: string) => {
   return { success: true, data, error: null };
 };
 
+// NEW: Fetch cities by multiple countries
+export const fetchCitiesByCountries = async (countryIds: string[]) => {
+  if (!countryIds || countryIds.length === 0) {
+    return { success: true, data: [], error: null };
+  }
+
+  const { data, error } = await supabase
+    .from('cities')
+    .select('*')
+    .in('country_id', countryIds)
+    .order('name');
+
+  if (error) {
+    console.error('Error fetching cities by countries:', error);
+    return { success: false, data: null, error };
+  }
+
+  return { success: true, data, error: null };
+};
+
 // =====================================================
 // TAX RATES FUNCTIONS - Using TaxRate type from trip.ts
 // =====================================================
@@ -143,9 +163,30 @@ export const formatCurrency = (currencies: Currency[], amount: number, currencyC
   return `${symbol}${amount.toLocaleString('en-IN')}`;
 };
 
-export const getCountryCurrency = (countries: Country[], countryId: string): string => {
-  const country = countries.find(c => c.id === countryId);
+// UPDATED: Now accepts multiple countries and returns the first country's currency or INR
+export const getCountryCurrency = (countries: Country[], countryIds: string[]): string => {
+  if (!countryIds || countryIds.length === 0) {
+    return 'INR';
+  }
+  
+  const country = countries.find(c => c.id === countryIds[0]);
   return country?.default_currency ?? 'INR';
+};
+
+// NEW: Get currencies for multiple countries
+export const getCountriesCurrencies = (countries: Country[], countryIds: string[]): string[] => {
+  if (!countryIds || countryIds.length === 0) {
+    return ['INR'];
+  }
+  
+  const currencies = countryIds
+    .map(countryId => {
+      const country = countries.find(c => c.id === countryId);
+      return country?.default_currency ?? null;
+    })
+    .filter((currency): currency is string => currency !== null);
+  
+  return currencies.length > 0 ? currencies : ['INR'];
 };
 
 /**

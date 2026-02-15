@@ -58,7 +58,7 @@ type DashboardTrip = {
   id: string;
   name: string;
   institution: string;
-  country: string;
+  countries: string[];  // CHANGED: Now array
   cities: string[];
   tripCategory: 'domestic' | 'international';
   tripType: 'institute' | 'commercial';
@@ -99,7 +99,7 @@ export default function Trips() {
           id,
           name,
           institution,
-          country,
+          countries,
           cities,
           trip_category,
           trip_type,
@@ -130,7 +130,7 @@ export default function Trips() {
         id: t.id,
         name: t.name,
         institution: t.institution,
-        country: t.country,
+        countries: t.countries || [],  // CHANGED: Now array
         cities: t.cities || [],
         tripCategory: t.trip_category || 'domestic',
         tripType: t.trip_type || 'institute',
@@ -154,7 +154,7 @@ export default function Trips() {
       trip.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       trip.institution.toLowerCase().includes(searchQuery.toLowerCase()) ||
       trip.cities.some(city => city.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      trip.country.toLowerCase().includes(searchQuery.toLowerCase());
+      trip.countries.some(country => country.toLowerCase().includes(searchQuery.toLowerCase()));  // CHANGED: Now searches all countries
     
     const matchesStatus = statusFilter === 'all' || trip.status === statusFilter;
     const matchesCategory = categoryFilter === 'all' || trip.tripCategory === categoryFilter;
@@ -224,13 +224,29 @@ export default function Trips() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Active</p>
+                <p className="text-sm text-muted-foreground">Draft</p>
                 <p className="text-2xl font-bold">
-                  {trips?.filter(t => ['draft', 'sent', 'approved'].includes(t.status)).length || 0}
+                  {trips?.filter(t => t.status === 'draft').length || 0}
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
-                <Globe className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                <Filter className="w-6 h-6 text-muted-foreground" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Active</p>
+                <p className="text-2xl font-bold">
+                  {trips?.filter(t => t.status === 'approved').length || 0}
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center">
+                <Users className="w-6 h-6 text-success" />
               </div>
             </div>
           </CardContent>
@@ -245,24 +261,8 @@ export default function Trips() {
                   {trips?.filter(t => t.status === 'completed').length || 0}
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
-                <Building2 className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Locked</p>
-                <p className="text-2xl font-bold">
-                  {trips?.filter(t => t.status === 'locked').length || 0}
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-full bg-purple-500/10 flex items-center justify-center">
-                <Users className="w-6 h-6 text-purple-600" />
+              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <MapPin className="w-6 h-6 text-primary" />
               </div>
             </div>
           </CardContent>
@@ -271,20 +271,22 @@ export default function Trips() {
 
       {/* Trips Table/Cards */}
       <Card className="shadow-card">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-xl font-semibold">Trip Cost Sheets</CardTitle>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-primary" />
+            Trips
+          </CardTitle>
         </CardHeader>
-
-        <CardContent>
+        <CardContent className="space-y-4">
           {/* Filters */}
-          <div className="flex flex-col lg:flex-row gap-3 mb-6">
+          <div className="flex flex-col lg:flex-row gap-4">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
               <Input
-                placeholder="Search trips, institutions, destinations..."
+                placeholder="Search trips, institutions, cities, or countries..."
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="pl-9"
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
               />
             </div>
 
@@ -390,14 +392,28 @@ function TripTable({ trips, onDelete }: { trips: DashboardTrip[]; onDelete: (id:
               <TableCell>
                 <div className="flex items-start gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                  <div className="flex flex-wrap gap-1">
-                    {trip.cities.map((city, idx) => (
-                      <Badge key={idx} variant="outline" className="text-xs">
-                        {city}
-                      </Badge>
-                    ))}
-                    {trip.cities.length > 0 && <span className="text-muted-foreground">,</span>}
-                    <span className="text-sm">{trip.country}</span>
+                  <div className="flex flex-col gap-1">
+                    {/* CHANGED: Display countries */}
+                    {trip.countries.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {trip.countries.map((country, idx) => (
+                          <Badge key={idx} variant="outline" className="text-xs">
+                            <Globe className="w-3 h-3 mr-1" />
+                            {country}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {/* Cities */}
+                    {trip.cities.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {trip.cities.map((city, idx) => (
+                          <Badge key={idx} variant="secondary" className="text-xs">
+                            {city}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </TableCell>
@@ -460,16 +476,28 @@ function TripCards({ trips, onDelete }: { trips: DashboardTrip[]; onDelete: (id:
             </div>
 
             <div className="space-y-2 text-sm">
-              <div className="flex items-start gap-2 text-muted-foreground">
-                <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <div className="flex flex-wrap gap-1">
-                  {trip.cities.map((city, idx) => (
-                    <span key={idx}>{city}{idx < trip.cities.length - 1 ? ',' : ''}</span>
-                  ))}
-                  {trip.cities.length > 0 && <span>,</span>}
-                  <span>{trip.country}</span>
+              {/* CHANGED: Display countries */}
+              {trip.countries.length > 0 && (
+                <div className="flex items-start gap-2 text-muted-foreground">
+                  <Globe className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <div className="flex flex-wrap gap-1">
+                    {trip.countries.map((country, idx) => (
+                      <span key={idx}>{country}{idx < trip.countries.length - 1 ? ',' : ''}</span>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+              {/* Cities */}
+              {trip.cities.length > 0 && (
+                <div className="flex items-start gap-2 text-muted-foreground">
+                  <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <div className="flex flex-wrap gap-1">
+                    {trip.cities.map((city, idx) => (
+                      <span key={idx}>{city}{idx < trip.cities.length - 1 ? ',' : ''}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="w-4 h-4" />
                 <span>{trip.totalDays} days • {new Date(trip.startDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}</span>
