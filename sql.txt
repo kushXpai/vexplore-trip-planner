@@ -215,93 +215,91 @@ CREATE INDEX idx_trips_cities ON public.trips USING gin (cities);
 -- Enable RLS
 ALTER TABLE public.trips ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies for trips
-CREATE POLICY "trips_select_policy"
-  ON public.trips FOR SELECT
-  USING (
+-- ============================================
+-- SELECT POLICY: View trips based on role
+-- ============================================
+CREATE POLICY "trips_select_by_role"
+ON public.trips FOR SELECT
+TO authenticated
+USING (
+    -- Admins and Superadmins can see ALL trips
     EXISTS (
-      SELECT 1 FROM public.users
-      WHERE users.id = auth.uid()
-      AND (
-        users.role = 'admin'
-        OR 
-        trips.created_by = auth.uid()
-      )
+        SELECT 1 FROM public.users
+        WHERE users.id = auth.uid()
+        AND users.role IN ('admin', 'superadmin')
     )
-  );
+    OR
+    -- Managers can only see their own trips
+    (
+        EXISTS (
+            SELECT 1 FROM public.users
+            WHERE users.id = auth.uid()
+            AND users.role = 'manager'
+        )
+        AND created_by = auth.uid()
+    )
+);
 
-CREATE POLICY "trips_insert_policy"
-  ON public.trips FOR INSERT
-  WITH CHECK (
-    created_by = auth.uid()
-  );
+-- ============================================
+-- INSERT POLICY: All authenticated users can create trips
+-- ============================================
+CREATE POLICY "trips_insert_by_authenticated"
+ON public.trips FOR INSERT
+TO authenticated
+WITH CHECK (
+    -- User must be authenticated and setting themselves as creator
+    auth.uid() = created_by
+);
 
-CREATE POLICY "trips_update_policy"
-  ON public.trips FOR UPDATE
-  USING (
+-- ============================================
+-- UPDATE POLICY: Update based on role
+-- ============================================
+CREATE POLICY "trips_update_by_role"
+ON public.trips FOR UPDATE
+TO authenticated
+USING (
+    -- Admins and Superadmins can update ALL trips
     EXISTS (
-      SELECT 1 FROM public.users
-      WHERE users.id = auth.uid()
-      AND (
-        users.role = 'admin'
-        OR 
-        trips.created_by = auth.uid()
-      )
+        SELECT 1 FROM public.users
+        WHERE users.id = auth.uid()
+        AND users.role IN ('admin', 'superadmin')
     )
-  );
+    OR
+    -- Managers can only update their own trips
+    (
+        EXISTS (
+            SELECT 1 FROM public.users
+            WHERE users.id = auth.uid()
+            AND users.role = 'manager'
+        )
+        AND created_by = auth.uid()
+    )
+);
 
-CREATE POLICY "trips_delete_policy"
-  ON public.trips FOR DELETE
-  USING (
+-- ============================================
+-- DELETE POLICY: Delete based on role
+-- ============================================
+CREATE POLICY "trips_delete_by_role"
+ON public.trips FOR DELETE
+TO authenticated
+USING (
+    -- Admins and Superadmins can delete ALL trips
     EXISTS (
-      SELECT 1 FROM public.users
-      WHERE users.id = auth.uid()
-      AND (
-        users.role = 'admin'
-        OR 
-        trips.created_by = auth.uid()
-      )
+        SELECT 1 FROM public.users
+        WHERE users.id = auth.uid()
+        AND users.role IN ('admin', 'superadmin')
     )
-  );
-
--- Auto-update updated_at
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER update_trips_updated_at
-  BEFORE UPDATE ON public.trips
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-
-
--- Allow authenticated users to insert trips
-CREATE POLICY "Users can insert their own trips"
-  ON public.trips FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    auth.uid() = created_by
-  );
-
--- Allow users to view their own trips
-CREATE POLICY "Users can view their own trips"
-  ON public.trips FOR SELECT
-  TO authenticated
-  USING (
-    auth.uid() = created_by
-  );
-
--- Allow users to update their own trips
-CREATE POLICY "Users can update their own trips"
-  ON public.trips FOR UPDATE
-  TO authenticated
-  USING (
-    auth.uid() = created_by
-  );
+    OR
+    -- Managers can only delete their own trips
+    (
+        EXISTS (
+            SELECT 1 FROM public.users
+            WHERE users.id = auth.uid()
+            AND users.role = 'manager'
+        )
+        AND created_by = auth.uid()
+    )
+);
 
 -- ============================================
 -- TRIP PARTICIPANTS - UPDATED
