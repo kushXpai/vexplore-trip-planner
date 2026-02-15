@@ -2830,9 +2830,9 @@ export default function CreateTrip() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* NEW: Profit Input */}
+          {/* NEW: Admin Charges Input */}
           <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg space-y-2">
-            <Label className="text-sm font-semibold">Profit Amount</Label>
+            <Label className="text-sm font-semibold">Admin Charges</Label>
             <div className="flex items-center gap-2">
               <Input
                 type="number"
@@ -2844,7 +2844,7 @@ export default function CreateTrip() {
               <span className="text-sm text-muted-foreground">₹</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Profit will be added to subtotal before calculating GST and TCS
+              Admin Charges will be added to subtotal before calculating GST and TCS
             </p>
           </div>
 
@@ -2877,22 +2877,22 @@ export default function CreateTrip() {
 
           <div className="pt-4 border-t space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-base font-semibold">Subtotal (Before Profit)</span>
+              <span className="text-base font-semibold">Subtotal (Before Admin Charges)</span>
               <span className="text-lg font-bold">{formatCurrency(totals.subtotalBeforeTax, 'INR')}</span>
             </div>
 
-            {/* NEW: Profit */}
+            {/* NEW: Admin Charges */}
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground flex items-center gap-2">
                 <BadgePercent className="w-4 h-4" />
-                Profit
+                Admin Charges
               </span>
               <span className="font-semibold">{formatCurrency(totals.profit, 'INR')}</span>
             </div>
 
             {/* NEW: Admin Subtotal */}
             <div className="flex justify-between items-center">
-              <span className="text-base font-semibold">Admin Subtotal (Subtotal + Profit)</span>
+              <span className="text-base font-semibold">Admin Subtotal (Subtotal + Admin Charges)</span>
               <span className="text-lg font-bold">{formatCurrency(totals.adminSubtotal, 'INR')}</span>
             </div>
 
