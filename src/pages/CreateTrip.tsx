@@ -222,7 +222,7 @@ export default function CreateTrip() {
         setFormData({
           name: trip.name,
           institution: trip.institution,
-          country: trip.country,
+          country: country?.id || '',  // ✅ FIXED: Use country ID, not name
           cities: trip.cities || [],
           startDate: trip.start_date,
           endDate: trip.end_date,
@@ -788,8 +788,8 @@ export default function CreateTrip() {
     setOverheads(overheads.filter((_, i) => i !== index));
   };
 
-  // Calculate totals with GST and TCS
-  const calculateTotals = () => {
+  // Calculate totals with GST and TCS - UPDATED: Now async
+  const calculateTotals = async () => {
     const transportTotal =
       flights.reduce((sum, f) => sum + f.totalCostINR, 0) +
       buses.reduce((sum, b) => sum + b.totalCostINR, 0) +
@@ -810,8 +810,8 @@ export default function CreateTrip() {
 
     const subtotal = transportTotal + accommodationTotal + mealsTotal + activitiesTotal + overheadsTotal + extrasTotal;
 
-    // Calculate GST and TCS
-    const taxCalc = calculateGrandTotal(subtotal, profit, tripCategory === 'international', 5, 5);
+    // Calculate GST and TCS - UPDATED: Fetch from database, removed hardcoded 5, 5
+    const taxCalc = await calculateGrandTotal(subtotal, profit, tripCategory === 'international');
 
     return {
       transport: transportTotal,
@@ -824,7 +824,9 @@ export default function CreateTrip() {
       profit: taxCalc.profit,
       adminSubtotal: taxCalc.adminSubtotal,
       gstAmount: taxCalc.gstAmount,
+      gstPercentage: taxCalc.gstPercentage,  // NEW: Store the rate used
       tcsAmount: taxCalc.tcsAmount,
+      tcsPercentage: taxCalc.tcsPercentage,  // NEW: Store the rate used
       grandTotal: taxCalc.grandTotal,
       costPerParticipant: (() => {
         if (tripType === 'institute') {
@@ -840,7 +842,51 @@ export default function CreateTrip() {
     };
   };
 
-  const totals = calculateTotals();
+  // UPDATED: Use React state for totals since calculateTotals is now async
+  const [totals, setTotals] = useState({
+    transport: 0,
+    accommodation: 0,
+    meals: 0,
+    activities: 0,
+    overheads: 0,
+    extras: 0,
+    subtotalBeforeTax: 0,
+    profit: 0,
+    adminSubtotal: 0,
+    gstAmount: 0,
+    gstPercentage: 5,
+    tcsAmount: 0,
+    tcsPercentage: 5,
+    grandTotal: 0,
+    costPerParticipant: 0,
+  });
+
+  // Recalculate totals when dependencies change
+  useEffect(() => {
+    const updateTotals = async () => {
+      const newTotals = await calculateTotals();
+      setTotals(newTotals);
+    };
+    updateTotals();
+  }, [
+    flights,
+    buses,
+    trains,
+    accommodations,
+    meals,
+    activities,
+    overheads,
+    extras,
+    profit,
+    tripCategory,
+    formData.boys,
+    formData.girls,
+    formData.maleCount,
+    formData.femaleCount,
+    formData.otherCount,
+    formData.startDate,
+    formData.endDate,
+  ]);
 
   // Save trip
   const handleSaveTrip = async () => {
@@ -937,9 +983,9 @@ export default function CreateTrip() {
 
         subtotalBeforeTax: totals.subtotalBeforeTax,
         profit: profit,
-        gstPercentage: 5,
+        gstPercentage: totals.gstPercentage,  // UPDATED: Use from database
         gstAmount: totals.gstAmount,
-        tcsPercentage: 5,
+        tcsPercentage: totals.tcsPercentage,  // UPDATED: Use from database
         tcsAmount: totals.tcsAmount,
         grandTotal: totals.grandTotal,
         grandTotalINR: totals.grandTotal,
@@ -2990,7 +3036,7 @@ export default function CreateTrip() {
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground flex items-center gap-2">
                 <BadgePercent className="w-4 h-4" />
-                GST (5%)
+                GST ({totals.gstPercentage}%)
               </span>
               <span className="font-semibold">{formatCurrency(totals.gstAmount, 'INR')}</span>
             </div>
@@ -3000,7 +3046,7 @@ export default function CreateTrip() {
               <div className="flex justify-between items-center text-sm">
                 <span className="text-muted-foreground flex items-center gap-2">
                   <BadgePercent className="w-4 h-4" />
-                  TCS (5% on Subtotal + GST)
+                  TCS ({totals.tcsPercentage}% on Subtotal + GST)
                 </span>
                 <span className="font-semibold">{formatCurrency(totals.tcsAmount, 'INR')}</span>
               </div>

@@ -59,7 +59,7 @@ export default function TripDetail() {
   const [loading, setLoading] = useState(true);
   const [showPDFPreview, setShowPDFPreview] = useState(false);
   const [tripAnalysis, setTripAnalysis] = useState<PostTripAnalysis | null>(null);
-  const [tripStatus, setTripStatus] = useState<'draft' | 'sent' | 'approved' | 'rejected' |'completed' | 'locked'>('draft');
+  const [tripStatus, setTripStatus] = useState<'draft' | 'sent' | 'approved' | 'rejected' | 'completed' | 'locked'>('draft');
   const [isLocked, setIsLocked] = useState(false);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [currentUserRole, setCurrentUserRole] = useState<'superadmin' | 'admin' | 'manager' | null>(null);
@@ -86,7 +86,7 @@ export default function TripDetail() {
           .select('role')
           .eq('id', user.id)
           .single();
-        
+
         if (userData) {
           setCurrentUserRole(userData.role);
         }
@@ -130,23 +130,23 @@ export default function TripDetail() {
           id: data.id,
           name: data.name,
           institution: data.institution,
-          
+
           // NEW: Trip classification
           tripCategory: data.trip_category || 'domestic',
           tripType: data.trip_type || 'institute',
-          
+
           country: data.country,
-          
+
           // NEW: Multi-city support
           cities: data.cities || [],
-          
+
           startDate: data.start_date,
           endDate: data.end_date,
           totalDays: data.total_days ?? 0,
           totalNights: data.total_nights ?? 0,
           defaultCurrency: data.default_currency ?? 'INR',
           status: data.status ?? 'draft',
-          
+
           participants: {
             // Institute participants
             boys: data.trip_participants?.boys ?? 0,
@@ -155,21 +155,21 @@ export default function TripDetail() {
             femaleFaculty: data.trip_participants?.female_faculty ?? 0,
             maleVXplorers: data.trip_participants?.male_vxplorers ?? 0,
             femaleVXplorers: data.trip_participants?.female_vxplorers ?? 0,
-            
+
             // NEW: Commercial participants
             maleCount: data.trip_participants?.male_count ?? 0,
             femaleCount: data.trip_participants?.female_count ?? 0,
             otherCount: data.trip_participants?.other_count ?? 0,
             commercialMaleVXplorers: data.trip_participants?.commercial_male_vxplorers ?? 0,
             commercialFemaleVXplorers: data.trip_participants?.commercial_female_vxplorers ?? 0,
-            
+
             totalStudents: data.trip_participants?.total_students ?? 0,
             totalFaculty: data.trip_participants?.total_faculty ?? 0,
             totalVXplorers: data.trip_participants?.total_vxplorers ?? 0,
             totalCommercial: data.trip_participants?.total_commercial ?? 0,
             totalParticipants: data.trip_participants?.total_participants ?? 0,
           },
-          
+
           transport: {
             flights: (data.trip_flights || []).map((f: any) => ({
               id: f.id,
@@ -210,7 +210,7 @@ export default function TripDetail() {
               totalCostINR: t.total_cost_inr ?? 0,
             })),
           },
-          
+
           accommodation: (data.trip_accommodations || []).map((a: any) => ({
             id: a.id,
             hotelName: a.hotel_name ?? '',
@@ -238,7 +238,7 @@ export default function TripDetail() {
               totalRooms: 0,
             },
           })),
-          
+
           meals: (() => {
             const mealsData = data.trip_meals?.[0] || data.trip_meals;
             if (mealsData) {
@@ -266,7 +266,7 @@ export default function TripDetail() {
               totalCostINR: 0,
             };
           })(),
-          
+
           activities: (data.trip_activities || []).map((a: any) => ({
             id: a.id,
             name: a.name ?? '',
@@ -279,7 +279,7 @@ export default function TripDetail() {
             totalCost: a.total_cost ?? 0,
             totalCostINR: a.total_cost_inr ?? 0,
           })),
-          
+
           overheads: (data.trip_overheads || []).map((o: any) => ({
             id: o.id,
             name: o.name ?? '',
@@ -288,7 +288,7 @@ export default function TripDetail() {
             hideFromClient: o.hide_from_client ?? false,
             totalCostINR: o.total_cost_inr ?? 0,
           })),
-          
+
           // NEW: Extras (visa, tips, insurance)
           extras: data.trip_extras ? {
             visaCostPerPerson: data.trip_extras.visa_cost_per_person ?? 0,
@@ -304,24 +304,24 @@ export default function TripDetail() {
             insuranceTotalCost: data.trip_extras.insurance_total_cost ?? 0,
             insuranceTotalCostINR: data.trip_extras.insurance_total_cost_inr ?? 0,
           } : undefined,
-          
+
           // Cost calculations
           subtotalBeforeTax: data.subtotal_before_tax ?? 0,
           profit: data.profit ?? 0,
-          
+
           // NEW: Tax fields
           gstPercentage: data.gst_percentage ?? 5,
           gstAmount: data.gst_amount ?? 0,
           tcsPercentage: data.tcs_percentage ?? 5,
           tcsAmount: data.tcs_amount ?? 0,
-          
+
           grandTotal: data.grand_total ?? 0,
           grandTotalINR: data.grand_total_inr ?? 0,
           costPerParticipant: data.cost_per_participant ?? 0,
-          
+
           createdAt: data.created_at ?? '',
           updatedAt: data.updated_at ?? '',
-          
+
           analysis: data.post_trip_analysis ? {
             categories: data.post_trip_analysis.categories || [],
             totalExpected: data.post_trip_analysis.total_expected ?? 0,
@@ -348,12 +348,12 @@ export default function TripDetail() {
   }, [id]);
 
   const handleEdit = () => {
-    navigate(`/create-trip?edit=${id}`);
+    navigate(`/trips/create?edit=${id}`);
   };
 
   const handleSendForApproval = async () => {
     if (!trip) return;
-    
+
     const { error } = await supabase
       .from('trips')
       .update({ status: 'sent' })
@@ -370,7 +370,7 @@ export default function TripDetail() {
 
   const handleApproveTrip = async () => {
     if (!trip) return;
-    
+
     const { error } = await supabase
       .from('trips')
       .update({ status: 'approved' })
@@ -387,7 +387,7 @@ export default function TripDetail() {
 
   const handleRejectTrip = async () => {
     if (!trip) return;
-    
+
     const { error } = await supabase
       .from('trips')
       .update({ status: 'rejected' })
@@ -404,7 +404,7 @@ export default function TripDetail() {
 
   const handleCompleteTrip = async () => {
     if (!trip) return;
-    
+
     const { error } = await supabase
       .from('trips')
       .update({ status: 'completed' })
@@ -422,7 +422,7 @@ export default function TripDetail() {
 
   const handleLockTrip = async () => {
     if (!trip) return;
-    
+
     const { error } = await supabase
       .from('trips')
       .update({ status: 'locked' })
@@ -441,14 +441,14 @@ export default function TripDetail() {
   const handleActualExpensesSubmit = async (actuals: ActualExpenses) => {
     if (!trip) return;
 
-    const transportExpected = 
+    const transportExpected =
       trip.transport.flights.reduce((sum, f) => sum + f.totalCostINR, 0) +
       trip.transport.buses.reduce((sum, b) => sum + b.totalCostINR, 0) +
       trip.transport.trains.reduce((sum, t) => sum + t.totalCostINR, 0);
     const accommodationExpected = trip.accommodation.reduce((sum, h) => sum + h.totalCostINR, 0);
     const mealsExpected = trip.meals.totalCostINR;
     const activitiesExpected = trip.activities.reduce((sum, a) => sum + a.totalCostINR, 0);
-    const extrasExpected = trip.extras 
+    const extrasExpected = trip.extras
       ? (trip.extras.visaTotalCostINR + trip.extras.tipsTotalCostINR + trip.extras.insuranceTotalCostINR)
       : 0;
     const overheadsExpected = trip.overheads.reduce((sum, o) => sum + o.totalCostINR, 0);
@@ -570,7 +570,7 @@ export default function TripDetail() {
         </div>
         <div className="flex items-center gap-3">
           <StatusBadge status={tripStatus} />
-          
+
           {/* DRAFT - Show Edit and Send for Approval */}
           {!isLocked && tripStatus === 'draft' && (
             <>
@@ -680,7 +680,7 @@ export default function TripDetail() {
                 <p className="font-semibold capitalize">{trip.tripCategory}</p>
               </div>
             </div>
-            
+
             {/* NEW: Trip Type */}
             <div className="flex items-start gap-3">
               <Building2 className="w-5 h-5 text-primary mt-1" />
@@ -689,7 +689,7 @@ export default function TripDetail() {
                 <p className="font-semibold capitalize">{trip.tripType}</p>
               </div>
             </div>
-            
+
             <div className="flex items-start gap-3">
               <Calendar className="w-5 h-5 text-primary mt-1" />
               <div>
@@ -702,7 +702,7 @@ export default function TripDetail() {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-start gap-3">
               <MapPin className="w-5 h-5 text-primary mt-1" />
               <div>
@@ -720,7 +720,7 @@ export default function TripDetail() {
                 )}
               </div>
             </div>
-            
+
             <div className="flex items-start gap-3">
               <Users className="w-5 h-5 text-primary mt-1" />
               <div>
@@ -866,7 +866,7 @@ function ParticipantsSection({ trip }: { trip: Trip }) {
             </div>
           </div>
         )}
-        
+
         <div className="mt-6 pt-6 border-t grid grid-cols-2 md:grid-cols-4 gap-4">
           {tripType === 'institute' && (
             <>
@@ -1460,7 +1460,7 @@ function CostSummarySection({ trip }: { trip: Trip }) {
     trip.transport.trains.reduce((sum, t) => sum + t.totalCostINR, 0);
   const accommodationTotal = trip.accommodation.reduce((sum, h) => sum + h.totalCostINR, 0);
   const activitiesTotal = trip.activities.reduce((sum, a) => sum + a.totalCostINR, 0);
-  const extrasTotal = trip.extras 
+  const extrasTotal = trip.extras
     ? (trip.extras.visaTotalCostINR + trip.extras.tipsTotalCostINR + trip.extras.insuranceTotalCostINR)
     : 0;
   const overheadsTotal = trip.overheads.reduce((sum, o) => sum + o.totalCostINR, 0);
@@ -1550,14 +1550,14 @@ function CostSummarySection({ trip }: { trip: Trip }) {
               <div>
                 <p className="font-bold text-lg">Grand Total</p>
                 <p className="text-sm text-muted-foreground">
-                  {trip.tripCategory === 'international' 
-                    ? 'Including GST, TCS & all charges' 
+                  {trip.tripCategory === 'international'
+                    ? 'Including GST, TCS & all charges'
                     : 'Including GST & all charges'}
                 </p>
               </div>
               <p className="text-2xl font-bold text-primary">{formatINR(trip.grandTotalINR)}</p>
             </div>
-            
+
             <div className="flex justify-between items-center mt-4 p-3 bg-primary/5 rounded-lg">
               <span className="font-medium">
                 Cost per {trip.tripType === 'institute' ? 'Student' : 'Participant'}
