@@ -38,6 +38,7 @@ CREATE TYPE trip_status AS ENUM (
   'draft',
   'sent',
   'approved',
+  'rejected',
   'completed',
   'locked'
 );

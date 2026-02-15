@@ -28,6 +28,7 @@ export type TripStatus =
   | 'draft'
   | 'sent'
   | 'approved'
+  | 'rejected'
   | 'completed'
   | 'locked';
 

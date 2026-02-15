@@ -9,10 +9,11 @@ interface StatusBadgeProps {
 
 const statusConfig: Record<TripStatus, { label: string; className: string }> = {
   draft: { label: 'Draft', className: 'bg-muted text-muted-foreground' },
-  sent: { label: 'Sent', className: 'bg-warning/10 text-warning border-warning/20' },
-  approved: { label: 'Approved', className: 'bg-primary/10 text-primary border-primary/20' },
-  completed: { label: 'Completed', className: 'bg-success/10 text-success border-success/20' },
-  locked: { label: 'Locked', className: 'bg-foreground/10 text-foreground border-foreground/20' },
+  sent: { label: 'Sent for Approval', className: 'bg-blue-100 text-blue-700 border-blue-300' },
+  approved: { label: 'Approved', className: 'bg-green-100 text-green-700 border-green-300' },
+  rejected: { label: 'Rejected', className: 'bg-red-100 text-red-700 border-red-300' },
+  completed: { label: 'Completed', className: 'bg-purple-100 text-purple-700 border-purple-300' },
+  locked: { label: 'Locked', className: 'bg-orange-100 text-orange-700 border-orange-300' },
 };
 
 export function StatusBadge({ status, size = 'sm' }: StatusBadgeProps) {

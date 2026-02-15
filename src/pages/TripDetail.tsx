@@ -32,6 +32,9 @@ import {
   IdCard,
   Heart,
   BadgePercent,
+  CheckCircle,
+  XCircle,
+  Clock,
 } from 'lucide-react';
 import { Trip, PostTripAnalysis, TripCategory, TripType } from '@/types/trip';
 import { supabase } from '@/supabase/client';
@@ -56,9 +59,11 @@ export default function TripDetail() {
   const [loading, setLoading] = useState(true);
   const [showPDFPreview, setShowPDFPreview] = useState(false);
   const [tripAnalysis, setTripAnalysis] = useState<PostTripAnalysis | null>(null);
-  const [tripStatus, setTripStatus] = useState<'draft' | 'sent' | 'approved' | 'completed' | 'locked'>('draft');
+  const [tripStatus, setTripStatus] = useState<'draft' | 'sent' | 'approved' | 'rejected' |'completed' | 'locked'>('draft');
   const [isLocked, setIsLocked] = useState(false);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [currentUserRole, setCurrentUserRole] = useState<'superadmin' | 'admin' | 'manager' | null>(null);
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
 
   // Fetch currencies on mount
   useEffect(() => {
@@ -69,6 +74,25 @@ export default function TripDetail() {
       }
     };
     loadCurrencies();
+  }, []);
+
+  // Fetch current user role
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        
+        if (userData) {
+          setCurrentUserRole(userData.role);
+        }
+      }
+    };
+    fetchUserRole();
   }, []);
 
   useEffect(() => {
@@ -341,7 +365,59 @@ export default function TripDetail() {
     }
 
     setTripStatus('sent');
-    toast.success('Trip sent for approval');
+    toast.success('Trip sent for approval! Waiting for admin approval.');
+  };
+
+  const handleApproveTrip = async () => {
+    if (!trip) return;
+    
+    const { error } = await supabase
+      .from('trips')
+      .update({ status: 'approved' })
+      .eq('id', trip.id);
+
+    if (error) {
+      toast.error('Failed to approve trip');
+      return;
+    }
+
+    setTripStatus('approved');
+    toast.success('Trip approved successfully!');
+  };
+
+  const handleRejectTrip = async () => {
+    if (!trip) return;
+    
+    const { error } = await supabase
+      .from('trips')
+      .update({ status: 'rejected' })
+      .eq('id', trip.id);
+
+    if (error) {
+      toast.error('Failed to reject trip');
+      return;
+    }
+
+    setTripStatus('rejected');
+    toast.success('Trip rejected');
+  };
+
+  const handleCompleteTrip = async () => {
+    if (!trip) return;
+    
+    const { error } = await supabase
+      .from('trips')
+      .update({ status: 'completed' })
+      .eq('id', trip.id);
+
+    if (error) {
+      toast.error('Failed to complete trip');
+      return;
+    }
+
+    setTripStatus('completed');
+    setShowCompleteDialog(false);
+    toast.success('Trip marked as completed!');
   };
 
   const handleLockTrip = async () => {
@@ -494,26 +570,100 @@ export default function TripDetail() {
         </div>
         <div className="flex items-center gap-3">
           <StatusBadge status={tripStatus} />
+          
+          {/* DRAFT - Show Edit and Send for Approval */}
           {!isLocked && tripStatus === 'draft' && (
             <>
               <Button variant="outline" onClick={handleEdit}>
                 <Pencil className="w-4 h-4 mr-2" />
                 Edit
               </Button>
-              <Button onClick={handleSendForApproval}>
+              <Button onClick={handleSendForApproval} className="bg-blue-600 hover:bg-blue-700">
                 <Send className="w-4 h-4 mr-2" />
                 Send for Approval
               </Button>
             </>
           )}
+
+          {/* SENT - Waiting message for managers */}
+          {!isLocked && tripStatus === 'sent' && currentUserRole === 'manager' && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 border border-yellow-200 rounded-md">
+              <Clock className="w-4 h-4 text-yellow-600" />
+              <span className="text-sm font-medium text-yellow-700">Waiting for Approval</span>
+            </div>
+          )}
+
+          {/* SENT - Approve/Reject for admins/superadmins */}
+          {!isLocked && tripStatus === 'sent' && (currentUserRole === 'admin' || currentUserRole === 'superadmin') && (
+            <>
+              <Button onClick={handleApproveTrip} className="bg-green-600 hover:bg-green-700">
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Approve
+              </Button>
+              <Button onClick={handleRejectTrip} variant="destructive">
+                <XCircle className="w-4 h-4 mr-2" />
+                Reject
+              </Button>
+            </>
+          )}
+
+          {/* APPROVED - Complete Trip button */}
           {!isLocked && tripStatus === 'approved' && (
-            <Button onClick={handleLockTrip} variant="destructive">
-              <Lock className="w-4 h-4 mr-2" />
-              Lock Trip
-            </Button>
+            <>
+              <Button onClick={() => setShowCompleteDialog(true)} className="bg-purple-600 hover:bg-purple-700">
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Complete Trip
+              </Button>
+              <Button onClick={handleLockTrip} variant="outline">
+                <Lock className="w-4 h-4 mr-2" />
+                Lock Trip
+              </Button>
+            </>
+          )}
+
+          {/* REJECTED - Show message */}
+          {!isLocked && tripStatus === 'rejected' && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-md">
+              <XCircle className="w-4 h-4 text-red-600" />
+              <span className="text-sm font-medium text-red-700">Trip Rejected</span>
+            </div>
+          )}
+
+          {/* COMPLETED - Show message */}
+          {!isLocked && tripStatus === 'completed' && (
+            <>
+              <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-md">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-medium text-green-700">Trip Completed</span>
+              </div>
+              <Button onClick={handleLockTrip} variant="outline">
+                <Lock className="w-4 h-4 mr-2" />
+                Lock Trip
+              </Button>
+            </>
           )}
         </div>
       </div>
+
+      {/* Complete Trip Confirmation Dialog */}
+      {showCompleteDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2">Complete this trip?</h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              Are you sure you want to mark this trip as completed? This will change the status to "Completed" and you can enter actual expenses for analysis.
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setShowCompleteDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleCompleteTrip} className="bg-purple-600 hover:bg-purple-700">
+                Yes, Complete Trip
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Trip Overview */}
       <Card className="shadow-card">

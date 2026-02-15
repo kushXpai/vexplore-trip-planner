@@ -26,6 +26,7 @@ const statusConfig: Record<TripStatus, { label: string; className: string }> = {
   draft: { label: 'Draft', className: 'status-draft' },
   sent: { label: 'Sent for Approval', className: 'status-sent' },
   approved: { label: 'Approved', className: 'status-approved' },
+  rejected: { label: 'Rejected', className: 'status-rejected' },
   completed: { label: 'Completed', className: 'status-completed' },
   locked: { label: 'Locked', className: 'status-locked' },
 };

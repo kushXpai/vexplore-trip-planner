@@ -946,3 +946,63 @@ export async function getUserTrips() {
     };
   }
 }
+
+/**
+ * Update trip status
+ */
+export async function updateTripStatus(
+  tripId: string,
+  status: 'draft' | 'sent' | 'approved' | 'rejected' | 'completed' | 'locked'
+) {
+  try {
+    const { error } = await supabase
+      .from('trips')
+      .update({ status })
+      .eq('id', tripId);
+
+    if (error) throw error;
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating trip status:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
+}
+
+/**
+ * Send trip for approval (changes status from draft to sent)
+ */
+export async function sendTripForApproval(tripId: string) {
+  return updateTripStatus(tripId, 'sent');
+}
+
+/**
+ * Approve trip (changes status from sent to approved)
+ */
+export async function approveTrip(tripId: string) {
+  return updateTripStatus(tripId, 'approved');
+}
+
+/**
+ * Reject trip (changes status from sent to rejected)
+ */
+export async function rejectTrip(tripId: string) {
+  return updateTripStatus(tripId, 'rejected');
+}
+
+/**
+ * Complete trip (changes status from approved to completed)
+ */
+export async function completeTrip(tripId: string) {
+  return updateTripStatus(tripId, 'completed');
+}
+
+/**
+ * Lock trip (changes status to locked)
+ */
+export async function lockTrip(tripId: string) {
+  return updateTripStatus(tripId, 'locked');
+}
