@@ -42,6 +42,9 @@ export default function Masters() {
   const [addCurrencyOpen, setAddCurrencyOpen] = useState(false);
   const [addTaxRateOpen, setAddTaxRateOpen] = useState(false);
 
+  // Track which country is being worked with for city/currency
+  const [selectedCountryId, setSelectedCountryId] = useState<string>('');
+
   const [newCountry, setNewCountry] = useState({
     name: '',
     code: '',
@@ -68,7 +71,6 @@ export default function Masters() {
   });
 
   const [countrySearch, setCountrySearch] = useState('');
-  const [citySearch, setCitySearch] = useState('');
 
   /* =========================
      INITIAL LOAD
@@ -221,33 +223,24 @@ export default function Masters() {
         .from('tax_rates')
         .update({ 
           is_current: false,
-          effective_to: new Date().toISOString().split('T')[0]
+          effective_to: new Date(newTaxRate.effectiveFrom).toISOString()
         })
         .eq('rate_type', newTaxRate.rateType)
         .eq('is_current', true);
 
-      if (updateError) {
-        console.error('Update error:', updateError);
-        toast.error(`Failed to update previous rates: ${updateError.message}`);
-        return;
-      }
+      if (updateError) throw updateError;
 
-      // Insert new rate
-      const { error } = await supabase.from('tax_rates').insert({
+      // Now insert the new rate
+      const { error: insertError } = await supabase.from('tax_rates').insert({
         rate_type: newTaxRate.rateType,
         rate_percentage: newTaxRate.ratePercentage,
         effective_from: newTaxRate.effectiveFrom,
-        effective_to: null,
         is_current: true,
       });
 
-      if (error) {
-        console.error('Insert error:', error);
-        toast.error(`Failed to add tax rate: ${error.message}`);
-        return;
-      }
+      if (insertError) throw insertError;
 
-      toast.success(`${newTaxRate.rateType.toUpperCase()} rate added successfully`);
+      toast.success(`New ${newTaxRate.rateType.toUpperCase()} rate added successfully`);
       setAddTaxRateOpen(false);
       setNewTaxRate({
         rateType: 'gst',
@@ -255,9 +248,8 @@ export default function Masters() {
         effectiveFrom: new Date().toISOString().split('T')[0],
       });
       fetchTaxRates();
-    } catch (error) {
-      console.error('Unexpected error:', error);
-      toast.error('An unexpected error occurred');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to add tax rate');
     }
   };
 
@@ -328,383 +320,334 @@ export default function Masters() {
   ========================= */
 
   const handleDeleteCountry = async (id: string) => {
-    if (!confirm('Delete this country? This will also delete all associated cities.')) return;
-    
+    if (!confirm('Are you sure you want to delete this country?')) return;
+
     const { error } = await supabase.from('countries').delete().eq('id', id);
+
     if (error) return toast.error(error.message);
-    
+
     toast.success('Country deleted');
     fetchCountries();
-    fetchCities();
   };
 
   const handleDeleteCity = async (id: string) => {
-    if (!confirm('Delete this city?')) return;
-    
+    if (!confirm('Are you sure you want to delete this city?')) return;
+
     const { error } = await supabase.from('cities').delete().eq('id', id);
+
     if (error) return toast.error(error.message);
-    
+
     toast.success('City deleted');
     fetchCities();
   };
 
   const handleDeleteCurrency = async (id: string) => {
-    if (!confirm('Delete this currency?')) return;
-    
+    if (!confirm('Are you sure you want to delete this currency?')) return;
+
     const { error } = await supabase.from('currencies').delete().eq('id', id);
+
     if (error) return toast.error(error.message);
-    
+
     toast.success('Currency deleted');
     fetchCurrencies();
   };
 
   /* =========================
-     FILTER LOGIC
+     HELPER FUNCTIONS
   ========================= */
 
-  const filteredCountries = countriesList.filter(c =>
-    c.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
-    c.code.toLowerCase().includes(countrySearch.toLowerCase())
+  // Get country's currency
+  const getCountryCurrency = (countryId: string): Currency | undefined => {
+    const country = countriesList.find(c => c.id === countryId);
+    if (!country) return undefined;
+    return currenciesList.find(curr => curr.code === country.defaultCurrency);
+  };
+
+  // Get cities for a country
+  const getCitiesForCountry = (countryId: string): City[] => {
+    return citiesList.filter(city => city.countryId === countryId);
+  };
+
+  // Open add city dialog for specific country
+  const openAddCityForCountry = (countryId: string) => {
+    setSelectedCountryId(countryId);
+    setNewCity({ name: '', countryId });
+    setAddCityOpen(true);
+  };
+
+  // Open add/edit currency dialog for specific country
+  const openCurrencyDialogForCountry = (countryId: string) => {
+    const country = countriesList.find(c => c.id === countryId);
+    if (!country) return;
+
+    const existingCurrency = currenciesList.find(curr => curr.code === country.defaultCurrency);
+    
+    if (existingCurrency) {
+      // Edit mode
+      setEditingCurrency(existingCurrency);
+    } else {
+      // Add mode
+      setSelectedCountryId(countryId);
+      setAddCurrencyOpen(true);
+    }
+  };
+
+  // Filter countries based on search
+  const filteredCountries = countriesList.filter(country =>
+    country.name.toLowerCase().includes(countrySearch.toLowerCase()) ||
+    country.code.toLowerCase().includes(countrySearch.toLowerCase())
   );
 
-  const filteredCities = citiesList.filter(c => {
-    const country = countriesList.find(co => co.id === c.countryId);
-    return c.name.toLowerCase().includes(citySearch.toLowerCase()) ||
-           (country && country.name.toLowerCase().includes(citySearch.toLowerCase()));
-  });
-
-  // NEW: Get current and historical rates
-  const currentGST = taxRatesList.find(r => r.rate_type === 'gst' && r.is_current);
-  const currentTCS = taxRatesList.find(r => r.rate_type === 'tcs' && r.is_current);
-  const historicalRates = taxRatesList.filter(r => !r.is_current);
-
   /* =========================
-     RENDER
+     TAX RATES SECTION (unchanged)
   ========================= */
 
+  const renderTaxRatesTab = () => (
+    <TabsContent value="tax-rates" className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BadgePercent className="h-5 w-5" />
+            <CardTitle>Tax Rates Management</CardTitle>
+          </div>
+          {isAdmin && (
+            <Button onClick={() => setAddTaxRateOpen(true)} className="gradient-primary text-primary-foreground">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Tax Rate
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          {!isAdmin ? (
+            <div className="flex items-center gap-2 p-4 bg-muted/50 rounded-lg">
+              <Lock className="h-5 w-5 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                Tax rates can only be modified by administrators
+              </p>
+            </div>
+          ) : null}
+
+          <div className="space-y-6 mt-4">
+            {/* Current Rates */}
+            <div>
+              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <Coins className="h-5 w-5" />
+                Current Tax Rates
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {taxRatesList
+                  .filter(rate => rate.is_current)
+                  .map(rate => (
+                    <Card key={rate.id} className="border-2 border-primary/20">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge variant="default" className="gradient-primary text-primary-foreground">
+                                {rate.rate_type.toUpperCase()}
+                              </Badge>
+                              <Badge variant="secondary">Current</Badge>
+                            </div>
+                            <p className="text-2xl font-bold">{rate.rate_percentage}%</p>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Effective from: {new Date(rate.effective_from).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+              </div>
+            </div>
+
+            {/* Historical Rates */}
+            <div>
+              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Historical Tax Rates
+              </h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Rate</TableHead>
+                    <TableHead>Effective From</TableHead>
+                    <TableHead>Effective To</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {taxRatesList
+                    .filter(rate => !rate.is_current)
+                    .map(rate => (
+                      <TableRow key={rate.id}>
+                        <TableCell>
+                          <Badge variant="outline">{rate.rate_type.toUpperCase()}</Badge>
+                        </TableCell>
+                        <TableCell className="font-medium">{rate.rate_percentage}%</TableCell>
+                        <TableCell>{new Date(rate.effective_from).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          {rate.effective_to
+                            ? new Date(rate.effective_to).toLocaleDateString()
+                            : 'N/A'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  {taxRatesList.filter(rate => !rate.is_current).length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center text-muted-foreground">
+                        No historical rates found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </TabsContent>
+  );
+
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Master Data Management</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage countries, cities, currencies, and tax rates
-        </p>
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Masters Management</h1>
+          <p className="text-muted-foreground">Manage countries, cities, currencies, and tax rates</p>
+        </div>
       </div>
 
-      <Tabs defaultValue="countries" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+      <Tabs defaultValue="countries" className="space-y-4">
+        <TabsList>
           <TabsTrigger value="countries">
-            <Globe className="w-4 h-4 mr-2" />
+            <Globe className="h-4 w-4 mr-2" />
             Countries
           </TabsTrigger>
-          <TabsTrigger value="cities">
-            <MapPin className="w-4 h-4 mr-2" />
-            Cities
-          </TabsTrigger>
-          <TabsTrigger value="currencies">
-            <Coins className="w-4 h-4 mr-2" />
-            Currencies
-          </TabsTrigger>
           <TabsTrigger value="tax-rates">
-            <BadgePercent className="w-4 h-4 mr-2" />
-            GST & TCS
+            <BadgePercent className="h-4 w-4 mr-2" />
+            Tax Rates
           </TabsTrigger>
         </TabsList>
 
-        {/* COUNTRIES TAB */}
-        <TabsContent value="countries">
-          <Card className="shadow-card">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Countries ({filteredCountries.length})</CardTitle>
-              <Button onClick={() => setAddCountryOpen(true)} className="gradient-primary text-primary-foreground">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Country
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <Input
-                placeholder="Search countries..."
-                value={countrySearch}
-                onChange={e => setCountrySearch(e.target.value)}
-                className="mb-4"
-              />
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Country Name</TableHead>
-                      <TableHead>Code</TableHead>
-                      <TableHead>Default Currency</TableHead>
-                      <TableHead className="w-24">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredCountries.map(country => (
-                      <TableRow key={country.id}>
-                        <TableCell className="font-medium">{country.name}</TableCell>
-                        <TableCell><Badge variant="outline">{country.code}</Badge></TableCell>
-                        <TableCell>{country.defaultCurrency}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => setEditingCountry(country)}>
-                              <Pencil className="w-4 h-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteCountry(country.id)} className="text-destructive">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* CITIES TAB */}
-        <TabsContent value="cities">
-          <Card className="shadow-card">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Cities ({filteredCities.length})</CardTitle>
-              <Button onClick={() => setAddCityOpen(true)} className="gradient-primary text-primary-foreground">
-                <Plus className="w-4 h-4 mr-2" />
-                Add City
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <Input
-                placeholder="Search cities..."
-                value={citySearch}
-                onChange={e => setCitySearch(e.target.value)}
-                className="mb-4"
-              />
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>City Name</TableHead>
-                      <TableHead>Country</TableHead>
-                      <TableHead className="w-24">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredCities.map(city => {
-                      const country = countriesList.find(c => c.id === city.countryId);
-                      return (
-                        <TableRow key={city.id}>
-                          <TableCell className="font-medium">{city.name}</TableCell>
-                          <TableCell>{country?.name || 'Unknown'}</TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button variant="ghost" size="icon" onClick={() => setEditingCity(city)}>
-                                <Pencil className="w-4 h-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => handleDeleteCity(city.id)} className="text-destructive">
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* CURRENCIES TAB */}
-        <TabsContent value="currencies">
-          <Card className="shadow-card">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Currencies ({currenciesList.length})</CardTitle>
-              <Button onClick={() => setAddCurrencyOpen(true)} className="gradient-primary text-primary-foreground">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Currency
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Code</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Symbol</TableHead>
-                      <TableHead>Rate to INR</TableHead>
-                      <TableHead>Effective Date</TableHead>
-                      <TableHead className="w-24">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {currenciesList.map(currency => (
-                      <TableRow key={currency.id}>
-                        <TableCell><Badge>{currency.code}</Badge></TableCell>
-                        <TableCell className="font-medium">{currency.name}</TableCell>
-                        <TableCell className="text-lg">{currency.symbol}</TableCell>
-                        <TableCell>{currency.rateToINR.toFixed(2)}</TableCell>
-                        <TableCell>{new Date(currency.effectiveDate).toLocaleDateString()}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => setEditingCurrency(currency)}>
-                              <Pencil className="w-4 h-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteCurrency(currency.id)} className="text-destructive">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* NEW: TAX RATES TAB */}
-        <TabsContent value="tax-rates">
-          <div className="space-y-6">
-            {/* Current Rates */}
-            <Card className="shadow-card">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Current Tax Rates</CardTitle>
-                <Button 
-                  onClick={() => setAddTaxRateOpen(true)} 
-                  disabled={!isAdmin}
-                  className="gradient-primary text-primary-foreground disabled:opacity-50"
-                  title={!isAdmin ? "Only administrators can add tax rates" : "Add new tax rate"}
-                >
-                  {!isAdmin && <Lock className="w-4 h-4 mr-2" />}
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Tax Rate
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {!isAdmin && (
-                  <div className="mb-4 p-3 bg-muted/50 border border-border rounded-lg flex items-center gap-2">
-                    <Lock className="w-4 h-4 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">
-                      Only administrators can add or modify tax rates.
-                    </p>
-                  </div>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* GST Card */}
-                  <Card className="bg-primary/5 border-primary/20">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                            <BadgePercent className="w-5 h-5 text-primary" />
-                          </div>
-                          <h3 className="font-semibold text-lg">GST Rate</h3>
-                        </div>
-                        <Badge>Current</Badge>
-                      </div>
-                      {currentGST ? (
-                        <>
-                          <p className="text-4xl font-bold text-primary mb-2">
-                            {currentGST.rate_percentage}%
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Effective from: {new Date(currentGST.effective_from).toLocaleDateString()}
-                          </p>
-                        </>
-                      ) : (
-                        <p className="text-muted-foreground">No GST rate set</p>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* TCS Card */}
-                  <Card className="bg-blue-500/5 border-blue-500/20">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
-                            <BadgePercent className="w-5 h-5 text-blue-600" />
-                          </div>
-                          <h3 className="font-semibold text-lg">TCS Rate</h3>
-                        </div>
-                        <Badge variant="outline">Current</Badge>
-                      </div>
-                      {currentTCS ? (
-                        <>
-                          <p className="text-4xl font-bold text-blue-600 mb-2">
-                            {currentTCS.rate_percentage}%
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Effective from: {new Date(currentTCS.effective_from).toLocaleDateString()}
-                          </p>
-                        </>
-                      ) : (
-                        <p className="text-muted-foreground">No TCS rate set</p>
-                      )}
-                    </CardContent>
-                  </Card>
+        {/* UNIFIED COUNTRIES TAB */}
+        <TabsContent value="countries" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Globe className="h-5 w-5" />
+                  <CardTitle>Countries List</CardTitle>
                 </div>
-              </CardContent>
-            </Card>
+                <Button onClick={() => setAddCountryOpen(true)} className="gradient-primary text-primary-foreground">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Country
+                </Button>
+              </div>
+              <div className="mt-4">
+                <Input
+                  placeholder="Search countries..."
+                  value={countrySearch}
+                  onChange={(e) => setCountrySearch(e.target.value)}
+                  className="max-w-sm"
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {filteredCountries.map((country) => {
+                  const currency = getCountryCurrency(country.id);
+                  const cities = getCitiesForCountry(country.id);
+                  
+                  return (
+                    <div 
+                      key={country.id} 
+                      className="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-lg">{country.name}</h3>
+                              <Badge variant="outline">{country.code}</Badge>
+                              {currency && (
+                                <Badge variant="secondary">
+                                  {currency.code} ({currency.symbol})
+                                </Badge>
+                              )}
+                            </div>
+                            {cities.length > 0 && (
+                              <p className="text-sm text-muted-foreground mt-1">
+                                Cities: {cities.map(c => c.name).join(', ')}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          {currency ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openCurrencyDialogForCountry(country.id)}
+                            >
+                              <Pencil className="h-4 w-4 mr-1" />
+                              Edit Currency
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openCurrencyDialogForCountry(country.id)}
+                            >
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add Currency
+                            </Button>
+                          )}
+                          
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openAddCityForCountry(country.id)}
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add City
+                          </Button>
 
-            {/* Historical Rates */}
-            <Card className="shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <History className="w-5 h-5" />
-                  Rate History
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {historicalRates.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">No historical rates</p>
-                ) : (
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Rate</TableHead>
-                          <TableHead>Effective From</TableHead>
-                          <TableHead>Effective To</TableHead>
-                          <TableHead>Created</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {historicalRates.map(rate => (
-                          <TableRow key={rate.id}>
-                            <TableCell>
-                              <Badge variant={rate.rate_type === 'gst' ? 'default' : 'outline'}>
-                                {rate.rate_type.toUpperCase()}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="font-semibold">{rate.rate_percentage}%</TableCell>
-                            <TableCell>{new Date(rate.effective_from).toLocaleDateString()}</TableCell>
-                            <TableCell>
-                              {rate.effective_to 
-                                ? new Date(rate.effective_to).toLocaleDateString() 
-                                : '-'}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground text-sm">
-                              {new Date(rate.created_at).toLocaleDateString()}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingCountry(country)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteCountry(country.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                
+                {filteredCountries.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No countries found
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
+
+        {renderTaxRatesTab()}
       </Tabs>
 
-      {/* DIALOGS - Add Country, City, Currency (keeping existing code) */}
+      {/* Add Country Dialog */}
       <Dialog open={addCountryOpen} onOpenChange={setAddCountryOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Add New Country</DialogTitle></DialogHeader>
@@ -722,13 +665,16 @@ export default function Masters() {
               <Input
                 value={newCountry.code}
                 onChange={(e) => setNewCountry({ ...newCountry, code: e.target.value.toUpperCase() })}
-                placeholder="e.g., AUS"
-                maxLength={3}
+                placeholder="e.g., AU"
+                maxLength={2}
               />
             </div>
             <div className="space-y-2">
               <Label>Default Currency</Label>
-              <Select value={newCountry.defaultCurrency} onValueChange={(v) => setNewCountry({ ...newCountry, defaultCurrency: v })}>
+              <Select
+                value={newCountry.defaultCurrency}
+                onValueChange={(v) => setNewCountry({ ...newCountry, defaultCurrency: v })}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-popover">
                   {currenciesList.map(c => <SelectItem key={c.code} value={c.code}>{c.code} - {c.name}</SelectItem>)}
@@ -743,6 +689,7 @@ export default function Masters() {
         </DialogContent>
       </Dialog>
 
+      {/* Add City Dialog */}
       <Dialog open={addCityOpen} onOpenChange={setAddCityOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Add New City</DialogTitle></DialogHeader>
@@ -757,8 +704,11 @@ export default function Masters() {
             </div>
             <div className="space-y-2">
               <Label>Country *</Label>
-              <Select value={newCity.countryId} onValueChange={(v) => setNewCity({ ...newCity, countryId: v })}>
-                <SelectTrigger><SelectValue placeholder="Select a country" /></SelectTrigger>
+              <Select
+                value={newCity.countryId}
+                onValueChange={(v) => setNewCity({ ...newCity, countryId: v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-popover">
                   {countriesList.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
@@ -772,6 +722,7 @@ export default function Masters() {
         </DialogContent>
       </Dialog>
 
+      {/* Add Currency Dialog */}
       <Dialog open={addCurrencyOpen} onOpenChange={setAddCurrencyOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Add New Currency</DialogTitle></DialogHeader>
@@ -950,7 +901,7 @@ export default function Masters() {
       {/* Edit Currency Dialog */}
       <Dialog open={!!editingCurrency} onOpenChange={() => setEditingCurrency(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Edit Currency</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Edit Currency Rate</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
