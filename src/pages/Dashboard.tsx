@@ -30,7 +30,8 @@ type DashboardTrip = {
   id: string;
   name: string;
   institution: string;
-  country: string;
+  countries: string[];  // FIXED: Changed from 'country' to 'countries' array
+  cities: string[];
   tripCategory: 'domestic' | 'international';
   tripType: 'institute' | 'commercial';
   startDate: string;
@@ -62,7 +63,8 @@ export default function Dashboard() {
           id,
           name,
           institution,
-          country,
+          countries,
+          cities,
           trip_category,
           trip_type,
           start_date,
@@ -91,7 +93,8 @@ export default function Dashboard() {
         id: t.id,
         name: t.name,
         institution: t.institution,
-        country: t.country,
+        countries: t.countries || [],  // FIXED: Now array
+        cities: t.cities || [],
         tripCategory: t.trip_category || 'domestic',
         tripType: t.trip_type || 'institute',
         startDate: t.start_date,
