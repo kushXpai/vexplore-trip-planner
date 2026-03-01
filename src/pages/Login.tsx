@@ -5,8 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Eye, EyeOff, Sparkles, Lock, Mail } from 'lucide-react';
+import { Eye, EyeOff, Plane, Lock, Mail } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Login() {
@@ -14,8 +13,6 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [emailFocused, setEmailFocused] = useState(false);
-  const [passwordFocused, setPasswordFocused] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -53,144 +50,144 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-slate-900 dark:via-indigo-950 dark:to-purple-950 p-4">
-      <div className="w-full max-w-md">
-        {/* Logo and Title with Animation */}
-        <div className="text-center mb-8 space-y-4">
-          <div className="flex justify-center mb-4 transform transition-transform hover:scale-110 duration-300">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full blur-xl opacity-50 animate-pulse"></div>
-              <div className="relative z-10 w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-2xl">
-                <Sparkles className="w-10 h-10 text-white" />
-              </div>
+    <div className="flex min-h-screen bg-background">
+      {/* ── Left Panel – Branding ── */}
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-[#0f172a] p-10 relative overflow-hidden">
+        {/* Decorative circles */}
+        <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-blue-500/10 animate-[pulse_4s_ease-in-out_infinite]" />
+        <div className="absolute -bottom-32 -right-32 h-96 w-96 rounded-full bg-blue-400/5 animate-[pulse_6s_ease-in-out_infinite]" />
+        <div className="absolute top-1/2 left-1/3 h-48 w-48 rounded-full bg-indigo-500/5 animate-[pulse_5s_ease-in-out_infinite]" />
+
+        {/* Logo */}
+        <div className="relative z-10 animate-[fadeSlideDown_0.6s_ease-out_both]">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500">
+              <Plane className="h-5 w-5 text-white" />
             </div>
-          </div>
-          <div className="space-y-2 animate-fade-in">
-            <h1 className="text-3xl font-display font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
-              Welcome Back
-            </h1>
-            <p className="text-muted-foreground flex items-center justify-center gap-2">
-              <Sparkles className="w-4 h-4" />
-              Sign in to access your account
-            </p>
+            <span className="text-xl font-bold text-white">V-Explore</span>
           </div>
         </div>
 
-        {/* Login Card with Enhanced Design */}
-        <Card className="shadow-2xl border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl transform transition-all duration-300 hover:shadow-blue-500/20 hover:shadow-3xl">
-          <CardHeader className="space-y-1 pb-6">
-            <CardTitle className="text-2xl font-display bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              Sign In
-            </CardTitle>
-            <CardDescription className="text-base">
-              Enter your credentials to access the dashboard
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Email Field */}
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-medium">
-                  Email Address
-                </Label>
-                <div className="relative group">
-                  <Mail className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors duration-200 ${
-                    emailFocused ? 'text-blue-500' : 'text-muted-foreground'
-                  }`} />
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    onFocus={() => setEmailFocused(true)}
-                    onBlur={() => setEmailFocused(false)}
-                    required
-                    autoComplete="email"
-                    className={`h-12 pl-11 pr-4 transition-all duration-200 ${
-                      emailFocused 
-                        ? 'ring-2 ring-blue-500 border-blue-500' 
-                        : 'border-border hover:border-blue-300'
-                    }`}
-                  />
-                </div>
-              </div>
-
-              {/* Password Field */}
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-medium">
-                  Password
-                </Label>
-                <div className="relative group">
-                  <Lock className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors duration-200 ${
-                    passwordFocused ? 'text-blue-500' : 'text-muted-foreground'
-                  }`} />
-                  <Input
-                    id="password"
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onFocus={() => setPasswordFocused(true)}
-                    onBlur={() => setPasswordFocused(false)}
-                    required
-                    autoComplete="current-password"
-                    className={`h-12 pl-11 pr-12 transition-all duration-200 ${
-                      passwordFocused 
-                        ? 'ring-2 ring-blue-500 border-blue-500' 
-                        : 'border-border hover:border-blue-300'
-                    }`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-blue-500 transition-all duration-200 hover:scale-110"
-                    aria-label="Toggle password visibility"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="w-5 h-5" />
-                    ) : (
-                      <Eye className="w-5 h-5" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <Button 
-                type="submit" 
-                className="w-full h-12 text-base font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transform transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]" 
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    Signing in...
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Lock className="w-5 h-5" />
-                    Sign In Securely
-                  </div>
-                )}
-              </Button>
-            </form>
-
-            {/* Additional Info */}
-            <div className="mt-6 text-center text-sm text-muted-foreground">
-              <p className="flex items-center justify-center gap-1">
-                <Lock className="w-3 h-3" />
-                Your credentials are encrypted and secure
-              </p>
+        {/* Hero copy */}
+        <div className="relative z-10 space-y-6 animate-[fadeSlideUp_0.8s_ease-out_0.2s_both]">
+          <h2 className="text-4xl font-bold leading-tight text-white">
+            Manage your trips
+            <br />
+            <span className="text-blue-400">with confidence.</span>
+          </h2>
+          <p className="max-w-md text-slate-400 text-base leading-relaxed">
+            Plan itineraries, track costs, manage participants, and generate quotes — all from one powerful dashboard.
+          </p>
+          <div className="flex gap-8 pt-4">
+            <div>
+              <p className="text-2xl font-bold text-white">500+</p>
+              <p className="text-sm text-slate-400">Trips managed</p>
             </div>
-          </CardContent>
-        </Card>
+            <div>
+              <p className="text-2xl font-bold text-white">50+</p>
+              <p className="text-sm text-slate-400">Destinations</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-white">98%</p>
+              <p className="text-sm text-slate-400">Client satisfaction</p>
+            </div>
+          </div>
+        </div>
 
         {/* Footer */}
-        <div className="mt-6 text-center text-sm text-muted-foreground">
-          <p>© 2024 Your Company. All rights reserved.</p>
+        <div className="relative z-10 animate-[fadeSlideUp_0.6s_ease-out_0.6s_both]">
+          <p className="text-xs text-slate-500">© 2025 V-Explore. All rights reserved.</p>
+        </div>
+      </div>
+
+      {/* ── Right Panel – Login Form ── */}
+      <div className="flex w-full lg:w-1/2 items-center justify-center p-6 md:p-12">
+        <div className="w-full max-w-md space-y-8 animate-[fadeSlideUp_0.7s_ease-out_0.1s_both]">
+
+          {/* Mobile logo */}
+          <div className="flex items-center gap-3 lg:hidden animate-[fadeSlideDown_0.5s_ease-out_both]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500">
+              <Plane className="h-5 w-5 text-white" />
+            </div>
+            <span className="text-xl font-bold text-foreground">V-Explore</span>
+          </div>
+
+          {/* Heading */}
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Welcome back</h1>
+            <p className="mt-2 text-base text-muted-foreground">Sign in to your account to continue</p>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Email */}
+            <div className="space-y-2 animate-[fadeSlideUp_0.5s_ease-out_0.2s_both]">
+              <Label htmlFor="email" className="text-foreground text-sm font-medium">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="name@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  className="pl-11 h-12 text-base"
+                />
+              </div>
+            </div>
+
+            {/* Password */}
+            <div className="space-y-2 animate-[fadeSlideUp_0.5s_ease-out_0.3s_both]">
+              <Label htmlFor="password" className="text-foreground text-sm font-medium">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input
+                  id="password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  className="pl-11 pr-11 h-12 text-base"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-blue-500 transition-colors duration-200"
+                  aria-label="Toggle password visibility"
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Submit */}
+            <div className="animate-[fadeSlideUp_0.5s_ease-out_0.4s_both]">
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full h-12 text-base gap-2 bg-blue-500 hover:bg-blue-600 text-white"
+              >
+                {isLoading ? (
+                  <>
+                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    Sign In
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+
         </div>
       </div>
     </div>
