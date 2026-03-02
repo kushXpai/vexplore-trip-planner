@@ -49,7 +49,7 @@ CREATE TYPE institution_type AS ENUM ('school', 'college');
 CREATE TYPE trip_category AS ENUM ('domestic', 'international');
 
 -- NEW: Trip type (institute vs commercial)
-CREATE TYPE trip_type AS ENUM ('institute', 'commercial');
+CREATE TYPE trip_type AS ENUM ('institute', 'commercial', 'fti');
 
 -- ============================================
 -- USERS TABLE
@@ -171,8 +171,7 @@ CREATE TABLE public.trips (
   
   country text NOT NULL,
   
-  -- CHANGED: Multi-city support (JSONB array of city names)
-  cities jsonb NOT NULL DEFAULT '[]'::jsonb,  -- ["Paris", "Lyon", "Nice"]
+  cities jsonb NOT NULL DEFAULT '[]'::jsonb,
   
   start_date date NOT NULL,
   end_date date NOT NULL,
@@ -194,6 +193,9 @@ CREATE TABLE public.trips (
   
   tcs_percentage numeric NOT NULL DEFAULT 5.0,  -- Only for international
   tcs_amount numeric NOT NULL DEFAULT 0,        -- Only for international
+  
+  tds_percentage numeric NOT NULL DEFAULT 0,
+  tds_amount numeric NOT NULL DEFAULT 0,
   
   grand_total numeric NOT NULL DEFAULT 0,
   grand_total_inr numeric NOT NULL DEFAULT 0,
@@ -847,17 +849,34 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
--- Function to validate cities JSONB array
+-- UPDATED: Function to validate cities JSONB array
+-- Now requires each city to have name, fromDate, and toDate fields
 CREATE OR REPLACE FUNCTION validate_cities_array(cities jsonb)
 RETURNS boolean AS $$
+DECLARE
+  city_item jsonb;
 BEGIN
+  -- Must be a JSON array
   IF jsonb_typeof(cities) != 'array' THEN
     RETURN false;
   END IF;
   
+  -- Must have at least one city
   IF jsonb_array_length(cities) = 0 THEN
     RETURN false;
   END IF;
+
+  -- Every city object must have name, fromDate, and toDate
+  FOR city_item IN SELECT * FROM jsonb_array_elements(cities)
+  LOOP
+    IF NOT (
+      city_item ? 'name'     AND
+      city_item ? 'fromDate' AND
+      city_item ? 'toDate'
+    ) THEN
+      RETURN false;
+    END IF;
+  END LOOP;
   
   RETURN true;
 END;
@@ -1253,7 +1272,7 @@ BEGIN
   RAISE NOTICE '📋 NEW: trip_category (domestic/international) and trip_type (institute/commercial)';
   RAISE NOTICE '📋 NEW: trip_extras table for visa, tips, insurance';
   RAISE NOTICE '📋 NEW: GST (5%%) and TCS (5%% for international) support';
-  RAISE NOTICE '📋 NEW: Multi-city support with JSONB cities array';
+  RAISE NOTICE '📋 NEW: Multi-city support with JSONB cities array (name + fromDate + toDate)';
   RAISE NOTICE '📋 NEW: Commercial trip participant fields (male/female/other)';
   RAISE NOTICE '📋 NEW: Room preferences for flexible allocation';
   RAISE NOTICE '📋 NEW: Faculty ALWAYS get single rooms (enforced)';

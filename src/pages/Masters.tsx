@@ -18,7 +18,7 @@ import { useAuth } from '@/contexts/AuthContext';
 // NEW: Tax Rate Types
 interface TaxRate {
   id: string;
-  rate_type: 'gst' | 'tcs';
+  rate_type: 'gst' | 'tcs' | 'tds';
   rate_percentage: number;
   effective_from: string;
   effective_to: string | null;
@@ -65,7 +65,7 @@ export default function Masters() {
   });
 
   const [newTaxRate, setNewTaxRate] = useState({
-    rateType: 'gst' as 'gst' | 'tcs',
+    rateType: 'gst' as 'gst' | 'tcs' | 'tds',
     ratePercentage: 5,
     effectiveFrom: new Date().toISOString().split('T')[0],
   });
@@ -434,7 +434,7 @@ export default function Masters() {
                 <Coins className="h-5 w-5" />
                 Current Tax Rates
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {taxRatesList
                   .filter(rate => rate.is_current)
                   .map(rate => (
@@ -788,11 +788,12 @@ export default function Masters() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Tax Type *</Label>
-              <Select value={newTaxRate.rateType} onValueChange={(v: 'gst' | 'tcs') => setNewTaxRate({ ...newTaxRate, rateType: v })}>
+              <Select value={newTaxRate.rateType} onValueChange={(v: 'gst' | 'tcs' | 'tds') => setNewTaxRate({ ...newTaxRate, rateType: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-popover">
                   <SelectItem value="gst">GST</SelectItem>
                   <SelectItem value="tcs">TCS</SelectItem>
+                  <SelectItem value="tds">TDS</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -11,7 +11,8 @@ import type {
   Activity, 
   Overhead,
   Participants,
-  TripExtras
+  TripExtras,
+  CityWithDates
 } from '@/types/trip';
 
 /**
@@ -32,7 +33,7 @@ interface DbTrip {
   countries: string[];
   
   // CHANGED: Multi-city support (JSONB array)
-  cities: string[];  // PostgreSQL JSONB array
+  cities: CityWithDates[];
   
   start_date: string;
   end_date: string;
@@ -51,6 +52,8 @@ interface DbTrip {
   gst_amount: number;
   tcs_percentage: number;
   tcs_amount: number;
+  tds_percentage: number;
+  tds_amount: number;
   
   grand_total: number;
   grand_total_inr: number;
@@ -216,7 +219,7 @@ export async function createTrip(tripData: {
   tripCategory: TripCategory;  // NEW
   tripType: TripType;          // NEW
   countries: string[];         // CHANGED: Now accepts multiple countries
-  cities: string[];            // CHANGED: Multi-city array
+  cities: CityWithDates[];            // CHANGED: Multi-city array
   startDate: string;
   endDate: string;
   totalDays: number;
@@ -263,6 +266,8 @@ export async function createTrip(tripData: {
   gstAmount: number;
   tcsPercentage: number;
   tcsAmount: number;
+  tdsPercentage: number;
+  tdsAmount: number;
   grandTotal: number;
   grandTotalINR: number;
   costPerParticipant: number;
@@ -294,6 +299,8 @@ export async function createTrip(tripData: {
       gst_amount: tripData.gstAmount,
       tcs_percentage: tripData.tcsPercentage,
       tcs_amount: tripData.tcsAmount,
+      tds_percentage: tripData.tdsPercentage,
+      tds_amount: tripData.tdsAmount,
       grand_total: tripData.grandTotal,
       grand_total_inr: tripData.grandTotalINR,
       cost_per_participant: tripData.costPerParticipant,
@@ -536,7 +543,7 @@ export async function updateTrip(tripId: string, tripData: {
   tripCategory: TripCategory;
   tripType: TripType;
   countries: string[];         // CHANGED: Now accepts multiple countries
-  cities: string[];
+  cities: CityWithDates[];
   startDate: string;
   endDate: string;
   totalDays: number;
@@ -583,6 +590,8 @@ export async function updateTrip(tripId: string, tripData: {
   gstAmount: number;
   tcsPercentage: number;
   tcsAmount: number;
+  tdsPercentage: number;
+  tdsAmount: number;
   grandTotal: number;
   grandTotalINR: number;
   costPerParticipant: number;
@@ -607,6 +616,8 @@ export async function updateTrip(tripId: string, tripData: {
       gst_amount: tripData.gstAmount,
       tcs_percentage: tripData.tcsPercentage,
       tcs_amount: tripData.tcsAmount,
+      tds_percentage: tripData.tdsPercentage,
+      tds_amount: tripData.tdsAmount,
       grand_total: tripData.grandTotal,
       grand_total_inr: tripData.grandTotalINR,
       cost_per_participant: tripData.costPerParticipant,

@@ -21,7 +21,8 @@ import {
   getCurrencyRate as getCurrencyRateHelper,
   getCountryCurrency as getCountryCurrencyHelper,
   formatCurrency as formatCurrencyHelper,
-  calculateGrandTotal
+  calculateGrandTotal,
+  getCurrentTDSRate
 } from '@/services/masterDataService';
 import {
   Plane, Bus, Train, Hotel, Utensils, Ticket, Calculator, Shield, Info, Plus, Trash2,
@@ -29,7 +30,7 @@ import {
 } from 'lucide-react';
 import {
   Flight, Bus as BusType, Train as TrainType, Accommodation, Activity, Overhead,
-  TripCategory, TripType, TripExtras, RoomPreferences
+  TripCategory, TripType, TripExtras, RoomPreferences, CityWithDates
 } from '@/types/trip';
 import { toast } from 'sonner';
 import { createTrip, updateTrip, getTripById } from '@/services/tripService';
@@ -59,7 +60,7 @@ export default function CreateTrip() {
     name: '',
     institution: '',
     countries: [] as string[],
-    cities: [] as string[], // CHANGED: Multi-city array
+    cities: [] as CityWithDates[],
     startDate: '',
     endDate: '',
 
@@ -379,7 +380,7 @@ export default function CreateTrip() {
       const totalVXplorers = formData.maleVXplorers + formData.femaleVXplorers;
       return totalStudents + totalFaculty + totalVXplorers;
     } else {
-      // Commercial trip
+      // Commercial and FTI trips use same participant fields
       const totalCommercial = formData.maleCount + formData.femaleCount + formData.otherCount;
       const totalVXplorers = formData.commercialMaleVXplorers + formData.commercialFemaleVXplorers;
       return totalCommercial + totalVXplorers;
@@ -428,12 +429,12 @@ export default function CreateTrip() {
     };
   };
 
-  // NEW: Multi-city functions
+  // Multi-city functions with dates
   const addCity = () => {
-    if (selectedCityForAdd && !formData.cities.includes(selectedCityForAdd)) {
+    if (selectedCityForAdd && !formData.cities.find(c => c.name === selectedCityForAdd)) {
       setFormData(prev => ({
         ...prev,
-        cities: [...prev.cities, selectedCityForAdd]
+        cities: [...prev.cities, { name: selectedCityForAdd, fromDate: '', toDate: '' }]
       }));
       setSelectedCityForAdd('');
     }
@@ -442,8 +443,20 @@ export default function CreateTrip() {
   const removeCity = (cityName: string) => {
     setFormData(prev => ({
       ...prev,
-      cities: prev.cities.filter(c => c !== cityName)
+      cities: prev.cities.filter(c => c.name !== cityName)
     }));
+  };
+
+  const updateCityDate = (cityName: string, field: 'fromDate' | 'toDate', value: string) => {
+    setFormData(prev => {
+      const updated = prev.cities.map(c =>
+        c.name === cityName ? { ...c, [field]: value } : c
+      );
+      // Auto-derive trip start/end from first and last city dates
+      const startDate = updated[0]?.fromDate || prev.startDate;
+      const endDate = updated[updated.length - 1]?.toDate || prev.endDate;
+      return { ...prev, cities: updated, startDate, endDate };
+    });
   };
 
   // Transport functions
@@ -561,7 +574,7 @@ export default function CreateTrip() {
   // Accommodation functions
   const addAccommodation = () => {
     const defaultCurrency = getCountryCurrency(formData.countries.length > 0 ? formData.countries[0] : '') || 'INR';
-    const firstCity = formData.cities[0] || '';
+    const firstCity = formData.cities[0]?.name || '';
 
     setAccommodations([...accommodations, {
       id: `acc-${Date.now()}`,
@@ -731,7 +744,7 @@ export default function CreateTrip() {
     setActivities([...activities, {
       id: `activity-${Date.now()}`,
       name: '',
-      city: formData.cities[0] || undefined,
+      city: formData.cities[0]?.name || undefined,
       entryCost: 0,
       transportCost: 0,
       guideCost: 0,
@@ -821,8 +834,13 @@ export default function CreateTrip() {
 
     const subtotal = transportTotal + accommodationTotal + mealsTotal + activitiesTotal + overheadsTotal + extrasTotal;
 
-    // Calculate GST and TCS - UPDATED: Fetch from database, removed hardcoded 5, 5
-    const taxCalc = await calculateGrandTotal(subtotal, profit, tripCategory === 'international');
+    // Calculate GST and TCS
+    const taxCalc = await calculateGrandTotal(
+      subtotal,
+      profit,
+      tripCategory === 'international',
+      tripType === 'fti'
+    );
 
     return {
       transport: transportTotal,
@@ -835,17 +853,18 @@ export default function CreateTrip() {
       profit: taxCalc.profit,
       adminSubtotal: taxCalc.adminSubtotal,
       gstAmount: taxCalc.gstAmount,
-      gstPercentage: taxCalc.gstPercentage,  // NEW: Store the rate used
+      gstPercentage: taxCalc.gstPercentage,
       tcsAmount: taxCalc.tcsAmount,
-      tcsPercentage: taxCalc.tcsPercentage,  // NEW: Store the rate used
+      tcsPercentage: taxCalc.tcsPercentage,
+      tdsAmount: taxCalc.tdsAmount,
+      tdsPercentage: taxCalc.tdsPercentage,
       grandTotal: taxCalc.grandTotal,
       costPerParticipant: (() => {
         if (tripType === 'institute') {
-          // For institute: divide by students only (boys + girls)
           const studentCount = formData.boys + formData.girls;
           return studentCount > 0 ? taxCalc.grandTotal / studentCount : 0;
         } else {
-          // For commercial: divide by participants only (male + female + other, NOT VXplorers)
+          // Commercial and FTI: divide by participants only (NOT VXplorers)
           const participantCount = formData.maleCount + formData.femaleCount + formData.otherCount;
           return participantCount > 0 ? taxCalc.grandTotal / participantCount : 0;
         }
@@ -868,6 +887,8 @@ export default function CreateTrip() {
     gstPercentage: 5,
     tcsAmount: 0,
     tcsPercentage: 5,
+    tdsAmount: 0,
+    tdsPercentage: 0,
     grandTotal: 0,
     costPerParticipant: 0,
   });
@@ -918,6 +939,10 @@ export default function CreateTrip() {
       toast.error('Please add at least one city');
       return;
     }
+    if (formData.cities.some(c => !c.fromDate || !c.toDate)) {
+      toast.error('Please set from and to dates for all cities');
+      return;
+    }
     if (!formData.startDate || !formData.endDate) {
       toast.error('Please select start and end dates');
       return;
@@ -932,7 +957,7 @@ export default function CreateTrip() {
     try {
       const { days, nights } = calculateTripDuration();
       const totalParticipants = calculateTotalParticipants();
-      
+
       // Get country names from IDs
       const countryNames = formData.countries.map(countryId => {
         const country = countries.find(c => c.id === countryId);
@@ -999,10 +1024,12 @@ export default function CreateTrip() {
 
         subtotalBeforeTax: totals.subtotalBeforeTax,
         profit: profit,
-        gstPercentage: totals.gstPercentage,  // UPDATED: Use from database
+        gstPercentage: totals.gstPercentage,
         gstAmount: totals.gstAmount,
-        tcsPercentage: totals.tcsPercentage,  // UPDATED: Use from database
+        tcsPercentage: totals.tcsPercentage,
         tcsAmount: totals.tcsAmount,
+        tdsPercentage: totals.tdsPercentage,
+        tdsAmount: totals.tdsAmount,
         grandTotal: totals.grandTotal,
         grandTotalINR: totals.grandTotal,
         costPerParticipant: totals.costPerParticipant,
@@ -1045,7 +1072,7 @@ export default function CreateTrip() {
             {isEditing ? 'Edit Trip' : 'Create New Trip'}
           </h1>
           <p className="text-muted-foreground mt-1">
-            {isEditing ? 'Update trip details and costs' : 'Plan a new educational trip'}
+            {isEditing ? 'Update trip details and costs' : 'Plan a new trip'}
           </p>
         </div>
       </div>
@@ -1105,7 +1132,7 @@ export default function CreateTrip() {
             <RadioGroup
               value={tripType}
               onValueChange={(value) => setTripType(value as TripType)}
-              className="grid grid-cols-2 gap-4"
+              className="grid grid-cols-3 gap-4"
             >
               <Label
                 htmlFor="institute"
@@ -1136,8 +1163,48 @@ export default function CreateTrip() {
                   <p className="text-xs text-muted-foreground mt-1">General Participants</p>
                 </div>
               </Label>
+
+              <Label
+                htmlFor="fti"
+                className={`flex items-center space-x-3 p-4 border-2 rounded-lg cursor-pointer transition-all ${tripType === 'fti' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                  }`}
+              >
+                <RadioGroupItem value="fti" id="fti" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-5 h-5 text-primary" />
+                    <span className="font-semibold">FTI Trip</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">FTI • TDS applied</p>
+                </div>
+              </Label>
             </RadioGroup>
           </div>
+
+          {tripType === 'fti' && (
+            <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <div className="flex gap-2">
+                <Info className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-900 dark:text-amber-100">
+                  <p className="font-semibold mb-1">FTI Trip - Tax Info</p>
+                  <ul className="list-disc list-inside space-y-1 text-amber-800 dark:text-amber-200">
+                    {tripCategory === 'domestic' ? (
+                      <>
+                        <li>GST: applied on subtotal</li>
+                        <li>TDS: deducted on (Subtotal + GST)</li>
+                      </>
+                    ) : (
+                      <>
+                        <li>GST: applied on subtotal</li>
+                        <li>TCS: applied on (Subtotal + GST)</li>
+                        <li>TDS: deducted on (Subtotal + GST + TCS)</li>
+                      </>
+                    )}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
 
           {tripCategory === 'international' && (
             <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
@@ -1166,6 +1233,8 @@ export default function CreateTrip() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+
+          {/* Row 1: Trip Name + Institution */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Trip Name *</Label>
@@ -1185,129 +1254,7 @@ export default function CreateTrip() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4">
-            {/* Countries - Multi-select */}
-            <div className="space-y-2">
-              <Label>Countries *</Label>
-              <div className="flex gap-2">
-                <Select
-                  value={selectedCountryForAdd}
-                  onValueChange={setSelectedCountryForAdd}
-                  disabled={isLoadingMasterData}
-                >
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select country to add"} />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {countries
-                      .filter(c => !formData.countries.includes(c.id))
-                      .map((country) => (
-                        <SelectItem key={country.id} value={country.id}>
-                          {country.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    if (selectedCountryForAdd && !formData.countries.includes(selectedCountryForAdd)) {
-                      setFormData(prev => ({
-                        ...prev,
-                        countries: [...prev.countries, selectedCountryForAdd],
-                        cities: [] // Reset cities when countries change
-                      }));
-                      setSelectedCountryForAdd('');
-                    }
-                  }}
-                  disabled={!selectedCountryForAdd}
-                  size="sm"
-                >
-                  <Plus className="w-4 h-4" />
-                </Button>
-              </div>
-              
-              {/* Display selected countries */}
-              {formData.countries.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {formData.countries.map((countryId) => {
-                    const country = countries.find(c => c.id === countryId);
-                    return (
-                      <Badge key={countryId} variant="secondary" className="flex items-center gap-1">
-                        {country?.name}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormData(prev => ({
-                              ...prev,
-                              countries: prev.countries.filter(id => id !== countryId),
-                              cities: prev.cities.filter(cityName => {
-                                const city = cities.find(c => c.name === cityName);
-                                return city && city.country_id !== countryId;
-                              })
-                            }));
-                          }}
-                          className="ml-1 hover:text-destructive"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </Badge>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* NEW: Multi-City Selection */}
-            <div className="space-y-2">
-              <Label>Cities * (Multi-City Support)</Label>
-              <div className="flex gap-2">
-                <Select
-                  value={selectedCityForAdd}
-                  onValueChange={setSelectedCityForAdd}
-                  disabled={formData.countries.length === 0 || isLoadingMasterData}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={formData.countries.length === 0 ? "Select countries first" : "Select city"} />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {filteredCities.map((city) => (
-                      <SelectItem key={city.id} value={city.name}>
-                        {city.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  type="button"
-                  onClick={addCity}
-                  disabled={!selectedCityForAdd}
-                  size="sm"
-                >
-                  <Plus className="w-4 h-4" />
-                </Button>
-              </div>
-
-              {/* Selected Cities */}
-              {formData.cities.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {formData.cities.map((cityName) => (
-                    <Badge key={cityName} variant="secondary" className="gap-1">
-                      {cityName}
-                      <button
-                        type="button"
-                        onClick={() => removeCity(cityName)}
-                        className="ml-1 hover:text-destructive"
-                      >
-                        ×
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
+          {/* Row 2: Start Date + End Date */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Start Date *</Label>
@@ -1328,13 +1275,141 @@ export default function CreateTrip() {
             </div>
           </div>
 
+          {/* Row 3: Itinerary */}
+          <div className="space-y-2">
+            <Label>Itinerary *</Label>
+
+            {/* City rows table — only shown when cities exist */}
+            {formData.cities.length > 0 && (
+              <div className="rounded-lg border overflow-hidden">
+                {/* Table header */}
+                <div className="grid grid-cols-[1fr_1fr_1fr_1fr_32px] bg-muted px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                  <span>City</span>
+                  <span>Country</span>
+                  <span>From</span>
+                  <span>To</span>
+                  <span></span>
+                </div>
+                {/* City rows */}
+                {formData.cities.map((city, index) => {
+                  const cityObj = cities.find(c => c.name === city.name);
+                  const countryObj = cityObj ? countries.find(c => c.id === cityObj.country_id) : null;
+                  return (
+                    <div
+                      key={city.name}
+                      className={`grid grid-cols-[1fr_1fr_1fr_1fr_32px] items-center px-3 py-2 text-sm ${index !== formData.cities.length - 1 ? 'border-b' : ''}`}
+                    >
+                      <span className="font-medium">{city.name}</span>
+                      <span className="text-muted-foreground text-xs">{countryObj?.name || '—'}</span>
+                      <div className="pr-2">
+                        <Input
+                          type="date"
+                          className="h-7 text-xs"
+                          value={city.fromDate}
+                          min={formData.startDate || undefined}
+                          max={city.toDate || formData.endDate || undefined}
+                          onChange={(e) => updateCityDate(city.name, 'fromDate', e.target.value)}
+                        />
+                      </div>
+                      <div className="pr-2">
+                        <Input
+                          type="date"
+                          className="h-7 text-xs"
+                          value={city.toDate}
+                          min={city.fromDate || formData.startDate || undefined}
+                          max={formData.endDate || undefined}
+                          onChange={(e) => updateCityDate(city.name, 'toDate', e.target.value)}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeCity(city.name)}
+                        className="hover:text-destructive text-muted-foreground"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Add city controls — always below rows */}
+            <div className="flex items-center gap-2 pt-1">
+              <Select
+                value={selectedCountryForAdd}
+                onValueChange={(val) => {
+                  setSelectedCountryForAdd(val);
+                  setSelectedCityForAdd('');
+                }}
+                disabled={isLoadingMasterData}
+              >
+                <SelectTrigger className="flex-1 h-9 text-sm">
+                  <SelectValue placeholder="Select country" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {countries.map((country) => (
+                    <SelectItem key={country.id} value={country.id}>
+                      {country.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={selectedCityForAdd}
+                onValueChange={setSelectedCityForAdd}
+                disabled={!selectedCountryForAdd || isLoadingMasterData}
+              >
+                <SelectTrigger className="flex-1 h-9 text-sm">
+                  <SelectValue placeholder={!selectedCountryForAdd ? "Country first" : "Select city"} />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {filteredCities
+                    .filter(c => c.country_id === selectedCountryForAdd)
+                    .map((city) => (
+                      <SelectItem key={city.id} value={city.name}>
+                        {city.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                size="sm"
+                className="h-9 px-4 shrink-0"
+                disabled={!selectedCityForAdd}
+                onClick={() => {
+                  if (selectedCityForAdd && !formData.cities.find(c => c.name === selectedCityForAdd)) {
+                    if (selectedCountryForAdd && !formData.countries.includes(selectedCountryForAdd)) {
+                      setFormData(prev => ({
+                        ...prev,
+                        countries: [...prev.countries, selectedCountryForAdd],
+                        cities: [...prev.cities, { name: selectedCityForAdd, fromDate: '', toDate: '' }]
+                      }));
+                    } else {
+                      setFormData(prev => ({
+                        ...prev,
+                        cities: [...prev.cities, { name: selectedCityForAdd, fromDate: '', toDate: '' }]
+                      }));
+                    }
+                    setSelectedCityForAdd('');
+                  }
+                }}
+              >
+                <Plus className="w-4 h-4 mr-1" /> Add City
+              </Button>
+            </div>
+          </div>
+
+          {/* Duration summary */}
           {formData.startDate && formData.endDate && (
-            <div className="p-4 bg-muted rounded-lg">
+            <div className="p-3 bg-muted rounded-lg">
               <p className="text-sm font-semibold">
                 Duration: {calculateTripDuration().days} days, {calculateTripDuration().nights} nights
               </p>
             </div>
           )}
+
         </CardContent>
       </Card>
 
@@ -1347,7 +1422,83 @@ export default function CreateTrip() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {tripType === 'institute' ? (
+          {tripType === 'fti' ? (
+            // FTI Trip Participants (same fields as commercial)
+            <>
+              <div className="grid grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label>Male Participants</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={formData.maleCount || ''}
+                    onChange={(e) => setFormData({ ...formData, maleCount: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Female Participants</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={formData.femaleCount || ''}
+                    onChange={(e) => setFormData({ ...formData, femaleCount: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Kids</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={formData.otherCount || ''}
+                    onChange={(e) => setFormData({ ...formData, otherCount: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="space-y-2 flex flex-col justify-end">
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground">Total Participants</p>
+                    <p className="text-lg font-bold">{calculateTotalCommercial()}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Heart className="w-4 h-4 text-primary" />
+                    Male VXplorers
+                  </Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={formData.commercialMaleVXplorers || ''}
+                    onChange={(e) => setFormData({ ...formData, commercialMaleVXplorers: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Heart className="w-4 h-4 text-primary" />
+                    Female VXplorers
+                  </Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={formData.commercialFemaleVXplorers || ''}
+                    onChange={(e) => setFormData({ ...formData, commercialFemaleVXplorers: parseInt(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="space-y-2 flex flex-col justify-end">
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground">Total VXplorers</p>
+                    <p className="text-lg font-bold">{formData.commercialMaleVXplorers + formData.commercialFemaleVXplorers}</p>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : tripType === 'institute' ? (
             // Institute Trip Participants
             <>
               <div className="grid grid-cols-3 gap-4">
@@ -1439,7 +1590,6 @@ export default function CreateTrip() {
             </>
           ) : (
             // Commercial Trip Participants
-            // Commercial Trip Participants
             <>
               <div className="grid grid-cols-4 gap-4">
                 <div className="space-y-2">
@@ -1460,16 +1610,6 @@ export default function CreateTrip() {
                     placeholder="0"
                     value={formData.femaleCount || ''}
                     onChange={(e) => setFormData({ ...formData, femaleCount: parseInt(e.target.value) || 0 })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Other Participants</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={formData.otherCount || ''}
-                    onChange={(e) => setFormData({ ...formData, otherCount: parseInt(e.target.value) || 0 })}
                   />
                 </div>
                 <div className="space-y-2 flex flex-col justify-end">
@@ -1967,8 +2107,8 @@ export default function CreateTrip() {
                       </SelectTrigger>
                       <SelectContent className="bg-popover">
                         {formData.cities.map((city) => (
-                          <SelectItem key={city} value={city}>
-                            {city}
+                          <SelectItem key={city.name} value={city.name}>
+                            {city.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -2563,8 +2703,8 @@ export default function CreateTrip() {
                       <SelectContent className="bg-popover">
                         <SelectItem value="none">No specific city</SelectItem>
                         {formData.cities.map((city) => (
-                          <SelectItem key={city} value={city}>
-                            {city}
+                          <SelectItem key={city.name} value={city.name}>
+                            {city.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -2976,6 +3116,17 @@ export default function CreateTrip() {
                   TCS ({totals.tcsPercentage}% on Subtotal + GST)
                 </span>
                 <span className="font-semibold">{formatCurrency(totals.tcsAmount, 'INR')}</span>
+              </div>
+            )}
+
+            {/* TDS (FTI trips only) */}
+            {tripType === 'fti' && (
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground flex items-center gap-2">
+                  <BadgePercent className="w-4 h-4" />
+                  TDS ({totals.tdsPercentage}% deducted{tripCategory === 'international' ? ' on Subtotal + GST + TCS' : ' on Subtotal + GST'})
+                </span>
+                <span className="font-semibold text-destructive">- {formatCurrency(totals.tdsAmount, 'INR')}</span>
               </div>
             )}
 

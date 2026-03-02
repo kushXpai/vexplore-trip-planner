@@ -18,7 +18,7 @@ export interface User {
 ========================= */
 
 export type TripCategory = 'domestic' | 'international';
-export type TripType = 'institute' | 'commercial';
+export type TripType = 'institute' | 'commercial' | 'fti';
 
 /* =========================
    Trip & Status
@@ -40,10 +40,9 @@ export interface Trip {
   tripCategory: TripCategory;
   tripType: TripType;
   
-  // CHANGED: Now supports multiple countries
   countries: string[];
   
-  cities: string[];
+  cities: CityWithDates[];
   
   startDate: string;
   endDate: string;
@@ -70,6 +69,8 @@ export interface Trip {
   gstAmount: number;
   tcsPercentage: number;
   tcsAmount: number;
+  tdsPercentage: number;
+  tdsAmount: number;
   
   grandTotal: number;
   grandTotalINR: number;
@@ -360,11 +361,20 @@ export interface Institution {
 
 export interface TaxRate {
   id: string;
-  rate_type: 'gst' | 'tcs';
+  rate_type: 'gst' | 'tcs' | 'tds';
   rate_percentage: number;
   effective_from: string;
   effective_to: string | null;
   is_current: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/* =========================
+   NEW: City with date range for itinerary
+========================= */
+export interface CityWithDates {
+  name: string;
+  fromDate: string; // ISO date string e.g. "2026-04-01"
+  toDate: string;   // ISO date string e.g. "2026-04-04"
 }

@@ -15,14 +15,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -58,10 +50,10 @@ type DashboardTrip = {
   id: string;
   name: string;
   institution: string;
-  countries: string[];  // CHANGED: Now array
-  cities: string[];
+  countries: string[];
+  cities: { name: string; fromDate: string; toDate: string }[];
   tripCategory: 'domestic' | 'international';
-  tripType: 'institute' | 'commercial';
+  tripType: 'institute' | 'commercial' | 'fti';
   startDate: string;
   endDate: string;
   totalDays: number;
@@ -85,13 +77,11 @@ export default function Trips() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
 
-  /* -------------------- FETCH TRIPS WITH ROLE-BASED ACCESS -------------------- */
+  /* -------------------- FETCH TRIPS -------------------- */
   const { data: trips, isLoading, refetch } = useQuery<DashboardTrip[], Error>({
     queryKey: ['trips', user?.id, user?.role],
     queryFn: async () => {
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
+      if (!user) throw new Error('User not authenticated');
 
       let query = supabase
         .from('trips')
@@ -114,7 +104,6 @@ export default function Trips() {
           )
         `);
 
-      // Apply role-based filtering
       if (user.role === 'manager') {
         query = query.eq('created_by', user.id);
       }
@@ -130,8 +119,12 @@ export default function Trips() {
         id: t.id,
         name: t.name,
         institution: t.institution,
-        countries: t.countries || [],  // CHANGED: Now array
-        cities: t.cities || [],
+        countries: t.countries || [],
+        cities: (t.cities || []).map((c: any) =>
+          typeof c === 'string'
+            ? { name: c, fromDate: t.start_date, toDate: t.end_date }
+            : { name: c.name, fromDate: c.fromDate, toDate: c.toDate }
+        ),
         tripCategory: t.trip_category || 'domestic',
         tripType: t.trip_type || 'institute',
         startDate: t.start_date,
@@ -153,26 +146,21 @@ export default function Trips() {
     const matchesSearch =
       trip.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       trip.institution.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      trip.cities.some(city => city.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      trip.countries.some(country => country.toLowerCase().includes(searchQuery.toLowerCase()));  // CHANGED: Now searches all countries
-    
+      trip.cities.some(city => city.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      trip.countries.some(country => country.toLowerCase().includes(searchQuery.toLowerCase()));
+
     const matchesStatus = statusFilter === 'all' || trip.status === statusFilter;
     const matchesCategory = categoryFilter === 'all' || trip.tripCategory === categoryFilter;
     const matchesType = typeFilter === 'all' || trip.tripType === typeFilter;
-    
+
     return matchesSearch && matchesStatus && matchesCategory && matchesType;
   }) || [];
 
-  /* -------------------- DELETE TRIP -------------------- */
+  /* -------------------- DELETE -------------------- */
   const handleDeleteTrip = async (tripId: string, tripName: string) => {
-    if (!confirm(`Are you sure you want to delete "${tripName}"? This action cannot be undone.`)) {
-      return;
-    }
+    if (!confirm(`Are you sure you want to delete "${tripName}"? This action cannot be undone.`)) return;
 
-    const { error } = await supabase
-      .from('trips')
-      .delete()
-      .eq('id', tripId);
+    const { error } = await supabase.from('trips').delete().eq('id', tripId);
 
     if (error) {
       toast.error('Failed to delete trip');
@@ -190,8 +178,8 @@ export default function Trips() {
         <div>
           <h1 className="text-3xl font-bold">All Trips</h1>
           <p className="text-muted-foreground mt-1">
-            {user?.role === 'manager' 
-              ? 'Manage your trip cost sheets' 
+            {user?.role === 'manager'
+              ? 'Manage your trip cost sheets'
               : 'Manage all trip cost sheets across the organization'}
           </p>
         </div>
@@ -323,6 +311,7 @@ export default function Trips() {
                 <SelectItem value="all">All Types</SelectItem>
                 <SelectItem value="institute">Institute</SelectItem>
                 <SelectItem value="commercial">Commercial</SelectItem>
+                <SelectItem value="fti">FTI</SelectItem>
               </SelectContent>
             </Select>
 
@@ -362,83 +351,109 @@ export default function Trips() {
   );
 }
 
-/* -------------------- TRIP TABLE -------------------- */
+/* -------------------- TRIP TABLE — Option 2 Card-in-Table -------------------- */
 function TripTable({ trips, onDelete }: { trips: DashboardTrip[]; onDelete: (id: string, name: string) => void }) {
   const navigate = useNavigate();
+
   return (
-    <div className="border rounded-lg overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/50">
-            <TableHead>Trip Name</TableHead>
-            <TableHead>Institution</TableHead>
-            <TableHead>Destination</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Dates</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Total Cost</TableHead>
-            <TableHead className="w-12"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {trips.map(trip => (
-            <TableRow
-              key={trip.id}
-              className="cursor-pointer hover:bg-muted/30 transition-colors"
-              onClick={() => navigate(`/trips/${trip.id}`)}
-            >
-              <TableCell className="font-medium">{trip.name}</TableCell>
-              <TableCell className="text-muted-foreground">{trip.institution}</TableCell>
-              <TableCell>
-                <div className="flex items-start gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                  <div className="flex flex-col gap-1">
-                    {/* CHANGED: Display countries */}
-                    {trip.countries.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {trip.countries.map((country, idx) => (
-                          <Badge key={idx} variant="outline" className="text-xs">
-                            <Globe className="w-3 h-3 mr-1" />
-                            {country}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                    {/* Cities */}
-                    {trip.cities.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {trip.cities.map((city, idx) => (
-                          <Badge key={idx} variant="secondary" className="text-xs">
-                            {city}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+    <div className="space-y-3">
+      {trips.map(trip => (
+        <div
+          key={trip.id}
+          onClick={() => navigate(`/trips/${trip.id}`)}
+          className="border rounded-xl p-4 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all duration-200 bg-card"
+        >
+          {/* Row 1: Trip name + Institution + Type badges + Actions */}
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-semibold text-foreground text-base leading-tight">
+                    {trip.name}
+                  </h3>
+                  <StatusBadge status={trip.status} />
                 </div>
-              </TableCell>
-              <TableCell>
-                <div className="flex flex-col gap-1">
-                  <Badge variant="outline" className="text-xs capitalize w-fit">
-                    {trip.tripCategory}
-                  </Badge>
-                  <Badge variant="outline" className="text-xs capitalize w-fit">
-                    {trip.tripType}
-                  </Badge>
-                </div>
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {new Date(trip.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} - {new Date(trip.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </TableCell>
-              <TableCell><StatusBadge status={trip.status} /></TableCell>
-              <TableCell className="text-right font-semibold">{formatINR(trip.totalCostINR)}</TableCell>
-              <TableCell onClick={(e) => e.stopPropagation()}>
+                <p className="text-sm text-muted-foreground mt-0.5">{trip.institution}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="flex gap-1.5">
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    'text-xs capitalize',
+                    trip.tripCategory === 'international'
+                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                      : 'bg-green-50 text-green-700 border-green-200'
+                  )}
+                >
+                  {trip.tripCategory}
+                </Badge>
+                <Badge variant="outline" className="text-xs capitalize">
+                  {trip.tripType}
+                </Badge>
+              </div>
+              <div onClick={(e) => e.stopPropagation()}>
                 <TripActions trip={trip} onDelete={onDelete} />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: Destination + Dates + Cost */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+
+            {/* Countries */}
+            {trip.countries.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium">
+                  {trip.countries.join(', ')}
+                </span>
+              </div>
+            )}
+
+            {/* Cities */}
+            {trip.cities.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <span className="text-sm text-muted-foreground">
+                  {trip.cities.map(c => c.name).join(' · ')}
+                </span>
+              </div>
+            )}
+
+            {/* Dates */}
+            <div className="flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <span className="text-sm text-muted-foreground">
+                {new Date(trip.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                {' – '}
+                {new Date(trip.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                <span className="ml-1 text-xs">({trip.totalDays}d)</span>
+              </span>
+            </div>
+
+            {/* Participants */}
+            {trip.participants.totalParticipants > 0 && (
+              <div className="flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <span className="text-sm text-muted-foreground">
+                  {trip.participants.totalParticipants} participants
+                </span>
+              </div>
+            )}
+
+            {/* Cost — pushed to the right */}
+            <div className="ml-auto">
+              <span className="text-base font-bold text-foreground">
+                {formatINR(trip.totalCostINR)}
+              </span>
+            </div>
+
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -456,18 +471,27 @@ function TripCards({ trips, onDelete }: { trips: DashboardTrip[]; onDelete: (id:
         >
           <CardContent className="p-5">
             <div className="flex items-start justify-between mb-3">
-              <div className="flex gap-2">
-                <StatusBadge status={trip.status} />
-              </div>
+              <StatusBadge status={trip.status} />
               <div onClick={(e) => e.stopPropagation()}>
                 <TripActions trip={trip} onDelete={onDelete} />
               </div>
             </div>
-            <h3 className="font-semibold text-foreground mb-1 group-hover:text-primary transition-colors">{trip.name}</h3>
+
+            <h3 className="font-semibold text-foreground mb-0.5 group-hover:text-primary transition-colors">
+              {trip.name}
+            </h3>
             <p className="text-sm text-muted-foreground mb-3">{trip.institution}</p>
-            
-            <div className="flex gap-2 mb-3">
-              <Badge variant="outline" className="text-xs capitalize">
+
+            <div className="flex gap-1.5 mb-3 flex-wrap">
+              <Badge
+                variant="secondary"
+                className={cn(
+                  'text-xs capitalize',
+                  trip.tripCategory === 'international'
+                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                    : 'bg-green-50 text-green-700 border-green-200'
+                )}
+              >
                 {trip.tripCategory}
               </Badge>
               <Badge variant="outline" className="text-xs capitalize">
@@ -475,39 +499,33 @@ function TripCards({ trips, onDelete }: { trips: DashboardTrip[]; onDelete: (id:
               </Badge>
             </div>
 
-            <div className="space-y-2 text-sm">
-              {/* CHANGED: Display countries */}
+            <div className="space-y-1.5 text-sm">
               {trip.countries.length > 0 && (
-                <div className="flex items-start gap-2 text-muted-foreground">
-                  <Globe className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <div className="flex flex-wrap gap-1">
-                    {trip.countries.map((country, idx) => (
-                      <span key={idx}>{country}{idx < trip.countries.length - 1 ? ',' : ''}</span>
-                    ))}
-                  </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Globe className="w-3.5 h-3.5 shrink-0" />
+                  <span className="font-medium text-foreground">{trip.countries.join(', ')}</span>
                 </div>
               )}
-              {/* Cities */}
               {trip.cities.length > 0 && (
-                <div className="flex items-start gap-2 text-muted-foreground">
-                  <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <div className="flex flex-wrap gap-1">
-                    {trip.cities.map((city, idx) => (
-                      <span key={idx}>{city}{idx < trip.cities.length - 1 ? ',' : ''}</span>
-                    ))}
-                  </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <MapPin className="w-3.5 h-3.5 shrink-0" />
+                  <span>{trip.cities.map(c => c.name).join(' · ')}</span>
                 </div>
               )}
               <div className="flex items-center gap-2 text-muted-foreground">
-                <Calendar className="w-4 h-4" />
-                <span>{trip.totalDays} days • {new Date(trip.startDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}</span>
+                <Calendar className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  {trip.totalDays} days •{' '}
+                  {new Date(trip.startDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                </span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
-                <Users className="w-4 h-4" />
+                <Users className="w-3.5 h-3.5 shrink-0" />
                 <span>{trip.participants.totalParticipants} participants</span>
               </div>
             </div>
-            <div className="mt-4 pt-4 border-t flex items-center justify-between">
+
+            <div className="mt-4 pt-3 border-t flex items-center justify-between">
               <span className="text-xs text-muted-foreground">Total Cost</span>
               <span className="font-bold text-lg text-foreground">{formatINR(trip.totalCostINR)}</span>
             </div>
@@ -541,8 +559,8 @@ function TripActions({ trip, onDelete }: { trip: DashboardTrip; onDelete: (id: s
         <DropdownMenuItem>
           <FileDown className="w-4 h-4 mr-2" /> Export PDF
         </DropdownMenuItem>
-        <DropdownMenuItem 
-          onClick={() => onDelete(trip.id, trip.name)} 
+        <DropdownMenuItem
+          onClick={() => onDelete(trip.id, trip.name)}
           className="text-destructive focus:text-destructive"
         >
           <Trash2 className="w-4 h-4 mr-2" /> Delete

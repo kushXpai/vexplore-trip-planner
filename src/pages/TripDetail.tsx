@@ -142,8 +142,12 @@ export default function TripDetail() {
 
           countries: data.countries || [],
 
-          // NEW: Multi-city support
-          cities: data.cities || [],
+          // Multi-city support with dates
+          cities: (data.cities || []).map((c: any) =>
+            typeof c === 'string'
+              ? { name: c, fromDate: data.start_date, toDate: data.end_date }
+              : { name: c.name, fromDate: c.fromDate, toDate: c.toDate }
+          ),
 
           startDate: data.start_date,
           endDate: data.end_date,
@@ -327,6 +331,8 @@ export default function TripDetail() {
           gstAmount: data.gst_amount ?? 0,
           tcsPercentage: data.tcs_percentage ?? 5,
           tcsAmount: data.tcs_amount ?? 0,
+          tdsPercentage: data.tds_percentage ?? 0,
+          tdsAmount: data.tds_amount ?? 0,
 
           grandTotal: data.grand_total ?? 0,
           grandTotalINR: data.grand_total_inr ?? 0,
@@ -731,13 +737,18 @@ export default function TripDetail() {
                     ))}
                   </div>
                 )}
-                {/* Cities */}
+                {/* Cities with dates */}
                 {trip.cities && trip.cities.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
+                  <div className="flex flex-col gap-1 mt-1">
                     {trip.cities.map((city, idx) => (
-                      <Badge key={idx} variant="outline" className="text-xs">
-                        {city}
-                      </Badge>
+                      <div key={idx} className="flex items-center gap-2 text-xs">
+                        <Badge variant="outline">{city.name}</Badge>
+                        <span className="text-muted-foreground">
+                          {new Date(city.fromDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                          {' – '}
+                          {new Date(city.toDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -1552,6 +1563,19 @@ function CostSummarySection({ trip }: { trip: Trip }) {
                 <span className="font-medium">TCS ({trip.tcsPercentage}% on Subtotal + GST)</span>
               </div>
               <span className="font-semibold">{formatINR(trip.tcsAmount)}</span>
+            </div>
+          )}
+
+          {/* TDS (FTI trips only) */}
+          {trip.tripType === 'fti' && trip.tdsAmount > 0 && (
+            <div className="flex justify-between items-center text-sm">
+              <div className="flex items-center gap-2">
+                <BadgePercent className="w-4 h-4 text-primary" />
+                <span className="font-medium">
+                  TDS ({trip.tdsPercentage}% deducted{trip.tripCategory === 'international' ? ' on Subtotal + GST + TCS' : ' on Subtotal + GST'})
+                </span>
+              </div>
+              <span className="font-semibold text-destructive">- {formatINR(trip.tdsAmount)}</span>
             </div>
           )}
 

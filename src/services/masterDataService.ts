@@ -147,6 +147,25 @@ export const getCurrentTCSRate = async (): Promise<number> => {
   return data?.rate_percentage ?? 5;
 };
 
+/**
+ * Get current TDS rate from database
+ */
+export const getCurrentTDSRate = async (): Promise<number> => {
+  const { data, error } = await supabase
+    .from('tax_rates')
+    .select('rate_percentage')
+    .eq('rate_type', 'tds')
+    .eq('is_current', true)
+    .single();
+
+  if (error) {
+    console.error('Error fetching current TDS rate:', error);
+    return 2; // Fallback to 2%
+  }
+
+  return data?.rate_percentage ?? 2;
+};
+
 // Helper functions
 export const getCurrencyRate = (currencies: Currency[], code: string): number => {
   const currency = currencies.find(c => c.code === code);
@@ -217,33 +236,45 @@ export const calculateGrandTotal = async (
   subtotal: number,
   profit: number,
   isInternational: boolean,
+  isFTI: boolean = false,
   gstPercentage?: number,
-  tcsPercentage?: number
+  tcsPercentage?: number,
+  tdsPercentage?: number
 ): Promise<{
   subtotal: number;
   profit: number;
   adminSubtotal: number;
   gstAmount: number;
   tcsAmount: number;
+  tdsAmount: number;
   grandTotal: number;
   gstPercentage: number;
   tcsPercentage: number;
+  tdsPercentage: number;
 }> => {
   // Fetch current rates from database if not provided
   const actualGstPercentage = gstPercentage ?? await getCurrentGSTRate();
   const actualTcsPercentage = tcsPercentage ?? await getCurrentTCSRate();
+  const actualTdsPercentage = tdsPercentage ?? (isFTI ? await getCurrentTDSRate() : 0);
 
   // Admin subtotal = base subtotal + profit
   const adminSubtotal = subtotal + profit;
-  
-  // Calculate GST on admin subtotal (subtotal + profit)
+
+  // Calculate GST on admin subtotal
   const gstAmount = calculateGST(adminSubtotal, actualGstPercentage);
   const subtotalPlusGST = adminSubtotal + gstAmount;
-  
+
   // TCS only applies to international trips
   const tcsAmount = isInternational ? calculateTCS(subtotalPlusGST, actualTcsPercentage) : 0;
-  
-  const grandTotal = subtotalPlusGST + tcsAmount;
+  const subtotalPlusGSTPlusTCS = subtotalPlusGST + tcsAmount;
+
+  // TDS only applies to FTI trips (deducted at end)
+  // Domestic FTI: TDS on (subtotal + GST)
+  // International FTI: TDS on (subtotal + GST + TCS)
+  const tdsBaseAmount = isFTI ? subtotalPlusGSTPlusTCS : 0;
+  const tdsAmount = isFTI ? (tdsBaseAmount * actualTdsPercentage) / 100 : 0;
+
+  const grandTotal = subtotalPlusGSTPlusTCS - tdsAmount;
 
   return {
     subtotal,
@@ -251,8 +282,10 @@ export const calculateGrandTotal = async (
     adminSubtotal,
     gstAmount,
     tcsAmount,
+    tdsAmount,
     grandTotal,
     gstPercentage: actualGstPercentage,
     tcsPercentage: actualTcsPercentage,
+    tdsPercentage: actualTdsPercentage,
   };
 };
