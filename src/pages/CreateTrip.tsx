@@ -16,7 +16,7 @@ import {
   fetchCities,
   fetchCurrencies,
   fetchCitiesByCountry,
-  fetchHotelsByCity,
+  fetchHotels,
   addHotel,
   getCurrencyRate as getCurrencyRateHelper,
   getCountryCurrency as getCountryCurrencyHelper,
@@ -146,10 +146,11 @@ export default function CreateTrip() {
     const loadMasterData = async () => {
       setIsLoadingMasterData(true);
       try {
-        const [countriesResult, citiesResult, currenciesResult] = await Promise.all([
+        const [countriesResult, citiesResult, currenciesResult, hotelsResult] = await Promise.all([
           fetchCountries(),
           fetchCities(),
-          fetchCurrencies()
+          fetchCurrencies(),
+          fetchHotels()
         ]);
 
         if (countriesResult.success && countriesResult.data) {
@@ -162,6 +163,10 @@ export default function CreateTrip() {
 
         if (currenciesResult.success && currenciesResult.data) {
           setCurrencies(currenciesResult.data);
+        }
+
+        if (hotelsResult.success && hotelsResult.data) {
+          setHotelsMasterList(hotelsResult.data);
         }
       } catch (error) {
         console.error('Error loading master data:', error);
@@ -451,10 +456,12 @@ export default function CreateTrip() {
   };
 
   const removeCity = (cityName: string) => {
-    setFormData(prev => ({
-      ...prev,
-      cities: prev.cities.filter(c => c.name !== cityName)
-    }));
+    setFormData(prev => {
+      const updated = prev.cities.filter(c => c.name !== cityName);
+      const startDate = updated[0]?.fromDate || '';
+      const endDate = updated[updated.length - 1]?.toDate || '';
+      return { ...prev, cities: updated, startDate, endDate };
+    });
   };
 
   const updateCityDate = (cityName: string, field: 'fromDate' | 'toDate', value: string) => {
@@ -462,9 +469,9 @@ export default function CreateTrip() {
       const updated = prev.cities.map(c =>
         c.name === cityName ? { ...c, [field]: value } : c
       );
-      // Auto-derive trip start/end from first and last city dates
-      const startDate = updated[0]?.fromDate || prev.startDate;
-      const endDate = updated[updated.length - 1]?.toDate || prev.endDate;
+      // Trip start = first city fromDate, Trip end = last city toDate
+      const startDate = updated[0]?.fromDate || '';
+      const endDate = updated[updated.length - 1]?.toDate || '';
       return { ...prev, cities: updated, startDate, endDate };
     });
   };
@@ -1264,26 +1271,19 @@ export default function CreateTrip() {
             </div>
           </div>
 
-          {/* Row 2: Start Date + End Date */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Start Date *</Label>
-              <Input
-                type="date"
-                value={formData.startDate}
-                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-              />
+          {/* Row 2: Trip dates — auto-derived from city itinerary */}
+          {formData.startDate && formData.endDate && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Start Date</Label>
+                <Input type="date" value={formData.startDate} readOnly className="bg-muted cursor-not-allowed" />
+              </div>
+              <div className="space-y-2">
+                <Label>End Date</Label>
+                <Input type="date" value={formData.endDate} readOnly className="bg-muted cursor-not-allowed" />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>End Date *</Label>
-              <Input
-                type="date"
-                value={formData.endDate}
-                min={formData.startDate}
-                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-              />
-            </div>
-          </div>
+          )}
 
           {/* Row 3: Itinerary */}
           <div className="space-y-2">
@@ -1316,8 +1316,7 @@ export default function CreateTrip() {
                           type="date"
                           className="h-7 text-xs"
                           value={city.fromDate}
-                          min={formData.startDate || undefined}
-                          max={city.toDate || formData.endDate || undefined}
+                          max={city.toDate || undefined}
                           onChange={(e) => updateCityDate(city.name, 'fromDate', e.target.value)}
                         />
                       </div>
@@ -1326,8 +1325,7 @@ export default function CreateTrip() {
                           type="date"
                           className="h-7 text-xs"
                           value={city.toDate}
-                          min={city.fromDate || formData.startDate || undefined}
-                          max={formData.endDate || undefined}
+                          min={city.fromDate || undefined}
                           onChange={(e) => updateCityDate(city.name, 'toDate', e.target.value)}
                         />
                       </div>
@@ -2117,18 +2115,6 @@ export default function CreateTrip() {
                       onValueChange={(v) => {
                         updateAccommodation(index, 'city', v);
                         updateAccommodation(index, 'hotelName', '');
-                        // Fetch hotels for this city
-                        const cityObj = cities.find(c => c.name === v);
-                        if (cityObj) {
-                          fetchHotelsByCity(cityObj.id).then(res => {
-                            if (res.success && res.data) {
-                              setHotelsMasterList(prev => {
-                                const withoutThisCity = prev.filter(h => h.cityid !== cityObj.id);
-                                return [...withoutThisCity, ...res.data!];
-                              });
-                            }
-                          });
-                        }
                       }}
                     >
                       <SelectTrigger>
