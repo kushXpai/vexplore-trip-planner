@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import {
   fetchCountries,
   fetchCities,
@@ -118,8 +119,11 @@ export default function CreateTrip() {
 
   // Hotel state for accommodation
   const [hotelsMasterList, setHotelsMasterList] = useState<Hotel[]>([]);
-  const [isAddingHotelInline, setIsAddingHotelInline] = useState<{ [accIndex: number]: boolean }>({});
-  const [inlineNewHotel, setInlineNewHotel] = useState<{ [accIndex: number]: { hotelname: string; remarks: string } }>({});
+  // Add Hotel Dialog state
+  const [addHotelDialogOpen, setAddHotelDialogOpen] = useState(false);
+  const [addHotelDialogAccIndex, setAddHotelDialogAccIndex] = useState<number | null>(null);
+  const [addHotelDialogForm, setAddHotelDialogForm] = useState({ hotelname: '', breakfastincluded: false, remarks: '' });
+  const [isSavingNewHotel, setIsSavingNewHotel] = useState(false);
 
   // NEW: Cost optimization toggle state
   const [optimizeRoomsByCost, setOptimizeRoomsByCost] = useState(false);
@@ -1467,10 +1471,10 @@ export default function CreateTrip() {
                     <p className="text-xs text-muted-foreground">Total Participants</p>
                     <p className="text-lg font-bold">{calculateTotalCommercial()}</p>
                   </div>
-                  <div className="p-4 bg-primary/5 rounded-lg">
+                  {/* <div className="p-4 bg-primary/5 rounded-lg">
                     <p className="text-sm text-muted-foreground">Total Billable</p>
                     <p className="text-2xl font-bold text-primary">{calculateBillableParticipants()}</p>
-                  </div>
+                  </div> */}
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4 pt-4 border-t">
@@ -1601,7 +1605,7 @@ export default function CreateTrip() {
           ) : (
             // Commercial Trip Participants
             <>
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Male Participants</Label>
                   <Input
@@ -1627,10 +1631,10 @@ export default function CreateTrip() {
                     <p className="text-xs text-muted-foreground">Total Participants</p>
                     <p className="text-lg font-bold">{calculateTotalCommercial()}</p>
                   </div>
-                  <div className="p-4 bg-primary/5 rounded-lg">
+                  {/* <div className="p-4 bg-primary/5 rounded-lg">
                     <p className="text-sm text-muted-foreground">Total Billable</p>
                     <p className="text-2xl font-bold text-primary">{calculateBillableParticipants()}</p>
-                  </div>
+                  </div> */}
                 </div>
               </div>
 
@@ -1680,10 +1684,10 @@ export default function CreateTrip() {
                 <p className="text-sm text-muted-foreground">Total Participants</p>
                 <p className="text-2xl font-bold text-primary">{calculateTotalParticipants()}</p>
               </div>
-              {/* <div className="p-4 bg-primary/5 rounded-lg">
+              <div className="p-4 bg-primary/5 rounded-lg">
                 <p className="text-sm text-muted-foreground">Total Billable</p>
                 <p className="text-2xl font-bold text-primary">{calculateBillableParticipants()}</p>
-              </div> */}
+              </div>
             </div>
           </div>
         </CardContent>
@@ -2146,77 +2150,22 @@ export default function CreateTrip() {
                       const hotelsForCity = cityObj
                         ? hotelsMasterList.filter(h => h.cityid === cityObj.id)
                         : [];
-                      const isAddingInline = isAddingHotelInline[index];
-
-                      if (isAddingInline) {
-                        return (
-                          <div className="space-y-2">
-                            <Input
-                              placeholder="New hotel name *"
-                              value={inlineNewHotel[index]?.hotelname || ''}
-                              onChange={(e) => setInlineNewHotel(prev => ({
-                                ...prev,
-                                [index]: { ...prev[index], hotelname: e.target.value }
-                              }))}
-                            />
-                            <Input
-                              placeholder="Remarks (optional)"
-                              value={inlineNewHotel[index]?.remarks || ''}
-                              onChange={(e) => setInlineNewHotel(prev => ({
-                                ...prev,
-                                [index]: { ...prev[index], remarks: e.target.value }
-                              }))}
-                            />
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                onClick={async () => {
-                                  const name = inlineNewHotel[index]?.hotelname?.trim();
-                                  if (!name) { toast.error('Hotel name is required'); return; }
-                                  const cityObj2 = cities.find(c => c.name === accommodation.city);
-                                  const countryId = cityObj2
-                                    ? countries.find(co => co.id === cityObj2.country_id)?.id
-                                    : undefined;
-                                  const result = await addHotel({
-                                    hotelname: name,
-                                    cityid: cityObj2?.id,
-                                    countryid: countryId,
-                                    remarks: inlineNewHotel[index]?.remarks || '',
-                                  });
-                                  if (result.success && result.data) {
-                                    setHotelsMasterList(prev => [...prev, result.data!]);
-                                    updateAccommodation(index, 'hotelName', result.data!.hotelname);
-                                    toast.success('Hotel added to master list');
-                                  } else {
-                                    toast.error('Failed to add hotel');
-                                  }
-                                  setIsAddingHotelInline(prev => ({ ...prev, [index]: false }));
-                                  setInlineNewHotel(prev => ({ ...prev, [index]: { hotelname: '', remarks: '' } }));
-                                }}
-                              >
-                                Save Hotel
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setIsAddingHotelInline(prev => ({ ...prev, [index]: false }))}
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      }
-
                       return (
                         <div className="space-y-2">
                           <Select
                             value={accommodation.hotelName}
-                            onValueChange={(v) => updateAccommodation(index, 'hotelName', v)}
+                            onValueChange={(v) => {
+                              updateAccommodation(index, 'hotelName', v);
+                              // Auto-set breakfast from master data
+                              const selectedHotel = hotelsMasterList.find(h => h.hotelname === v);
+                              if (selectedHotel?.breakfastincluded) {
+                                updateAccommodation(index, 'breakfastIncluded', true);
+                              }
+                            }}
                             disabled={!accommodation.city}
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder={!accommodation.city ? 'Select city first' : hotelsForCity.length === 0 ? 'No hotels — add one below' : 'Select hotel'} />
+                              <SelectValue placeholder={!accommodation.city ? 'Select city first' : hotelsForCity.length === 0 ? 'No hotels — add one' : 'Select hotel'} />
                             </SelectTrigger>
                             <SelectContent className="bg-popover">
                               {hotelsForCity.map(h => (
@@ -2231,8 +2180,9 @@ export default function CreateTrip() {
                               type="button"
                               className="text-xs text-muted-foreground underline hover:text-primary"
                               onClick={() => {
-                                setIsAddingHotelInline(prev => ({ ...prev, [index]: true }));
-                                setInlineNewHotel(prev => ({ ...prev, [index]: { hotelname: '', remarks: '' } }));
+                                setAddHotelDialogAccIndex(index);
+                                setAddHotelDialogForm({ hotelname: '', breakfastincluded: false, remarks: '' });
+                                setAddHotelDialogOpen(true);
                               }}
                             >
                               {hotelsForCity.length === 0
@@ -3275,6 +3225,95 @@ export default function CreateTrip() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Add Hotel Dialog */}
+      <Dialog open={addHotelDialogOpen} onOpenChange={(open) => { if (!open) setAddHotelDialogOpen(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Hotel to Master List</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Hotel Name *</Label>
+              <Input
+                placeholder="e.g., Taj Mahal Palace"
+                value={addHotelDialogForm.hotelname}
+                onChange={(e) => setAddHotelDialogForm(prev => ({ ...prev, hotelname: e.target.value }))}
+                autoFocus
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="dialogBreakfast"
+                checked={addHotelDialogForm.breakfastincluded}
+                onChange={(e) => setAddHotelDialogForm(prev => ({ ...prev, breakfastincluded: e.target.checked }))}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="dialogBreakfast">Breakfast Included</Label>
+            </div>
+            <div className="space-y-2">
+              <Label>Remarks (optional)</Label>
+              <Input
+                placeholder="e.g., Beachfront, city center..."
+                value={addHotelDialogForm.remarks}
+                onChange={(e) => setAddHotelDialogForm(prev => ({ ...prev, remarks: e.target.value }))}
+              />
+            </div>
+            {addHotelDialogAccIndex !== null && (() => {
+              const acc = accommodations[addHotelDialogAccIndex];
+              const cityObj = cities.find(c => c.name === acc?.city);
+              const countryObj = cityObj ? countries.find(co => co.id === cityObj.country_id) : null;
+              return acc?.city ? (
+                <p className="text-sm text-muted-foreground bg-muted px-3 py-2 rounded-md">
+                  📍 Will be added for <strong>{acc.city}</strong>{countryObj ? `, ${countryObj.name}` : ''}
+                </p>
+              ) : null;
+            })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddHotelDialogOpen(false)} disabled={isSavingNewHotel}>
+              Cancel
+            </Button>
+            <Button
+              className="gradient-primary text-primary-foreground"
+              disabled={isSavingNewHotel || !addHotelDialogForm.hotelname.trim()}
+              onClick={async () => {
+                const name = addHotelDialogForm.hotelname.trim();
+                if (!name) { toast.error('Hotel name is required'); return; }
+                if (addHotelDialogAccIndex === null) return;
+                const acc = accommodations[addHotelDialogAccIndex];
+                const cityObj = cities.find(c => c.name === acc?.city);
+                const countryId = cityObj ? countries.find(co => co.id === cityObj.country_id)?.id : undefined;
+                setIsSavingNewHotel(true);
+                const result = await addHotel({
+                  hotelname: name,
+                  cityid: cityObj?.id,
+                  countryid: countryId,
+                  breakfastincluded: addHotelDialogForm.breakfastincluded,
+                  remarks: addHotelDialogForm.remarks || undefined,
+                });
+                setIsSavingNewHotel(false);
+                if (result.success && result.data) {
+                  setHotelsMasterList(prev => [...prev, result.data!]);
+                  updateAccommodation(addHotelDialogAccIndex, 'hotelName', result.data!.hotelname);
+                  if (addHotelDialogForm.breakfastincluded) {
+                    updateAccommodation(addHotelDialogAccIndex, 'breakfastIncluded', true);
+                  }
+                  toast.success('Hotel added to master list');
+                  setAddHotelDialogOpen(false);
+                } else {
+                  toast.error('Failed to add hotel');
+                }
+              }}
+            >
+              {isSavingNewHotel ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</>
+              ) : 'Add Hotel'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Save Button */}
       <div className="flex justify-end gap-4 pt-4">
