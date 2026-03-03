@@ -409,8 +409,11 @@ export default function CreateTrip() {
       const totalFaculty = formData.maleFaculty + formData.femaleFaculty;
       const totalVXplorers = formData.maleVXplorers + formData.femaleVXplorers;
       return totalStudents + totalFaculty + totalVXplorers;
+    } else if (tripType === 'fti') {
+      // FTI: only Male + Female + Kids, no VXplorers
+      return formData.maleCount + formData.femaleCount + formData.otherCount;
     } else {
-      // Commercial and FTI trips use same participant fields
+      // Commercial trips include VXplorers
       const totalCommercial = formData.maleCount + formData.femaleCount + formData.otherCount;
       const totalVXplorers = formData.commercialMaleVXplorers + formData.commercialFemaleVXplorers;
       return totalCommercial + totalVXplorers;
@@ -1172,7 +1175,7 @@ export default function CreateTrip() {
           commercialFemaleVXplorers: tripType === 'fti' ? 0 : formData.commercialFemaleVXplorers,
           totalStudents: calculateTotalStudents(),
           totalFaculty: calculateTotalFaculty(),
-          totalVXplorers: formData.maleVXplorers + formData.femaleVXplorers + formData.commercialMaleVXplorers + formData.commercialFemaleVXplorers,  // UPDATED
+          totalVXplorers: tripType === 'fti' ? 0 : (formData.maleVXplorers + formData.femaleVXplorers + formData.commercialMaleVXplorers + formData.commercialFemaleVXplorers),
           totalCommercial: calculateTotalCommercial(),
           totalParticipants,
         },
@@ -1708,40 +1711,6 @@ export default function CreateTrip() {
                     <p className="text-sm text-muted-foreground">Total Billable</p>
                     <p className="text-2xl font-bold text-primary">{calculateBillableParticipants()}</p>
                   </div> */}
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-4 pt-4 border-t">
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Heart className="w-4 h-4 text-primary" />
-                    Male VXplorers
-                  </Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={formData.commercialMaleVXplorers || ''}
-                    onChange={(e) => setFormData({ ...formData, commercialMaleVXplorers: parseInt(e.target.value) || 0 })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Heart className="w-4 h-4 text-primary" />
-                    Female VXplorers
-                  </Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={formData.commercialFemaleVXplorers || ''}
-                    onChange={(e) => setFormData({ ...formData, commercialFemaleVXplorers: parseInt(e.target.value) || 0 })}
-                  />
-                </div>
-                <div className="space-y-2 flex flex-col justify-end">
-                  <div className="p-3 bg-muted rounded-lg">
-                    <p className="text-xs text-muted-foreground">Total VXplorers</p>
-                    <p className="text-lg font-bold">{formData.commercialMaleVXplorers + formData.commercialFemaleVXplorers}</p>
-                  </div>
                 </div>
               </div>
             </>
