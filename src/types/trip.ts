@@ -56,7 +56,7 @@ export interface Trip {
   participants: Participants;
   transport: Transport;
   accommodation: Accommodation[];
-  meals: Meals;
+  meals: HotelMeal[];
   activities: Activity[];
   overheads: Overhead[];
   
@@ -254,9 +254,28 @@ export interface RoomTypeBreakdown {
 }
 
 /* =========================
-   Meals
+   Meals (Hotel-wise)
 ========================= */
 
+export interface HotelMeal {
+  id?: string;
+  accommodationId: string;
+  hotelName: string;
+  city: string;
+  numberOfNights: number;
+  breakfastCostPerPerson: number;
+  lunchCostPerPerson: number;
+  dinnerCostPerPerson: number;
+  freeBreakfast: number;
+  freeLunch: number;
+  freeDinner: number;
+  currency: string;
+  totalParticipants: number;
+  totalCost: number;
+  totalCostINR: number;
+}
+
+// Keep legacy Meals type for any backward-compat references
 export interface Meals {
   breakfastCostPerPerson: number;
   lunchCostPerPerson: number;

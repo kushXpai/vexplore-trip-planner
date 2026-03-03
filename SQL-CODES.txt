@@ -156,17 +156,24 @@ CREATE TABLE public.trip_flights (
   CONSTRAINT trip_flights_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
 );
 CREATE TABLE public.trip_meals (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
   trip_id uuid NOT NULL,
+  accommodation_id text NOT NULL,
+  hotel_name text NOT NULL,
+  city text NOT NULL,
+  number_of_nights integer NOT NULL DEFAULT 1 CHECK (number_of_nights > 0),
   breakfast_cost_per_person numeric NOT NULL DEFAULT 0 CHECK (breakfast_cost_per_person >= 0::numeric),
   lunch_cost_per_person numeric NOT NULL DEFAULT 0 CHECK (lunch_cost_per_person >= 0::numeric),
   dinner_cost_per_person numeric NOT NULL DEFAULT 0 CHECK (dinner_cost_per_person >= 0::numeric),
-  currency text NOT NULL,
-  total_days integer NOT NULL DEFAULT 1 CHECK (total_days > 0),
+  free_breakfast integer NOT NULL DEFAULT 0 CHECK (free_breakfast >= 0),
+  free_lunch integer NOT NULL DEFAULT 0 CHECK (free_lunch >= 0),
+  free_dinner integer NOT NULL DEFAULT 0 CHECK (free_dinner >= 0),
+  currency text NOT NULL DEFAULT 'INR'::text,
   total_participants integer NOT NULL DEFAULT 0,
-  daily_cost_per_person numeric NOT NULL DEFAULT 0,
   total_cost numeric NOT NULL DEFAULT 0,
   total_cost_inr numeric NOT NULL DEFAULT 0,
-  CONSTRAINT trip_meals_pkey PRIMARY KEY (trip_id),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT trip_meals_pkey PRIMARY KEY (id),
   CONSTRAINT trip_meals_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
 );
 CREATE TABLE public.trip_overheads (

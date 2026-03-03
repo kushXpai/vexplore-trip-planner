@@ -187,13 +187,36 @@ interface DbActivity {
 
 interface DbMeals {
   trip_id: string;
+  accommodation_id: string;
+  hotel_name: string;
+  city: string;
+  number_of_nights: number;
   breakfast_cost_per_person: number;
   lunch_cost_per_person: number;
   dinner_cost_per_person: number;
+  free_breakfast: number;
+  free_lunch: number;
+  free_dinner: number;
   currency: string;
-  total_days: number;
   total_participants: number;
-  daily_cost_per_person: number;
+  total_cost: number;
+  total_cost_inr: number;
+}
+
+// Frontend shape for a single hotel meal row (as sent from CreateTrip)
+interface HotelMealInput {
+  accommodation_id: string;
+  hotel_name: string;
+  city: string;
+  number_of_nights: number;
+  breakfast_cost_per_person: number;
+  lunch_cost_per_person: number;
+  dinner_cost_per_person: number;
+  free_breakfast: number;
+  free_lunch: number;
+  free_dinner: number;
+  currency: string;
+  total_participants: number;
   total_cost: number;
   total_cost_inr: number;
 }
@@ -237,28 +260,18 @@ export async function createTrip(tripData: {
   // Accommodation
   accommodations: Accommodation[];
   
-  // Meals
-  meals: {
-    breakfastCostPerPerson: number;
-    lunchCostPerPerson: number;
-    dinnerCostPerPerson: number;
-    currency: string;
-    totalDays: number;
-    totalParticipants: number;
-    dailyCostPerPerson: number;
-    totalCost: number;
-    totalCostINR: number;
-  };
-  
+  // Meals (hotel-wise array)
+  meals: HotelMealInput[];
+
   // Activities
   activities: Activity[];
-  
+
   // Overheads
   overheads: Overhead[];
-  
-  // NEW: Extras (visa, tips, insurance)
+
+  // Extras (visa, tips, insurance)
   extras?: TripExtras;
-  
+
   // Costs
   subtotalBeforeTax: number;
   profit: number;
@@ -437,25 +450,32 @@ export async function createTrip(tripData: {
       if (accommodationsError) throw accommodationsError;
     }
 
-    // 7. Create meals
-    const dbMeals: DbMeals = {
-      trip_id: tripId,
-      breakfast_cost_per_person: tripData.meals.breakfastCostPerPerson,
-      lunch_cost_per_person: tripData.meals.lunchCostPerPerson,
-      dinner_cost_per_person: tripData.meals.dinnerCostPerPerson,
-      currency: tripData.meals.currency,
-      total_days: tripData.meals.totalDays,
-      total_participants: tripData.meals.totalParticipants,
-      daily_cost_per_person: tripData.meals.dailyCostPerPerson,
-      total_cost: tripData.meals.totalCost,
-      total_cost_inr: tripData.meals.totalCostINR,
-    };
+    // 7. Create meals (hotel-wise — one row per accommodation)
+    if (tripData.meals && tripData.meals.length > 0) {
+      const dbMealsRows: DbMeals[] = tripData.meals.map(m => ({
+        trip_id: tripId,
+        accommodation_id: m.accommodation_id,
+        hotel_name: m.hotel_name,
+        city: m.city,
+        number_of_nights: m.number_of_nights,
+        breakfast_cost_per_person: m.breakfast_cost_per_person,
+        lunch_cost_per_person: m.lunch_cost_per_person,
+        dinner_cost_per_person: m.dinner_cost_per_person,
+        free_breakfast: m.free_breakfast,
+        free_lunch: m.free_lunch,
+        free_dinner: m.free_dinner,
+        currency: m.currency,
+        total_participants: m.total_participants,
+        total_cost: m.total_cost,
+        total_cost_inr: m.total_cost_inr,
+      }));
 
-    const { error: mealsError } = await supabase
-      .from('trip_meals')
-      .insert(dbMeals);
+      const { error: mealsError } = await supabase
+        .from('trip_meals')
+        .insert(dbMealsRows);
 
-    if (mealsError) throw mealsError;
+      if (mealsError) throw mealsError;
+    }
 
     // NEW: 7.5. Create extras (visa, tips, insurance)
     if (tripData.extras) {
@@ -561,18 +581,8 @@ export async function updateTrip(tripId: string, tripData: {
   // Accommodation
   accommodations: Accommodation[];
   
-  // Meals
-  meals: {
-    breakfastCostPerPerson: number;
-    lunchCostPerPerson: number;
-    dinnerCostPerPerson: number;
-    currency: string;
-    totalDays: number;
-    totalParticipants: number;
-    dailyCostPerPerson: number;
-    totalCost: number;
-    totalCostINR: number;
-  };
+  // Meals (hotel-wise array)
+  meals: HotelMealInput[];
   
   // Activities
   activities: Activity[];
@@ -733,25 +743,34 @@ export async function updateTrip(tripId: string, tripData: {
       await supabase.from('trip_accommodations').insert(dbAccommodations);
     }
 
-    // 8. Update meals (upsert)
-    const dbMeals: DbMeals = {
-      trip_id: tripId,
-      breakfast_cost_per_person: tripData.meals.breakfastCostPerPerson,
-      lunch_cost_per_person: tripData.meals.lunchCostPerPerson,
-      dinner_cost_per_person: tripData.meals.dinnerCostPerPerson,
-      currency: tripData.meals.currency,
-      total_days: tripData.meals.totalDays,
-      total_participants: tripData.meals.totalParticipants,
-      daily_cost_per_person: tripData.meals.dailyCostPerPerson,
-      total_cost: tripData.meals.totalCost,
-      total_cost_inr: tripData.meals.totalCostINR,
-    };
+    // 8. Update meals (hotel-wise — delete all then re-insert)
+    await supabase.from('trip_meals').delete().eq('trip_id', tripId);
 
-    const { error: mealsError } = await supabase
-      .from('trip_meals')
-      .upsert(dbMeals, { onConflict: 'trip_id' });
+    if (tripData.meals && tripData.meals.length > 0) {
+      const dbMealsRows: DbMeals[] = tripData.meals.map(m => ({
+        trip_id: tripId,
+        accommodation_id: m.accommodation_id,
+        hotel_name: m.hotel_name,
+        city: m.city,
+        number_of_nights: m.number_of_nights,
+        breakfast_cost_per_person: m.breakfast_cost_per_person,
+        lunch_cost_per_person: m.lunch_cost_per_person,
+        dinner_cost_per_person: m.dinner_cost_per_person,
+        free_breakfast: m.free_breakfast,
+        free_lunch: m.free_lunch,
+        free_dinner: m.free_dinner,
+        currency: m.currency,
+        total_participants: m.total_participants,
+        total_cost: m.total_cost,
+        total_cost_inr: m.total_cost_inr,
+      }));
 
-    if (mealsError) throw mealsError;
+      const { error: mealsError } = await supabase
+        .from('trip_meals')
+        .insert(dbMealsRows);
+
+      if (mealsError) throw mealsError;
+    }
 
     // NEW: 8.5. Update or insert extras (upsert like meals)
     if (tripData.extras) {
@@ -887,12 +906,12 @@ export async function getTripById(tripId: string) {
 
     if (accommodationsError) throw accommodationsError;
 
-    // Fetch meals
+    // Fetch meals (hotel-wise array)
     const { data: meals, error: mealsError } = await supabase
       .from('trip_meals')
       .select('*')
       .eq('trip_id', tripId)
-      .single();
+      .order('created_at');
 
     if (mealsError && mealsError.code !== 'PGRST116') throw mealsError;
 

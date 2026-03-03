@@ -86,12 +86,16 @@ export default function CreateTrip() {
   const [buses, setBuses] = useState<BusType[]>([]);
   const [trains, setTrains] = useState<TrainType[]>([]);
   const [accommodations, setAccommodations] = useState<Accommodation[]>([]);
-  const [meals, setMeals] = useState({
-    breakfastCostPerPerson: 0,
-    lunchCostPerPerson: 0,
-    dinnerCostPerPerson: 0,
-    currency: 'INR'
-  });
+  // Hotel-wise meals: keyed by accommodation id
+  const [hotelMeals, setHotelMeals] = useState<Record<string, {
+    breakfastCostPerPerson: number;
+    lunchCostPerPerson: number;
+    dinnerCostPerPerson: number;
+    freeBreakfast: number;
+    freeLunch: number;
+    freeDinner: number;
+    currency: string;
+  }>>({});
   const [activities, setActivities] = useState<Activity[]>([]);
   const [overheads, setOverheads] = useState<Overhead[]>([]);
   const [profit, setProfit] = useState(0);
@@ -362,14 +366,23 @@ export default function CreateTrip() {
           totalCostINR: o.total_cost_inr,
         })));
 
-        // Map meals
-        if (dbMeals) {
-          setMeals({
-            breakfastCostPerPerson: dbMeals.breakfast_cost_per_person,
-            lunchCostPerPerson: dbMeals.lunch_cost_per_person,
-            dinnerCostPerPerson: dbMeals.dinner_cost_per_person,
-            currency: dbMeals.currency,
+        // Map meals (hotel-wise)
+        if (dbMeals && Array.isArray(dbMeals)) {
+          const mealsMap: Record<string, any> = {};
+          dbMeals.forEach((m: any) => {
+            mealsMap[m.accommodation_id] = {
+              breakfastCostPerPerson: m.breakfast_cost_per_person,
+              lunchCostPerPerson: m.lunch_cost_per_person,
+              dinnerCostPerPerson: m.dinner_cost_per_person,
+              freeBreakfast: m.free_breakfast ?? 0,
+              freeLunch: m.free_lunch ?? 0,
+              freeDinner: m.free_dinner ?? 0,
+              currency: m.currency,
+            };
           });
+          setHotelMeals(mealsMap);
+        } else if (dbMeals && !Array.isArray(dbMeals)) {
+          // Legacy single-record fallback — ignore, will default to empty
         }
       }
     } catch (error) {
@@ -439,18 +452,51 @@ export default function CreateTrip() {
     return days;
   };
 
-  const calculateMealsCost = () => {
-    const totalParticipants = calculateTotalParticipants();
-    const days = calculateTripDays();
-    const dailyCostPerPerson = meals.breakfastCostPerPerson + meals.lunchCostPerPerson + meals.dinnerCostPerPerson;
-    const totalCost = dailyCostPerPerson * days * totalParticipants;
-    const totalCostINR = totalCost * getCurrencyRate(meals.currency);
-
-    return {
-      dailyCostPerPerson,
-      totalCost,
-      totalCostINR,
+  const getHotelMealDefaults = (accId: string, currency: string) => {
+    return hotelMeals[accId] ?? {
+      breakfastCostPerPerson: 0,
+      lunchCostPerPerson: 0,
+      dinnerCostPerPerson: 0,
+      freeBreakfast: 0,
+      freeLunch: 0,
+      freeDinner: 0,
+      currency,
     };
+  };
+
+  const updateHotelMeal = (accId: string, field: string, value: number | string, currency: string) => {
+    setHotelMeals(prev => ({
+      ...prev,
+      [accId]: {
+        ...getHotelMealDefaults(accId, currency),
+        ...prev[accId],
+        [field]: value,
+      }
+    }));
+  };
+
+  const calculateHotelMealCost = (accId: string, nights: number, totalPax: number, currency: string) => {
+    const m = getHotelMealDefaults(accId, currency);
+    const rate = getCurrencyRate(m.currency);
+    const bfTotal = m.breakfastCostPerPerson * Math.max(0, totalPax - m.freeBreakfast) * nights;
+    const lunchTotal = m.lunchCostPerPerson * Math.max(0, totalPax - m.freeLunch) * nights;
+    const dinnerTotal = m.dinnerCostPerPerson * Math.max(0, totalPax - m.freeDinner) * nights;
+    const totalCost = bfTotal + lunchTotal + dinnerTotal;
+    return {
+      breakfastTotal: bfTotal,
+      lunchTotal,
+      dinnerTotal,
+      totalCost,
+      totalCostINR: totalCost * rate,
+    };
+  };
+
+  const calculateAllMealsCost = () => {
+    const totalPax = calculateTotalParticipants();
+    return accommodations.reduce((sum, acc) => {
+      const { totalCostINR } = calculateHotelMealCost(acc.id, acc.numberOfNights, totalPax, acc.currency);
+      return sum + totalCostINR;
+    }, 0);
   };
 
   // Multi-city functions with dates
@@ -865,8 +911,7 @@ export default function CreateTrip() {
 
     const totalParticipants = calculateTotalParticipants();
     const { days } = calculateTripDuration();
-    const mealsCostPerDay = meals.breakfastCostPerPerson + meals.lunchCostPerPerson + meals.dinnerCostPerPerson;
-    const mealsTotal = mealsCostPerDay * days * totalParticipants * getCurrencyRate(meals.currency);
+    const mealsTotal = calculateAllMealsCost();
 
     const activitiesTotal = activities.reduce((sum, a) => sum + a.totalCostINR, 0);
     const overheadsTotal = overheads.reduce((sum, o) => sum + o.totalCostINR, 0);
@@ -947,7 +992,7 @@ export default function CreateTrip() {
     buses,
     trains,
     accommodations,
-    meals,
+    hotelMeals,
     activities,
     overheads,
     extras,
@@ -1046,17 +1091,27 @@ export default function CreateTrip() {
         trains,
         accommodations,
 
-        meals: {
-          breakfastCostPerPerson: meals.breakfastCostPerPerson,
-          lunchCostPerPerson: meals.lunchCostPerPerson,
-          dinnerCostPerPerson: meals.dinnerCostPerPerson,
-          currency: meals.currency,
-          totalDays: days,
-          totalParticipants,
-          dailyCostPerPerson: meals.breakfastCostPerPerson + meals.lunchCostPerPerson + meals.dinnerCostPerPerson,
-          totalCost: (meals.breakfastCostPerPerson + meals.lunchCostPerPerson + meals.dinnerCostPerPerson) * days * totalParticipants,
-          totalCostINR: totals.meals,
-        },
+        meals: accommodations.map(acc => {
+          const m = getHotelMealDefaults(acc.id, acc.currency);
+          const totalPax = calculateTotalParticipants();
+          const { totalCost, totalCostINR } = calculateHotelMealCost(acc.id, acc.numberOfNights, totalPax, acc.currency);
+          return {
+            accommodation_id: acc.id,
+            hotel_name: acc.hotelName,
+            city: acc.city,
+            number_of_nights: acc.numberOfNights,
+            breakfast_cost_per_person: m.breakfastCostPerPerson,
+            lunch_cost_per_person: m.lunchCostPerPerson,
+            dinner_cost_per_person: m.dinnerCostPerPerson,
+            free_breakfast: m.freeBreakfast,
+            free_lunch: m.freeLunch,
+            free_dinner: m.freeDinner,
+            currency: m.currency,
+            total_participants: totalPax,
+            total_cost: totalCost,
+            total_cost_inr: totalCostINR,
+          };
+        }),
 
         activities,
         overheads,
@@ -2580,69 +2635,148 @@ export default function CreateTrip() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label>Breakfast Per Person</Label>
-              <Input
-                type="number"
-                placeholder="0"
-                value={meals.breakfastCostPerPerson || ''}
-                onChange={(e) => setMeals({ ...meals, breakfastCostPerPerson: parseFloat(e.target.value) || 0 })}
-              />
+          {accommodations.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
+              <Utensils className="w-8 h-8 mx-auto mb-2 opacity-40" />
+              <p className="text-sm">Add accommodations first — meals are configured per hotel.</p>
             </div>
-            <div className="space-y-2">
-              <Label>Lunch Per Person</Label>
-              <Input
-                type="number"
-                placeholder="0"
-                value={meals.lunchCostPerPerson || ''}
-                onChange={(e) => setMeals({ ...meals, lunchCostPerPerson: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Dinner Per Person</Label>
-              <Input
-                type="number"
-                placeholder="0"
-                value={meals.dinnerCostPerPerson || ''}
-                onChange={(e) => setMeals({ ...meals, dinnerCostPerPerson: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Currency</Label>
-              <Select
-                value={meals.currency}
-                onValueChange={(v) => setMeals({ ...meals, currency: v })}
-                disabled={isLoadingMasterData}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select currency"} />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  {currencies.map((currency) => (
-                    <SelectItem key={currency.id} value={currency.code}>
-                      {currency.code} ({currency.symbol})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          ) : (
+            <div className="space-y-4">
+              {accommodations.map((acc) => {
+                const totalPax = calculateTotalParticipants();
+                const m = getHotelMealDefaults(acc.id, acc.currency);
+                const costs = calculateHotelMealCost(acc.id, acc.numberOfNights, totalPax, acc.currency);
 
-          <div className="pt-4 border-t space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Daily Cost Per Person</span>
-              <span className="font-semibold">{formatCurrency(calculateMealsCost().dailyCostPerPerson * getCurrencyRate(meals.currency), 'INR')}</span>
+                return (
+                  <div key={acc.id} className="border rounded-lg overflow-hidden">
+                    {/* Hotel header */}
+                    <div className="bg-muted/50 px-4 py-3 flex items-center justify-between border-b">
+                      <div className="flex items-center gap-2">
+                        <HotelIcon className="w-4 h-4 text-primary" />
+                        <span className="font-semibold text-sm">{acc.hotelName || 'Unnamed Hotel'}</span>
+                        <span className="text-muted-foreground text-xs">•</span>
+                        <span className="text-muted-foreground text-xs">{acc.city}</span>
+                        <span className="text-muted-foreground text-xs">•</span>
+                        <span className="text-muted-foreground text-xs">{acc.numberOfNights} nights</span>
+                        <span className="text-muted-foreground text-xs">•</span>
+                        <span className="text-muted-foreground text-xs">{totalPax} pax</span>
+                      </div>
+                      {/* Currency selector */}
+                      <Select
+                        value={m.currency}
+                        onValueChange={(v) => updateHotelMeal(acc.id, 'currency', v, acc.currency)}
+                        disabled={isLoadingMasterData}
+                      >
+                        <SelectTrigger className="h-7 w-28 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover">
+                          {currencies.map((currency) => (
+                            <SelectItem key={currency.id} value={currency.code} className="text-xs">
+                              {currency.code} ({currency.symbol})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Meal rows */}
+                    <div className="divide-y">
+                      {/* Header row */}
+                      <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-3 px-4 py-2 bg-muted/20 text-xs font-medium text-muted-foreground">
+                        <span>Meal</span>
+                        <span>Cost / Person</span>
+                        <span>Free Meal Pax</span>
+                        <span className="text-right">Row Total (INR)</span>
+                      </div>
+
+                      {/* Breakfast */}
+                      <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-3 items-center px-4 py-3">
+                        <span className="text-sm font-medium flex items-center gap-1.5">🌅 Breakfast</span>
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          className="h-8 text-sm"
+                          value={m.breakfastCostPerPerson || ''}
+                          onChange={(e) => updateHotelMeal(acc.id, 'breakfastCostPerPerson', parseFloat(e.target.value) || 0, acc.currency)}
+                        />
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          className="h-8 text-sm"
+                          value={m.freeBreakfast || ''}
+                          onChange={(e) => updateHotelMeal(acc.id, 'freeBreakfast', parseFloat(e.target.value) || 0, acc.currency)}
+                        />
+                        <span className="text-right text-sm font-medium">
+                          {formatCurrency(costs.breakfastTotal * getCurrencyRate(m.currency), 'INR')}
+                        </span>
+                      </div>
+
+                      {/* Lunch */}
+                      <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-3 items-center px-4 py-3">
+                        <span className="text-sm font-medium flex items-center gap-1.5">☀️ Lunch</span>
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          className="h-8 text-sm"
+                          value={m.lunchCostPerPerson || ''}
+                          onChange={(e) => updateHotelMeal(acc.id, 'lunchCostPerPerson', parseFloat(e.target.value) || 0, acc.currency)}
+                        />
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          className="h-8 text-sm"
+                          value={m.freeLunch || ''}
+                          onChange={(e) => updateHotelMeal(acc.id, 'freeLunch', parseFloat(e.target.value) || 0, acc.currency)}
+                        />
+                        <span className="text-right text-sm font-medium">
+                          {formatCurrency(costs.lunchTotal * getCurrencyRate(m.currency), 'INR')}
+                        </span>
+                      </div>
+
+                      {/* Dinner */}
+                      <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-3 items-center px-4 py-3">
+                        <span className="text-sm font-medium flex items-center gap-1.5">🌙 Dinner</span>
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          className="h-8 text-sm"
+                          value={m.dinnerCostPerPerson || ''}
+                          onChange={(e) => updateHotelMeal(acc.id, 'dinnerCostPerPerson', parseFloat(e.target.value) || 0, acc.currency)}
+                        />
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          className="h-8 text-sm"
+                          value={m.freeDinner || ''}
+                          onChange={(e) => updateHotelMeal(acc.id, 'freeDinner', parseFloat(e.target.value) || 0, acc.currency)}
+                        />
+                        <span className="text-right text-sm font-medium">
+                          {formatCurrency(costs.dinnerTotal * getCurrencyRate(m.currency), 'INR')}
+                        </span>
+                      </div>
+
+                      {/* Hotel subtotal */}
+                      <div className="flex justify-between items-center px-4 py-3 bg-muted/20">
+                        <span className="text-xs text-muted-foreground">
+                          Formula: Cost × (Pax − Free Pax) × {acc.numberOfNights} nights
+                        </span>
+                        <span className="font-semibold text-sm">
+                          Hotel Subtotal: {formatCurrency(costs.totalCostINR, 'INR')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Grand total */}
+              <div className="flex justify-between items-center pt-3 border-t">
+                <span className="text-base font-semibold">Total Meals Cost</span>
+                <span className="text-lg font-bold text-primary">{formatCurrency(calculateAllMealsCost(), 'INR')}</span>
+              </div>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Total Days × Participants</span>
-              <span className="font-semibold">{calculateTripDays()} days × {calculateTotalParticipants()} people</span>
-            </div>
-            <div className="flex justify-between items-center pt-2 border-t">
-              <span className="text-base font-semibold">Total Meals Cost</span>
-              <span className="text-lg font-bold text-primary">{formatCurrency(calculateMealsCost().totalCostINR, 'INR')}</span>
-            </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 
@@ -2791,12 +2925,12 @@ export default function CreateTrip() {
         </CardContent>
       </Card>
 
-      {/* Extras (Visa, Tips, Insurance) */}
+      {/* Visa, Tips and Insurance */}
       <Card className="shadow-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <IdCard className="w-5 h-5 text-primary" />
-            Extras (Visa, Tips, Insurance)
+            Visa, Tips and Insurance
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -3084,7 +3218,7 @@ export default function CreateTrip() {
               <span className="font-semibold">{formatCurrency(totals.activities, 'INR')}</span>
             </div>
             <div className="flex justify-between items-center pb-2 border-b">
-              <span className="text-muted-foreground">Extras (Visa, Tips, Insurance)</span>
+              <span className="text-muted-foreground">Visa, Tips and Insurance</span>
               <span className="font-semibold">{formatCurrency(totals.extras, 'INR')}</span>
             </div>
             <div className="flex justify-between items-center pb-2 border-b">
