@@ -128,11 +128,12 @@ export default function CreateTrip() {
   // NEW: Cost optimization toggle state
   const [optimizeRoomsByCost, setOptimizeRoomsByCost] = useState(false);
 
-  // NEW: Multi-city selection state
-  const [selectedCityForAdd, setSelectedCityForAdd] = useState('');
-
-  // NEW: Multi-country selection state
+  // City add form state
+  const [showAddCityForm, setShowAddCityForm] = useState(false);
   const [selectedCountryForAdd, setSelectedCountryForAdd] = useState('');
+  const [selectedCityForAdd, setSelectedCityForAdd] = useState('');
+  const [pendingCityFromDate, setPendingCityFromDate] = useState('');
+  const [pendingCityToDate, setPendingCityToDate] = useState('');
 
   // Load trip data when editing
   useEffect(() => {
@@ -456,18 +457,24 @@ export default function CreateTrip() {
   };
 
   const removeCity = (cityName: string) => {
-    setFormData(prev => ({
-      ...prev,
-      cities: prev.cities.filter(c => c.name !== cityName)
-    }));
+    setFormData(prev => {
+      const updated = prev.cities.filter(c => c.name !== cityName);
+      return {
+        ...prev,
+        cities: updated,
+        startDate: updated[0]?.fromDate || '',
+        endDate: updated[updated.length - 1]?.toDate || '',
+      };
+    });
   };
 
   const updateCityDate = (cityName: string, field: 'fromDate' | 'toDate', value: string) => {
     setFormData(prev => {
+      // Only update the specific city's date — never touch other cities
       const updated = prev.cities.map(c =>
         c.name === cityName ? { ...c, [field]: value } : c
       );
-      // Auto-derive trip start/end from first and last city dates
+      // Trip start/end derived from first and last city dates only
       const startDate = updated[0]?.fromDate || prev.startDate;
       const endDate = updated[updated.length - 1]?.toDate || prev.endDate;
       return { ...prev, cities: updated, startDate, endDate };
@@ -1249,55 +1256,39 @@ export default function CreateTrip() {
         </CardHeader>
         <CardContent className="space-y-4">
 
-          {/* Row 1: Trip Name + Institution */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Trip Name *</Label>
-              <Input
-                placeholder="e.g., Paris Cultural Tour 2024"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Institution *</Label>
-              <Input
-                placeholder="e.g., St. Mary's High School"
-                value={formData.institution}
-                onChange={(e) => setFormData({ ...formData, institution: e.target.value })}
-              />
-            </div>
-          </div>
-
-          {/* Row 2: Start Date + End Date */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Start Date *</Label>
-              <Input
-                type="date"
-                value={formData.startDate}
-                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>End Date *</Label>
-              <Input
-                type="date"
-                value={formData.endDate}
-                min={formData.startDate}
-                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-              />
-            </div>
-          </div>
-
-          {/* Row 3: Itinerary */}
+          {/* Trip Name */}
           <div className="space-y-2">
+            <Label>Trip Name *</Label>
+            <Input
+              placeholder="e.g., Paris Cultural Tour 2024"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            />
+          </div>
+
+          {/* Institution / Company / Family Name — label based on trip type */}
+          <div className="space-y-2">
+            <Label>
+              {tripType === 'institute' ? 'Institution Name *' : tripType === 'commercial' ? 'Company / Group Name *' : 'Family / Group Name *'}
+            </Label>
+            <Input
+              placeholder={
+                tripType === 'institute' ? "e.g., St. Mary's High School" :
+                tripType === 'commercial' ? "e.g., Acme Corp" :
+                "e.g., The Sharma Family"
+              }
+              value={formData.institution}
+              onChange={(e) => setFormData({ ...formData, institution: e.target.value })}
+            />
+          </div>
+
+          {/* Itinerary */}
+          <div className="space-y-3">
             <Label>Itinerary *</Label>
 
-            {/* City rows table — only shown when cities exist */}
+            {/* Cities list */}
             {formData.cities.length > 0 && (
               <div className="rounded-lg border overflow-hidden">
-                {/* Table header */}
                 <div className="grid grid-cols-[1fr_1fr_1fr_1fr_32px] bg-muted px-3 py-2 text-xs font-medium text-muted-foreground border-b">
                   <span>City</span>
                   <span>Country</span>
@@ -1305,7 +1296,6 @@ export default function CreateTrip() {
                   <span>To</span>
                   <span></span>
                 </div>
-                {/* City rows */}
                 {formData.cities.map((city, index) => {
                   const cityObj = cities.find(c => c.name === city.name);
                   const countryObj = cityObj ? countries.find(c => c.id === cityObj.country_id) : null;
@@ -1316,26 +1306,8 @@ export default function CreateTrip() {
                     >
                       <span className="font-medium">{city.name}</span>
                       <span className="text-muted-foreground text-xs">{countryObj?.name || '—'}</span>
-                      <div className="pr-2">
-                        <Input
-                          type="date"
-                          className="h-7 text-xs"
-                          value={city.fromDate}
-                          min={formData.startDate || undefined}
-                          max={city.toDate || formData.endDate || undefined}
-                          onChange={(e) => updateCityDate(city.name, 'fromDate', e.target.value)}
-                        />
-                      </div>
-                      <div className="pr-2">
-                        <Input
-                          type="date"
-                          className="h-7 text-xs"
-                          value={city.toDate}
-                          min={city.fromDate || formData.startDate || undefined}
-                          max={formData.endDate || undefined}
-                          onChange={(e) => updateCityDate(city.name, 'toDate', e.target.value)}
-                        />
-                      </div>
+                      <span className="text-sm">{city.fromDate || '—'}</span>
+                      <span className="text-sm">{city.toDate || '—'}</span>
                       <button
                         type="button"
                         onClick={() => removeCity(city.name)}
@@ -1349,81 +1321,171 @@ export default function CreateTrip() {
               </div>
             )}
 
-            {/* Add city controls — always below rows */}
-            <div className="flex items-center gap-2 pt-1">
-              <Select
-                value={selectedCountryForAdd}
-                onValueChange={(val) => {
-                  setSelectedCountryForAdd(val);
-                  setSelectedCityForAdd('');
-                }}
-                disabled={isLoadingMasterData}
-              >
-                <SelectTrigger className="flex-1 h-9 text-sm">
-                  <SelectValue placeholder="Select country" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  {countries.map((country) => (
-                    <SelectItem key={country.id} value={country.id}>
-                      {country.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={selectedCityForAdd}
-                onValueChange={setSelectedCityForAdd}
-                disabled={!selectedCountryForAdd || isLoadingMasterData}
-              >
-                <SelectTrigger className="flex-1 h-9 text-sm">
-                  <SelectValue placeholder={!selectedCountryForAdd ? "Country first" : "Select city"} />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  {cities
-                    .filter(c => c.country_id === selectedCountryForAdd)
-                    .map((city) => (
-                      <SelectItem key={city.id} value={city.name}>
-                        {city.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+            {/* Add City Button — full width, toggles the form */}
+            {!showAddCityForm && (
               <Button
                 type="button"
-                size="sm"
-                className="h-9 px-4 shrink-0"
-                disabled={!selectedCityForAdd}
-                onClick={() => {
-                  if (selectedCityForAdd && !formData.cities.find(c => c.name === selectedCityForAdd)) {
-                    if (selectedCountryForAdd && !formData.countries.includes(selectedCountryForAdd)) {
-                      setFormData(prev => ({
-                        ...prev,
-                        countries: [...prev.countries, selectedCountryForAdd],
-                        cities: [...prev.cities, { name: selectedCityForAdd, fromDate: '', toDate: '' }]
-                      }));
-                    } else {
-                      setFormData(prev => ({
-                        ...prev,
-                        cities: [...prev.cities, { name: selectedCityForAdd, fromDate: '', toDate: '' }]
-                      }));
-                    }
-                    setSelectedCityForAdd('');
-                  }
-                }}
+                variant="outline"
+                className="w-full h-10"
+                onClick={() => setShowAddCityForm(true)}
               >
-                <Plus className="w-4 h-4 mr-1" /> Add City
+                <Plus className="w-4 h-4 mr-2" /> Add City
               </Button>
-            </div>
-          </div>
+            )}
 
-          {/* Duration summary */}
-          {formData.startDate && formData.endDate && (
-            <div className="p-3 bg-muted rounded-lg">
-              <p className="text-sm font-semibold">
-                Duration: {calculateTripDuration().days} days, {calculateTripDuration().nights} nights
-              </p>
-            </div>
-          )}
+            {/* Add City Form — shown when button clicked */}
+            {showAddCityForm && (
+              <div className="rounded-lg border p-4 space-y-3 bg-muted/30">
+                <p className="text-sm font-medium">New City</p>
+                {/* Country + City */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Country</Label>
+                    <Select
+                      value={selectedCountryForAdd || '__none__'}
+                      onValueChange={(val) => {
+                        if (val === '__none__') return;
+                        setSelectedCountryForAdd(val);
+                        setSelectedCityForAdd('');
+                      }}
+                      disabled={isLoadingMasterData}
+                    >
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue placeholder="Select country" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover">
+                        <SelectItem value="__none__" disabled>Select country</SelectItem>
+                        {countries.map((country) => (
+                          <SelectItem key={country.id} value={country.id}>
+                            {country.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">City</Label>
+                    <Select
+                      value={selectedCityForAdd || '__none__'}
+                      onValueChange={(val) => {
+                        if (val === '__none__') return;
+                        setSelectedCityForAdd(val);
+                      }}
+                      disabled={!selectedCountryForAdd || isLoadingMasterData}
+                    >
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue placeholder={!selectedCountryForAdd ? "Select country first" : "Select city"} />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover">
+                        <SelectItem value="__none__" disabled>Select city</SelectItem>
+                        {cities
+                          .filter(c => c.country_id === selectedCountryForAdd)
+                          .map((city) => (
+                            <SelectItem key={city.id} value={city.name}>
+                              {city.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {/* From + To dates — only after city selected */}
+                {selectedCityForAdd && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">From Date</Label>
+                      <Input
+                        type="date"
+                        className="h-9 text-sm"
+                        value={pendingCityFromDate}
+                        max={pendingCityToDate || undefined}
+                        onChange={(e) => setPendingCityFromDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">To Date</Label>
+                      <Input
+                        type="date"
+                        className="h-9 text-sm"
+                        value={pendingCityToDate}
+                        min={pendingCityFromDate || undefined}
+                        onChange={(e) => setPendingCityToDate(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+                {/* Action buttons */}
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="flex-1 h-9"
+                    disabled={!selectedCityForAdd || !pendingCityFromDate || !pendingCityToDate}
+                    onClick={() => {
+                      if (selectedCityForAdd && pendingCityFromDate && pendingCityToDate &&
+                          !formData.cities.find(c => c.name === selectedCityForAdd)) {
+                        const newCity = { name: selectedCityForAdd, fromDate: pendingCityFromDate, toDate: pendingCityToDate };
+                        setFormData(prev => {
+                          const updated = [...prev.cities, newCity];
+                          const newCountries = selectedCountryForAdd && !prev.countries.includes(selectedCountryForAdd)
+                            ? [...prev.countries, selectedCountryForAdd]
+                            : prev.countries;
+                          return {
+                            ...prev,
+                            countries: newCountries,
+                            cities: updated,
+                            startDate: updated[0].fromDate,
+                            endDate: updated[updated.length - 1].toDate,
+                          };
+                        });
+                        // Reset form for next city
+                        setSelectedCityForAdd('');
+                        setPendingCityFromDate('');
+                        setPendingCityToDate('');
+                        setShowAddCityForm(false);
+                      }
+                    }}
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> Add City
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-9 px-4"
+                    onClick={() => {
+                      setShowAddCityForm(false);
+                      setSelectedCountryForAdd('');
+                      setSelectedCityForAdd('');
+                      setPendingCityFromDate('');
+                      setPendingCityToDate('');
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Overall Trip Dates — auto-derived, shown below cities */}
+            {formData.startDate && formData.endDate && (
+              <div className="p-3 bg-muted rounded-lg flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Overall Trip Duration</p>
+                  <p className="text-sm font-semibold">
+                    {formData.startDate} → {formData.endDate}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground mb-0.5">Duration</p>
+                  <p className="text-sm font-semibold">
+                    {calculateTripDuration().days} days · {calculateTripDuration().nights} nights
+                  </p>
+                </div>
+              </div>
+            )}
+
+          </div>
 
         </CardContent>
       </Card>
@@ -2121,7 +2183,6 @@ export default function CreateTrip() {
                       value={accommodation.city || '__no_city__'}
                       onValueChange={(v) => {
                         if (v === '__no_city__') return;
-                        // Update city and reset hotelName in one atomic state update
                         setAccommodations(prev => {
                           const updated = [...prev];
                           updated[index] = { ...updated[index], city: v, hotelName: '' };
