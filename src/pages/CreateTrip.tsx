@@ -1911,6 +1911,16 @@ export default function CreateTrip() {
         </CardContent>
       </Card>
 
+      {/* Flights Section Total */}
+      {flights.length > 0 && (
+        <div className="flex items-center justify-between px-5 py-3 rounded-lg bg-primary/5 border border-primary/20">
+          <span className="text-sm font-medium text-muted-foreground">Flights Total</span>
+          <span className="text-sm font-semibold text-primary">
+            {formatCurrency(flights.reduce((sum, f) => sum + f.totalCostINR, 0), 'INR')}
+          </span>
+        </div>
+      )}
+
       {/* Transport - Buses */}
       <Card className="shadow-card">
         <CardHeader>
@@ -1975,6 +1985,16 @@ export default function CreateTrip() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Buses Section Total */}
+      {buses.length > 0 && (
+        <div className="flex items-center justify-between px-5 py-3 rounded-lg bg-primary/5 border border-primary/20">
+          <span className="text-sm font-medium text-muted-foreground">Buses Total</span>
+          <span className="text-sm font-semibold text-primary">
+            {formatCurrency(buses.reduce((sum, b) => sum + b.totalCostINR, 0), 'INR')}
+          </span>
+        </div>
+      )}
 
       {/* Transport - Trains */}
       <Card className="shadow-card">
@@ -2042,6 +2062,16 @@ export default function CreateTrip() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Trains Section Total */}
+      {trains.length > 0 && (
+        <div className="flex items-center justify-between px-5 py-3 rounded-lg bg-primary/5 border border-primary/20">
+          <span className="text-sm font-medium text-muted-foreground">Trains Total</span>
+          <span className="text-sm font-semibold text-primary">
+            {formatCurrency(trains.reduce((sum, t) => sum + t.totalCostINR, 0), 'INR')}
+          </span>
+        </div>
+      )}
 
       {/* Accommodation */}
       <Card className="shadow-card">
@@ -2631,6 +2661,16 @@ export default function CreateTrip() {
         </CardContent>
       </Card>
 
+      {/* Accommodation Section Total */}
+      {accommodations.length > 0 && (
+        <div className="flex items-center justify-between px-5 py-3 rounded-lg bg-primary/5 border border-primary/20">
+          <span className="text-sm font-medium text-muted-foreground">Accommodation Total</span>
+          <span className="text-sm font-semibold text-primary">
+            {formatCurrency(accommodations.reduce((sum, a) => sum + a.totalCostINR, 0), 'INR')}
+          </span>
+        </div>
+      )}
+
       {/* Meals */}
       <Card className="shadow-card">
         <CardHeader>
@@ -2785,6 +2825,16 @@ export default function CreateTrip() {
         </CardContent>
       </Card>
 
+      {/* Meals Section Total */}
+      {accommodations.length > 0 && (
+        <div className="flex items-center justify-between px-5 py-3 rounded-lg bg-primary/5 border border-primary/20">
+          <span className="text-sm font-medium text-muted-foreground">Meals Total</span>
+          <span className="text-sm font-semibold text-primary">
+            {formatCurrency(calculateAllMealsCost(), 'INR')}
+          </span>
+        </div>
+      )}
+
       {/* Activities */}
       <Card className="shadow-card">
         <CardHeader>
@@ -2929,6 +2979,16 @@ export default function CreateTrip() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Activities Section Total */}
+      {activities.length > 0 && (
+        <div className="flex items-center justify-between px-5 py-3 rounded-lg bg-primary/5 border border-primary/20">
+          <span className="text-sm font-medium text-muted-foreground">Activities Total</span>
+          <span className="text-sm font-semibold text-primary">
+            {formatCurrency(activities.reduce((sum, a) => sum + a.totalCostINR, 0), 'INR')}
+          </span>
+        </div>
+      )}
 
       {/* Visa, Tips and Insurance */}
       <Card className="shadow-card">
@@ -3077,6 +3137,16 @@ export default function CreateTrip() {
         </CardContent>
       </Card>
 
+      {/* Visa, Tips & Insurance Section Total */}
+      {(extras.visaTotalCostINR + extras.tipsTotalCostINR + extras.insuranceTotalCostINR) > 0 && (
+        <div className="flex items-center justify-between px-5 py-3 rounded-lg bg-primary/5 border border-primary/20">
+          <span className="text-sm font-medium text-muted-foreground">Visa, Tips & Insurance Total</span>
+          <span className="text-sm font-semibold text-primary">
+            {formatCurrency(extras.visaTotalCostINR + extras.tipsTotalCostINR + extras.insuranceTotalCostINR, 'INR')}
+          </span>
+        </div>
+      )}
+
       {/* Overheads */}
       <Card className="shadow-card">
         <CardHeader>
@@ -3195,6 +3265,16 @@ export default function CreateTrip() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Overheads Section Total */}
+      {overheads.length > 0 && (
+        <div className="flex items-center justify-between px-5 py-3 rounded-lg bg-primary/5 border border-primary/20">
+          <span className="text-sm font-medium text-muted-foreground">Overheads Total</span>
+          <span className="text-sm font-semibold text-primary">
+            {formatCurrency(overheads.reduce((sum, o) => sum + o.totalCostINR, 0), 'INR')}
+          </span>
+        </div>
+      )}
 
       {/* Cost Summary with GST and TCS */}
       <Card className="shadow-card">
