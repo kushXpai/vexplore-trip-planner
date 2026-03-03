@@ -15,17 +15,18 @@ import {
   fetchCities,
   fetchCurrencies,
   fetchCitiesByCountry,
-  Currency,
-  Country,
-  City,
+  fetchHotelsByCity,
+  addHotel,
   getCurrencyRate as getCurrencyRateHelper,
   getCountryCurrency as getCountryCurrencyHelper,
   formatCurrency as formatCurrencyHelper,
   calculateGrandTotal,
   getCurrentTDSRate
 } from '@/services/masterDataService';
+import type { Currency, Country, City } from '@/services/masterDataService';
+import type { Hotel } from '@/services/masterDataService';
 import {
-  Plane, Bus, Train, Hotel, Utensils, Ticket, Calculator, Shield, Info, Plus, Trash2,
+  Plane, Bus, Train, Hotel as HotelIcon, Utensils, Ticket, Calculator, Shield, Info, Plus, Trash2,
   Loader2, Users, Calendar, MapPin, Save, Globe, Building2, IdCard, Heart, BadgePercent
 } from 'lucide-react';
 import {
@@ -113,8 +114,12 @@ export default function CreateTrip() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
-  const [filteredCities, setFilteredCities] = useState<City[]>([]);
   const [isLoadingMasterData, setIsLoadingMasterData] = useState(true);
+
+  // Hotel state for accommodation
+  const [hotelsMasterList, setHotelsMasterList] = useState<Hotel[]>([]);
+  const [isAddingHotelInline, setIsAddingHotelInline] = useState<{ [accIndex: number]: boolean }>({});
+  const [inlineNewHotel, setInlineNewHotel] = useState<{ [accIndex: number]: { hotelname: string; remarks: string } }>({});
 
   // NEW: Cost optimization toggle state
   const [optimizeRoomsByCost, setOptimizeRoomsByCost] = useState(false);
@@ -164,16 +169,6 @@ export default function CreateTrip() {
 
     loadMasterData();
   }, []);
-
-  // Update filtered cities when countries change
-  useEffect(() => {
-    if (formData.countries.length > 0) {
-      const filtered = cities.filter(c => formData.countries.includes(c.country_id));
-      setFilteredCities(filtered);
-    } else {
-      setFilteredCities([]);
-    }
-  }, [formData.countries, cities]);
 
   // NEW: Auto-calculate extras totals
   useEffect(() => {
@@ -384,6 +379,17 @@ export default function CreateTrip() {
       const totalCommercial = formData.maleCount + formData.femaleCount + formData.otherCount;
       const totalVXplorers = formData.commercialMaleVXplorers + formData.commercialFemaleVXplorers;
       return totalCommercial + totalVXplorers;
+    }
+  };
+
+  const calculateBillableParticipants = () => {
+    if (tripType === 'institute') {
+      const totalStudents = formData.boys + formData.girls;
+      return totalStudents;
+    } else {
+      // Commercial and FTI trips use same participant fields
+      const totalCommercial = formData.maleCount + formData.femaleCount + formData.otherCount;
+      return totalCommercial;
     }
   };
 
@@ -1364,7 +1370,7 @@ export default function CreateTrip() {
                   <SelectValue placeholder={!selectedCountryForAdd ? "Country first" : "Select city"} />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  {filteredCities
+                  {cities
                     .filter(c => c.country_id === selectedCountryForAdd)
                     .map((city) => (
                       <SelectItem key={city.id} value={city.name}>
@@ -1460,6 +1466,10 @@ export default function CreateTrip() {
                   <div className="p-3 bg-muted rounded-lg">
                     <p className="text-xs text-muted-foreground">Total Participants</p>
                     <p className="text-lg font-bold">{calculateTotalCommercial()}</p>
+                  </div>
+                  <div className="p-4 bg-primary/5 rounded-lg">
+                    <p className="text-sm text-muted-foreground">Total Billable</p>
+                    <p className="text-2xl font-bold text-primary">{calculateBillableParticipants()}</p>
                   </div>
                 </div>
               </div>
@@ -1617,6 +1627,10 @@ export default function CreateTrip() {
                     <p className="text-xs text-muted-foreground">Total Participants</p>
                     <p className="text-lg font-bold">{calculateTotalCommercial()}</p>
                   </div>
+                  <div className="p-4 bg-primary/5 rounded-lg">
+                    <p className="text-sm text-muted-foreground">Total Billable</p>
+                    <p className="text-2xl font-bold text-primary">{calculateBillableParticipants()}</p>
+                  </div>
                 </div>
               </div>
 
@@ -1666,6 +1680,10 @@ export default function CreateTrip() {
                 <p className="text-sm text-muted-foreground">Total Participants</p>
                 <p className="text-2xl font-bold text-primary">{calculateTotalParticipants()}</p>
               </div>
+              {/* <div className="p-4 bg-primary/5 rounded-lg">
+                <p className="text-sm text-muted-foreground">Total Billable</p>
+                <p className="text-2xl font-bold text-primary">{calculateBillableParticipants()}</p>
+              </div> */}
             </div>
           </div>
         </CardContent>
@@ -2061,7 +2079,7 @@ export default function CreateTrip() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Hotel className="w-5 h-5 text-primary" />
+              <HotelIcon className="w-5 h-5 text-primary" />
               Accommodation
             </div>
             <Button onClick={addAccommodation} size="sm" className="gradient-primary text-primary-foreground">
@@ -2089,18 +2107,25 @@ export default function CreateTrip() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Hotel Name</Label>
-                    <Input
-                      placeholder="e.g., Grand Hotel"
-                      value={accommodation.hotelName}
-                      onChange={(e) => updateAccommodation(index, 'hotelName', e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
                     <Label>City</Label>
                     <Select
                       value={accommodation.city}
-                      onValueChange={(v) => updateAccommodation(index, 'city', v)}
+                      onValueChange={(v) => {
+                        updateAccommodation(index, 'city', v);
+                        updateAccommodation(index, 'hotelName', '');
+                        // Fetch hotels for this city
+                        const cityObj = cities.find(c => c.name === v);
+                        if (cityObj) {
+                          fetchHotelsByCity(cityObj.id).then(res => {
+                            if (res.success && res.data) {
+                              setHotelsMasterList(prev => {
+                                const withoutThisCity = prev.filter(h => h.cityid !== cityObj.id);
+                                return [...withoutThisCity, ...res.data!];
+                              });
+                            }
+                          });
+                        }
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select city" />
@@ -2113,6 +2138,111 @@ export default function CreateTrip() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Hotel</Label>
+                    {(() => {
+                      const cityObj = cities.find(c => c.name === accommodation.city);
+                      const hotelsForCity = cityObj
+                        ? hotelsMasterList.filter(h => h.cityid === cityObj.id)
+                        : [];
+                      const isAddingInline = isAddingHotelInline[index];
+
+                      if (isAddingInline) {
+                        return (
+                          <div className="space-y-2">
+                            <Input
+                              placeholder="New hotel name *"
+                              value={inlineNewHotel[index]?.hotelname || ''}
+                              onChange={(e) => setInlineNewHotel(prev => ({
+                                ...prev,
+                                [index]: { ...prev[index], hotelname: e.target.value }
+                              }))}
+                            />
+                            <Input
+                              placeholder="Remarks (optional)"
+                              value={inlineNewHotel[index]?.remarks || ''}
+                              onChange={(e) => setInlineNewHotel(prev => ({
+                                ...prev,
+                                [index]: { ...prev[index], remarks: e.target.value }
+                              }))}
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={async () => {
+                                  const name = inlineNewHotel[index]?.hotelname?.trim();
+                                  if (!name) { toast.error('Hotel name is required'); return; }
+                                  const cityObj2 = cities.find(c => c.name === accommodation.city);
+                                  const countryId = cityObj2
+                                    ? countries.find(co => co.id === cityObj2.country_id)?.id
+                                    : undefined;
+                                  const result = await addHotel({
+                                    hotelname: name,
+                                    cityid: cityObj2?.id,
+                                    countryid: countryId,
+                                    remarks: inlineNewHotel[index]?.remarks || '',
+                                  });
+                                  if (result.success && result.data) {
+                                    setHotelsMasterList(prev => [...prev, result.data!]);
+                                    updateAccommodation(index, 'hotelName', result.data!.hotelname);
+                                    toast.success('Hotel added to master list');
+                                  } else {
+                                    toast.error('Failed to add hotel');
+                                  }
+                                  setIsAddingHotelInline(prev => ({ ...prev, [index]: false }));
+                                  setInlineNewHotel(prev => ({ ...prev, [index]: { hotelname: '', remarks: '' } }));
+                                }}
+                              >
+                                Save Hotel
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setIsAddingHotelInline(prev => ({ ...prev, [index]: false }))}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-2">
+                          <Select
+                            value={accommodation.hotelName}
+                            onValueChange={(v) => updateAccommodation(index, 'hotelName', v)}
+                            disabled={!accommodation.city}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder={!accommodation.city ? 'Select city first' : hotelsForCity.length === 0 ? 'No hotels — add one below' : 'Select hotel'} />
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover">
+                              {hotelsForCity.map(h => (
+                                <SelectItem key={h.id} value={h.hotelname}>
+                                  {h.hotelname}{h.breakfastincluded ? ' ✓ Breakfast' : ''}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {accommodation.city && (
+                            <button
+                              type="button"
+                              className="text-xs text-muted-foreground underline hover:text-primary"
+                              onClick={() => {
+                                setIsAddingHotelInline(prev => ({ ...prev, [index]: true }));
+                                setInlineNewHotel(prev => ({ ...prev, [index]: { hotelname: '', remarks: '' } }));
+                              }}
+                            >
+                              {hotelsForCity.length === 0
+                                ? "No hotel found — add new hotel"
+                                : "Can't find your hotel? Add new hotel"}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 

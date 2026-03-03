@@ -24,6 +24,17 @@ export interface City {
   country_id: string;
 }
 
+export interface Hotel {
+  id: string;
+  hotelname: string;
+  countryid: string | null;
+  cityid: string | null;
+  breakfastincluded: boolean;
+  remarks: string | null;
+  createdat: string;
+  updatedat: string;
+}
+
 // Fetch all currencies
 export const fetchCurrencies = async () => {
   const { data, error } = await supabase
@@ -79,6 +90,81 @@ export const fetchCitiesByCountry = async (countryId: string) => {
 
   if (error) {
     console.error('Error fetching cities by country:', error);
+    return { success: false, data: null, error };
+  }
+
+  return { success: true, data, error: null };
+};
+
+// Fetch all hotels
+export const fetchHotels = async () => {
+  const { data, error } = await supabase
+    .from('hotel')
+    .select('*')
+    .order('hotelname');
+
+  if (error) {
+    console.error('Error fetching hotels:', error);
+    return { success: false, data: null, error };
+  }
+
+  return { success: true, data, error: null };
+};
+
+// Fetch hotels by city
+export const fetchHotelsByCity = async (cityId: string) => {
+  const { data, error } = await supabase
+    .from('hotel')
+    .select('*')
+    .eq('cityid', cityId)
+    .order('hotelname');
+
+  if (error) {
+    console.error('Error fetching hotels by city:', error);
+    return { success: false, data: null, error };
+  }
+
+  return { success: true, data, error: null };
+};
+
+// Fetch hotels by country
+export const fetchHotelsByCountry = async (countryId: string) => {
+  const { data, error } = await supabase
+    .from('hotel')
+    .select('*')
+    .eq('countryid', countryId)
+    .order('hotelname');
+
+  if (error) {
+    console.error('Error fetching hotels by country:', error);
+    return { success: false, data: null, error };
+  }
+
+  return { success: true, data, error: null };
+};
+
+// Add a new hotel to master data
+export const addHotel = async (hotel: {
+  hotelname: string;
+  countryid?: string;
+  cityid?: string;
+  breakfastincluded?: boolean;
+  remarks?: string;
+}) => {
+  const { data, error } = await supabase
+    .from('hotel')
+    .insert({
+      hotelname: hotel.hotelname,
+      countryid: hotel.countryid || null,
+      cityid: hotel.cityid || null,
+      breakfastincluded: hotel.breakfastincluded ?? false,
+      remarks: hotel.remarks || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error adding hotel:', error);
     return { success: false, data: null, error };
   }
 

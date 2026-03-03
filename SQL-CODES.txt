@@ -27,6 +27,19 @@ CREATE TABLE public.currencies (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT currencies_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.hotel (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  hotelname text NOT NULL,
+  countryid uuid,
+  cityid uuid,
+  breakfastincluded boolean NOT NULL DEFAULT false,
+  remarks text,
+  createdat timestamp with time zone DEFAULT now(),
+  updatedat timestamp with time zone DEFAULT now(),
+  CONSTRAINT hotel_pkey PRIMARY KEY (id),
+  CONSTRAINT hotel_countryid_fkey FOREIGN KEY (countryid) REFERENCES public.countries(id),
+  CONSTRAINT hotel_cityid_fkey FOREIGN KEY (cityid) REFERENCES public.cities(id)
+);
 CREATE TABLE public.institutions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   name text NOT NULL,

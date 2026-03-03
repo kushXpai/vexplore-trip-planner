@@ -10,12 +10,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Country, City, Currency } from '@/types/trip';
-import { Globe, MapPin, Coins, Plus, Pencil, Trash2, BadgePercent, History, Lock } from 'lucide-react';
+import { Globe, MapPin, Coins, Plus, Pencil, Trash2, BadgePercent, History, Lock, Hotel } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
-// NEW: Tax Rate Types
+// Tax Rate Types
 interface TaxRate {
   id: string;
   rate_type: 'gst' | 'tcs' | 'tds';
@@ -26,12 +26,36 @@ interface TaxRate {
   created_at: string;
 }
 
+// FIX 1: Single HotelRecord interface at module level — duplicate inside function removed
+interface HotelRecord {
+  id: string;
+  hotelname: string;
+  countryid: string | null;
+  cityid: string | null;
+  breakfastincluded: boolean;
+  remarks: string | null;
+}
+
 export default function Masters() {
   const { isAdmin } = useAuth();
   const [countriesList, setCountriesList] = useState<Country[]>([]);
   const [citiesList, setCitiesList] = useState<City[]>([]);
   const [currenciesList, setCurrenciesList] = useState<Currency[]>([]);
   const [taxRatesList, setTaxRatesList] = useState<TaxRate[]>([]);
+
+  // Hotels state — FIX 1 applied: inner duplicate interface block removed
+  const [hotelsList, setHotelsList] = useState<HotelRecord[]>([]);
+  const [editingHotel, setEditingHotel] = useState<HotelRecord | null>(null);
+  const [addHotelOpen, setAddHotelOpen] = useState(false);
+  const [newHotel, setNewHotel] = useState({
+    hotelname: '',
+    countryid: '',
+    cityid: '',
+    breakfastincluded: false,
+    remarks: '',
+  });
+  const [hotelSearch, setHotelSearch] = useState('');
+  const [hotelCountryFilter, setHotelCountryFilter] = useState('');
 
   const [editingCountry, setEditingCountry] = useState<Country | null>(null);
   const [editingCity, setEditingCity] = useState<City | null>(null);
@@ -86,6 +110,7 @@ export default function Masters() {
       fetchCities(),
       fetchCurrencies(),
       fetchTaxRates(),
+      fetchHotels(),
     ]);
   };
 
@@ -148,7 +173,6 @@ export default function Masters() {
     );
   };
 
-  // NEW: Fetch Tax Rates
   const fetchTaxRates = async () => {
     const { data, error } = await supabase
       .from('tax_rates')
@@ -158,6 +182,21 @@ export default function Masters() {
     if (error) return toast.error(error.message);
 
     setTaxRatesList(data || []);
+  };
+
+  const fetchHotels = async () => {
+    const { data, error } = await supabase
+      .from('hotel')
+      .select('id, hotelname, countryid, cityid, breakfastincluded, remarks')
+      .order('hotelname');
+
+    if (error) {
+      console.error('fetchHotels error:', error);
+      toast.error('Failed to load hotels: ' + error.message);
+      return;
+    }
+    console.log('fetchHotels result count:', data?.length);
+    setHotelsList(data || []);
   };
 
   /* =========================
@@ -209,19 +248,16 @@ export default function Masters() {
     fetchCurrencies();
   };
 
-  // NEW: Add Tax Rate
   const handleAddTaxRate = async () => {
-    // Check if user is admin or superadmin
     if (!isAdmin) {
       toast.error('Only administrators can add tax rates');
       return;
     }
 
     try {
-      // First, set all previous rates of this type as non-current
       const { error: updateError } = await supabase
         .from('tax_rates')
-        .update({ 
+        .update({
           is_current: false,
           effective_to: new Date(newTaxRate.effectiveFrom).toISOString()
         })
@@ -230,7 +266,6 @@ export default function Masters() {
 
       if (updateError) throw updateError;
 
-      // Now insert the new rate
       const { error: insertError } = await supabase.from('tax_rates').insert({
         rate_type: newTaxRate.rateType,
         rate_percentage: newTaxRate.ratePercentage,
@@ -251,6 +286,52 @@ export default function Masters() {
     } catch (error: any) {
       toast.error(error.message || 'Failed to add tax rate');
     }
+  };
+
+  // Hotel CRUD
+  const handleAddHotel = async () => {
+    if (!newHotel.hotelname.trim()) {
+      toast.error('Hotel name is required');
+      return;
+    }
+    const { error } = await supabase.from('hotel').insert({
+      hotelname: newHotel.hotelname.trim(),
+      countryid: newHotel.countryid || null,
+      cityid: newHotel.cityid || null,
+      breakfastincluded: newHotel.breakfastincluded,
+      remarks: newHotel.remarks || null,
+    });
+    if (error) return toast.error(error.message);
+    toast.success('Hotel added');
+    setAddHotelOpen(false);
+    setNewHotel({ hotelname: '', countryid: '', cityid: '', breakfastincluded: false, remarks: '' });
+    fetchHotels();
+  };
+
+  const handleSaveHotel = async () => {
+    if (!editingHotel) return;
+    const { error } = await supabase
+      .from('hotel')
+      .update({
+        hotelname: editingHotel.hotelname,
+        countryid: editingHotel.countryid,
+        cityid: editingHotel.cityid,
+        breakfastincluded: editingHotel.breakfastincluded,
+        remarks: editingHotel.remarks,
+      })
+      .eq('id', editingHotel.id);
+    if (error) return toast.error(error.message);
+    toast.success('Hotel updated');
+    setEditingHotel(null);
+    fetchHotels();
+  };
+
+  const handleDeleteHotel = async (id: string) => {
+    if (!confirm('Delete this hotel from master data?')) return;
+    const { error } = await supabase.from('hotel').delete().eq('id', id);
+    if (error) return toast.error(error.message);
+    toast.success('Hotel deleted');
+    fetchHotels();
   };
 
   /* =========================
@@ -363,8 +444,13 @@ export default function Masters() {
     return currenciesList.find(curr => curr.code === country.defaultCurrency);
   };
 
-  // Get cities for a country
+  // Get cities for a country (used in Countries tab)
   const getCitiesForCountry = (countryId: string): City[] => {
+    return citiesList.filter(city => city.countryId === countryId);
+  };
+
+  // FIX 2 & 3: Get cities for hotel country/city selectors + filteredHotels defined here
+  const getCitiesForHotelCountry = (countryId: string): City[] => {
     return citiesList.filter(city => city.countryId === countryId);
   };
 
@@ -381,12 +467,10 @@ export default function Masters() {
     if (!country) return;
 
     const existingCurrency = currenciesList.find(curr => curr.code === country.defaultCurrency);
-    
+
     if (existingCurrency) {
-      // Edit mode
       setEditingCurrency(existingCurrency);
     } else {
-      // Add mode
       setSelectedCountryId(countryId);
       setAddCurrencyOpen(true);
     }
@@ -398,8 +482,15 @@ export default function Masters() {
     country.code.toLowerCase().includes(countrySearch.toLowerCase())
   );
 
+  // FIX 2: filteredHotels was used in JSX but never defined
+  const filteredHotels = hotelsList.filter(hotel => {
+    const matchesName = hotel.hotelname.toLowerCase().includes(hotelSearch.toLowerCase());
+    const matchesCountry = !hotelCountryFilter || hotel.countryid === hotelCountryFilter;
+    return matchesName && matchesCountry;
+  });
+
   /* =========================
-     TAX RATES SECTION (unchanged)
+     TAX RATES SECTION
   ========================= */
 
   const renderTaxRatesTab = () => (
@@ -523,6 +614,10 @@ export default function Masters() {
             <Globe className="h-4 w-4 mr-2" />
             Countries
           </TabsTrigger>
+          <TabsTrigger value="hotels">
+            <Hotel className="h-4 w-4 mr-2" />
+            Hotels
+          </TabsTrigger>
           <TabsTrigger value="tax-rates">
             <BadgePercent className="h-4 w-4 mr-2" />
             Tax Rates
@@ -557,10 +652,10 @@ export default function Masters() {
                 {filteredCountries.map((country) => {
                   const currency = getCountryCurrency(country.id);
                   const cities = getCitiesForCountry(country.id);
-                  
+
                   return (
-                    <div 
-                      key={country.id} 
+                    <div
+                      key={country.id}
                       className="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex items-center justify-between">
@@ -582,7 +677,7 @@ export default function Masters() {
                             )}
                           </div>
                         </div>
-                        
+
                         <div className="flex items-center gap-2">
                           {currency ? (
                             <Button
@@ -603,7 +698,7 @@ export default function Masters() {
                               Add Currency
                             </Button>
                           )}
-                          
+
                           <Button
                             variant="outline"
                             size="sm"
@@ -620,7 +715,7 @@ export default function Masters() {
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          
+
                           <Button
                             variant="ghost"
                             size="sm"
@@ -633,13 +728,99 @@ export default function Masters() {
                     </div>
                   );
                 })}
-                
+
                 {filteredCountries.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     No countries found
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* HOTELS TAB */}
+        <TabsContent value="hotels" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Hotel className="h-5 w-5" />
+                  <CardTitle>Hotels Master List</CardTitle>
+                </div>
+                <Button onClick={() => setAddHotelOpen(true)} className="gradient-primary text-primary-foreground">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Hotel
+                </Button>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                <Input
+                  placeholder="Search hotels..."
+                  value={hotelSearch}
+                  onChange={(e) => setHotelSearch(e.target.value)}
+                />
+                <Select value={hotelCountryFilter || 'all'} onValueChange={(v) => setHotelCountryFilter(v === 'all' ? '' : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filter by country" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    <SelectItem value="all">All Countries</SelectItem>
+                    {countriesList.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Hotel Name</TableHead>
+                    <TableHead>Country</TableHead>
+                    <TableHead>City</TableHead>
+                    <TableHead>Breakfast</TableHead>
+                    <TableHead>Remarks</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredHotels.map(hotel => {
+                    const country = countriesList.find(c => c.id === hotel.countryid);
+                    const city = citiesList.find(c => c.id === hotel.cityid);
+                    return (
+                      <TableRow key={hotel.id}>
+                        <TableCell className="font-medium">{hotel.hotelname}</TableCell>
+                        <TableCell>{country?.name || '—'}</TableCell>
+                        <TableCell>{city?.name || '—'}</TableCell>
+                        <TableCell>
+                          <Badge variant={hotel.breakfastincluded ? 'default' : 'outline'}>
+                            {hotel.breakfastincluded ? 'Yes' : 'No'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{hotel.remarks || '—'}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => setEditingHotel(hotel)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteHotel(hotel.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {filteredHotels.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                        No hotels found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
@@ -824,6 +1005,136 @@ export default function Masters() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddTaxRateOpen(false)}>Cancel</Button>
             <Button onClick={handleAddTaxRate} className="gradient-primary text-primary-foreground">Add Tax Rate</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Hotel Dialog */}
+      <Dialog open={addHotelOpen} onOpenChange={setAddHotelOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add New Hotel</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Hotel Name *</Label>
+              <Input
+                value={newHotel.hotelname}
+                onChange={(e) => setNewHotel({ ...newHotel, hotelname: e.target.value })}
+                placeholder="e.g., Grand Hyatt"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Country</Label>
+              <Select
+                value={newHotel.countryid}
+                onValueChange={(v) => setNewHotel({ ...newHotel, countryid: v, cityid: '' })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {countriesList.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>City</Label>
+              <Select
+                value={newHotel.cityid}
+                onValueChange={(v) => setNewHotel({ ...newHotel, cityid: v })}
+                disabled={!newHotel.countryid}
+              >
+                <SelectTrigger><SelectValue placeholder={!newHotel.countryid ? 'Select country first' : 'Select city'} /></SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {getCitiesForHotelCountry(newHotel.countryid).map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="newHotelBreakfast"
+                checked={newHotel.breakfastincluded}
+                onChange={(e) => setNewHotel({ ...newHotel, breakfastincluded: e.target.checked })}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="newHotelBreakfast">Breakfast Included</Label>
+            </div>
+            <div className="space-y-2">
+              <Label>Remarks</Label>
+              <Input
+                value={newHotel.remarks}
+                onChange={(e) => setNewHotel({ ...newHotel, remarks: e.target.value })}
+                placeholder="Optional notes..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddHotelOpen(false)}>Cancel</Button>
+            <Button onClick={handleAddHotel} className="gradient-primary text-primary-foreground">Add Hotel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Hotel Dialog */}
+      <Dialog open={!!editingHotel} onOpenChange={() => setEditingHotel(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Hotel</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Hotel Name</Label>
+              <Input
+                value={editingHotel?.hotelname || ''}
+                onChange={(e) => editingHotel && setEditingHotel({ ...editingHotel, hotelname: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Country</Label>
+              <Select
+                value={editingHotel?.countryid || ''}
+                onValueChange={(v) => editingHotel && setEditingHotel({ ...editingHotel, countryid: v, cityid: null })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {countriesList.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>City</Label>
+              <Select
+                value={editingHotel?.cityid || ''}
+                onValueChange={(v) => editingHotel && setEditingHotel({ ...editingHotel, cityid: v })}
+                disabled={!editingHotel?.countryid}
+              >
+                <SelectTrigger><SelectValue placeholder="Select city" /></SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {getCitiesForHotelCountry(editingHotel?.countryid || '').map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="editHotelBreakfast"
+                checked={editingHotel?.breakfastincluded || false}
+                onChange={(e) => editingHotel && setEditingHotel({ ...editingHotel, breakfastincluded: e.target.checked })}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="editHotelBreakfast">Breakfast Included</Label>
+            </div>
+            <div className="space-y-2">
+              <Label>Remarks</Label>
+              <Input
+                value={editingHotel?.remarks || ''}
+                onChange={(e) => editingHotel && setEditingHotel({ ...editingHotel, remarks: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingHotel(null)}>Cancel</Button>
+            <Button onClick={handleSaveHotel} className="gradient-primary text-primary-foreground">Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
