@@ -28,7 +28,7 @@ import type { Currency, Country, City } from '@/services/masterDataService';
 import type { Hotel } from '@/services/masterDataService';
 import {
   Plane, Bus, Train, Hotel as HotelIcon, Utensils, Ticket, Calculator, Shield, Info, Plus, Trash2,
-  Loader2, Users, Calendar, MapPin, Save, Globe, Building2, IdCard, Heart, BadgePercent
+  Loader2, Users, Calendar, MapPin, Save, Globe, Building2, IdCard, Heart, BadgePercent, ChevronDown, ChevronUp
 } from 'lucide-react';
 import {
   Flight, Bus as BusType, Train as TrainType, Accommodation, Activity, Overhead,
@@ -116,6 +116,14 @@ export default function CreateTrip() {
   const [cities, setCities] = useState<City[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [isLoadingMasterData, setIsLoadingMasterData] = useState(true);
+
+  // Collapsed state for each section's items
+  const [collapsedFlights, setCollapsedFlights] = useState<boolean[]>([]);
+  const [collapsedBuses, setCollapsedBuses] = useState<boolean[]>([]);
+  const [collapsedTrains, setCollapsedTrains] = useState<boolean[]>([]);
+  const [collapsedAccommodations, setCollapsedAccommodations] = useState<boolean[]>([]);
+  const [collapsedActivities, setCollapsedActivities] = useState<boolean[]>([]);
+  const [collapsedOverheads, setCollapsedOverheads] = useState<boolean[]>([]);
 
   // Hotel state for accommodation
   const [hotelsMasterList, setHotelsMasterList] = useState<Hotel[]>([]);
@@ -484,6 +492,7 @@ export default function CreateTrip() {
   // Transport functions
   const addFlight = () => {
     const defaultCurrency = getCountryCurrency(formData.countries.length > 0 ? formData.countries[0] : '') || 'INR';
+    setCollapsedFlights(prev => [...prev, false]);
     setFlights([...flights, {
       id: `flight-${Date.now()}`,
       from: '',
@@ -517,11 +526,13 @@ export default function CreateTrip() {
   };
 
   const deleteFlight = (index: number) => {
+    setCollapsedFlights(prev => prev.filter((_, i) => i !== index));
     setFlights(flights.filter((_, i) => i !== index));
   };
 
   const addBus = () => {
     const defaultCurrency = getCountryCurrency(formData.countries.length > 0 ? formData.countries[0] : '') || 'INR';
+    setCollapsedBuses(prev => [...prev, false]);
     setBuses([...buses, {
       id: `bus-${Date.now()}`,
       name: '',
@@ -554,11 +565,13 @@ export default function CreateTrip() {
   };
 
   const deleteBus = (index: number) => {
+    setCollapsedBuses(prev => prev.filter((_, i) => i !== index));
     setBuses(buses.filter((_, i) => i !== index));
   };
 
   const addTrain = () => {
     const defaultCurrency = getCountryCurrency(formData.countries.length > 0 ? formData.countries[0] : '') || 'INR';
+    setCollapsedTrains(prev => [...prev, false]);
     setTrains([...trains, {
       id: `train-${Date.now()}`,
       name: '',
@@ -590,6 +603,7 @@ export default function CreateTrip() {
   };
 
   const deleteTrain = (index: number) => {
+    setCollapsedTrains(prev => prev.filter((_, i) => i !== index));
     setTrains(trains.filter((_, i) => i !== index));
   };
 
@@ -598,6 +612,7 @@ export default function CreateTrip() {
     const defaultCurrency = getCountryCurrency(formData.countries.length > 0 ? formData.countries[0] : '') || 'INR';
     const firstCity = formData.cities[0]?.name || '';
 
+    setCollapsedAccommodations(prev => [...prev, false]);
     setAccommodations([...accommodations, {
       id: `acc-${Date.now()}`,
       hotelName: '',
@@ -695,6 +710,7 @@ export default function CreateTrip() {
   };
 
   const deleteAccommodation = (index: number) => {
+    setCollapsedAccommodations(prev => prev.filter((_, i) => i !== index));
     setAccommodations(accommodations.filter((_, i) => i !== index));
   };
 
@@ -763,6 +779,7 @@ export default function CreateTrip() {
   // Activity functions
   const addActivity = () => {
     const defaultCurrency = getCountryCurrency(formData.countries.length > 0 ? formData.countries[0] : '') || 'INR';
+    setCollapsedActivities(prev => [...prev, false]);
     setActivities([...activities, {
       id: `activity-${Date.now()}`,
       name: '',
@@ -797,12 +814,14 @@ export default function CreateTrip() {
   };
 
   const deleteActivity = (index: number) => {
+    setCollapsedActivities(prev => prev.filter((_, i) => i !== index));
     setActivities(activities.filter((_, i) => i !== index));
   };
 
   // Overhead functions
   const addOverhead = () => {
     const defaultCurrency = getCountryCurrency(formData.countries.length > 0 ? formData.countries[0] : '') || 'INR';
+    setCollapsedOverheads(prev => [...prev, false]);
     setOverheads([...overheads, {
       id: `overhead-${Date.now()}`,
       name: '',
@@ -831,6 +850,7 @@ export default function CreateTrip() {
   };
 
   const deleteOverhead = (index: number) => {
+    setCollapsedOverheads(prev => prev.filter((_, i) => i !== index));
     setOverheads(overheads.filter((_, i) => i !== index));
   };
 
@@ -1768,135 +1788,66 @@ export default function CreateTrip() {
               <Plane className="w-5 h-5 text-primary" />
               Flights
             </div>
-            <Button onClick={addFlight} size="sm" className="gradient-primary text-primary-foreground">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Flight
-            </Button>
+
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {flights.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No flights added yet. Click "Add Flight" to begin.</p>
+            <p className="text-sm text-muted-foreground text-center py-4">No flights added yet.</p>
           ) : (
-            flights.map((flight, index) => (
-              <div key={flight.id} className="p-4 border rounded-lg space-y-4 relative bg-card">
-                <div className="absolute top-2 right-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => deleteFlight(index)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+            flights.map((flight, index) => {
+              const isCollapsed = collapsedFlights[index] ?? false;
+              const summary = [flight.from, flight.to].filter(Boolean).join(' → ') || `Flight ${index + 1}`;
+              const subSummary = [flight.airline, flight.flightNumber].filter(Boolean).join(' · ');
+              return (
+                <div key={flight.id} className="border rounded-lg bg-card overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
+                    <button type="button" className="flex items-center gap-2 flex-1 text-left min-w-0"
+                      onClick={() => setCollapsedFlights(prev => { const n = [...prev]; n[index] = !n[index]; return n; })}>
+                      {isCollapsed ? <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 shrink-0 text-muted-foreground" />}
+                      <span className="font-medium text-sm truncate">{summary}</span>
+                      {subSummary && <span className="text-xs text-muted-foreground truncate hidden sm:inline">{subSummary}</span>}
+                      {isCollapsed && flight.totalCostINR > 0 && <span className="text-xs text-primary ml-auto mr-2 shrink-0">{formatCurrency(flight.totalCostINR, 'INR')}</span>}
+                    </button>
+                    <Button size="sm" variant="ghost" onClick={() => deleteFlight(index)} className="text-destructive hover:text-destructive h-7 w-7 p-0 shrink-0">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                  {!isCollapsed && (
+                    <div className="p-4 space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2"><Label>From</Label><Input placeholder="Departure city" value={flight.from} onChange={(e) => updateFlight(index, 'from', e.target.value)} /></div>
+                        <div className="space-y-2"><Label>To</Label><Input placeholder="Arrival city" value={flight.to} onChange={(e) => updateFlight(index, 'to', e.target.value)} /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2"><Label>Airline</Label><Input placeholder="e.g., Air India" value={flight.airline} onChange={(e) => updateFlight(index, 'airline', e.target.value)} /></div>
+                        <div className="space-y-2"><Label>Flight Number</Label><Input placeholder="e.g., AI 101" value={flight.flightNumber} onChange={(e) => updateFlight(index, 'flightNumber', e.target.value)} /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2"><Label>Departure Time</Label><Input type="datetime-local" value={flight.departureTime} onChange={(e) => updateFlight(index, 'departureTime', e.target.value)} /></div>
+                        <div className="space-y-2"><Label>Arrival Time</Label><Input type="datetime-local" value={flight.arrivalTime} onChange={(e) => updateFlight(index, 'arrivalTime', e.target.value)} /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2"><Label>Cost Per Person</Label><Input type="number" placeholder="0" value={flight.costPerPerson || ''} onChange={(e) => updateFlight(index, 'costPerPerson', parseFloat(e.target.value) || 0)} /></div>
+                        <div className="space-y-2">
+                          <Label>Currency</Label>
+                          <Select value={flight.currency} onValueChange={(v) => updateFlight(index, 'currency', v)} disabled={isLoadingMasterData}>
+                            <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                            <SelectContent className="bg-popover">{currencies.map((c) => <SelectItem key={c.id} value={c.code}>{c.code} ({c.symbol})</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="space-y-2"><Label>Description</Label><Textarea placeholder="Additional flight details..." value={flight.description} onChange={(e) => updateFlight(index, 'description', e.target.value)} rows={2} /></div>
+                      <div className="pt-2 border-t"><p className="text-sm font-semibold text-primary">Total: {formatCurrency(flight.totalCostINR, 'INR')}</p></div>
+                    </div>
+                  )}
                 </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>From</Label>
-                    <Input
-                      placeholder="Departure city"
-                      value={flight.from}
-                      onChange={(e) => updateFlight(index, 'from', e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>To</Label>
-                    <Input
-                      placeholder="Arrival city"
-                      value={flight.to}
-                      onChange={(e) => updateFlight(index, 'to', e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Airline</Label>
-                    <Input
-                      placeholder="e.g., Air India"
-                      value={flight.airline}
-                      onChange={(e) => updateFlight(index, 'airline', e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Flight Number</Label>
-                    <Input
-                      placeholder="e.g., AI 101"
-                      value={flight.flightNumber}
-                      onChange={(e) => updateFlight(index, 'flightNumber', e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Departure Time</Label>
-                    <Input
-                      type="datetime-local"
-                      value={flight.departureTime}
-                      onChange={(e) => updateFlight(index, 'departureTime', e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Arrival Time</Label>
-                    <Input
-                      type="datetime-local"
-                      value={flight.arrivalTime}
-                      onChange={(e) => updateFlight(index, 'arrivalTime', e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Cost Per Person</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={flight.costPerPerson || ''}
-                      onChange={(e) => updateFlight(index, 'costPerPerson', parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Currency</Label>
-                    <Select
-                      value={flight.currency}
-                      onValueChange={(v) => updateFlight(index, 'currency', v)}
-                      disabled={isLoadingMasterData}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select currency"} />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        {currencies.map((currency) => (
-                          <SelectItem key={currency.id} value={currency.code}>
-                            {currency.code} ({currency.symbol})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Textarea
-                    placeholder="Additional flight details..."
-                    value={flight.description}
-                    onChange={(e) => updateFlight(index, 'description', e.target.value)}
-                    rows={2}
-                  />
-                </div>
-
-                <div className="pt-2 border-t">
-                  <p className="text-sm font-semibold text-primary">
-                    Total: {formatCurrency(flight.totalCostINR, 'INR')}
-                  </p>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
+          <Button type="button" variant="outline" className="w-full h-10 border-dashed" onClick={addFlight}>
+            <Plus className="w-4 h-4 mr-2" /> Add Flight
+          </Button>
         </CardContent>
       </Card>
 
@@ -1908,119 +1859,60 @@ export default function CreateTrip() {
               <Bus className="w-5 h-5 text-primary" />
               Buses
             </div>
-            <Button onClick={addBus} size="sm" className="gradient-primary text-primary-foreground">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Bus
-            </Button>
+
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {buses.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No buses added yet. Click "Add Bus" to begin.</p>
+            <p className="text-sm text-muted-foreground text-center py-4">No buses added yet.</p>
           ) : (
-            buses.map((bus, index) => (
-              <div key={bus.id} className="p-4 border rounded-lg space-y-4 relative bg-card">
-                <div className="absolute top-2 right-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => deleteBus(index)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Bus Name/Type</Label>
-                    <Input
-                      placeholder="e.g., Volvo AC Sleeper"
-                      value={bus.name}
-                      onChange={(e) => updateBus(index, 'name', e.target.value)}
-                    />
+            buses.map((bus, index) => {
+              const isCollapsed = collapsedBuses[index] ?? false;
+              const summary = bus.name || `Bus ${index + 1}`;
+              const subSummary = [bus.seatingCapacity ? `${bus.seatingCapacity} seats` : '', bus.quantity ? `×${bus.quantity}` : '', bus.numberOfDays ? `${bus.numberOfDays} days` : ''].filter(Boolean).join(' · ');
+              return (
+                <div key={bus.id} className="border rounded-lg bg-card overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
+                    <button type="button" className="flex items-center gap-2 flex-1 text-left min-w-0"
+                      onClick={() => setCollapsedBuses(prev => { const n = [...prev]; n[index] = !n[index]; return n; })}>
+                      {isCollapsed ? <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 shrink-0 text-muted-foreground" />}
+                      <span className="font-medium text-sm truncate">{summary}</span>
+                      {subSummary && <span className="text-xs text-muted-foreground hidden sm:inline">{subSummary}</span>}
+                      {isCollapsed && bus.totalCostINR > 0 && <span className="text-xs text-primary ml-auto mr-2 shrink-0">{formatCurrency(bus.totalCostINR, 'INR')}</span>}
+                    </button>
+                    <Button size="sm" variant="ghost" onClick={() => deleteBus(index)} className="text-destructive hover:text-destructive h-7 w-7 p-0 shrink-0">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Seating Capacity</Label>
-                    <Input
-                      type="number"
-                      placeholder="e.g., 45"
-                      value={bus.seatingCapacity || ''}
-                      onChange={(e) => updateBus(index, 'seatingCapacity', parseInt(e.target.value) || 0)}
-                    />
-                  </div>
+                  {!isCollapsed && (
+                    <div className="p-4 space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2"><Label>Bus Name/Type</Label><Input placeholder="e.g., Volvo AC Sleeper" value={bus.name} onChange={(e) => updateBus(index, 'name', e.target.value)} /></div>
+                        <div className="space-y-2"><Label>Seating Capacity</Label><Input type="number" placeholder="e.g., 45" value={bus.seatingCapacity || ''} onChange={(e) => updateBus(index, 'seatingCapacity', parseInt(e.target.value) || 0)} /></div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-2"><Label>Cost Per Bus</Label><Input type="number" placeholder="0" value={bus.costPerBus || ''} onChange={(e) => updateBus(index, 'costPerBus', parseFloat(e.target.value) || 0)} /></div>
+                        <div className="space-y-2">
+                          <Label>Currency</Label>
+                          <Select value={bus.currency} onValueChange={(v) => updateBus(index, 'currency', v)} disabled={isLoadingMasterData}>
+                            <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                            <SelectContent className="bg-popover">{currencies.map((c) => <SelectItem key={c.id} value={c.code}>{c.code} ({c.symbol})</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2"><Label>Number of Days</Label><Input type="number" placeholder="0" value={bus.numberOfDays || ''} onChange={(e) => updateBus(index, 'numberOfDays', parseInt(e.target.value) || 0)} /></div>
+                      </div>
+                      <div className="space-y-2"><Label>Quantity (Number of Buses)</Label><Input type="number" placeholder="1" value={bus.quantity || ''} onChange={(e) => updateBus(index, 'quantity', parseInt(e.target.value) || 1)} /></div>
+                      <div className="space-y-2"><Label>Description</Label><Textarea placeholder="Route, timings, etc." value={bus.description} onChange={(e) => updateBus(index, 'description', e.target.value)} rows={2} /></div>
+                      <div className="pt-2 border-t"><p className="text-sm font-semibold text-primary">Total: {formatCurrency(bus.totalCostINR, 'INR')}</p></div>
+                    </div>
+                  )}
                 </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label>Cost Per Bus</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={bus.costPerBus || ''}
-                      onChange={(e) => updateBus(index, 'costPerBus', parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Currency</Label>
-                    <Select
-                      value={bus.currency}
-                      onValueChange={(v) => updateBus(index, 'currency', v)}
-                      disabled={isLoadingMasterData}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select currency"} />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        {currencies.map((currency) => (
-                          <SelectItem key={currency.id} value={currency.code}>
-                            {currency.code} ({currency.symbol})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Number of Days</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={bus.numberOfDays || ''}
-                      onChange={(e) => updateBus(index, 'numberOfDays', parseInt(e.target.value) || 0)}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="space-y-2">
-                    <Label>Quantity (Number of Buses)</Label>
-                    <Input
-                      type="number"
-                      placeholder="1"
-                      value={bus.quantity || ''}
-                      onChange={(e) => updateBus(index, 'quantity', parseInt(e.target.value) || 1)}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Textarea
-                    placeholder="Route, timings, etc."
-                    value={bus.description}
-                    onChange={(e) => updateBus(index, 'description', e.target.value)}
-                    rows={2}
-                  />
-                </div>
-
-                <div className="pt-2 border-t">
-                  <p className="text-sm font-semibold text-primary">
-                    Total: {formatCurrency(bus.totalCostINR, 'INR')}
-                  </p>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
+          <Button type="button" variant="outline" className="w-full h-10 border-dashed" onClick={addBus}>
+            <Plus className="w-4 h-4 mr-2" /> Add Bus
+          </Button>
         </CardContent>
       </Card>
 
@@ -2032,116 +1924,62 @@ export default function CreateTrip() {
               <Train className="w-5 h-5 text-primary" />
               Trains
             </div>
-            <Button onClick={addTrain} size="sm" className="gradient-primary text-primary-foreground">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Train
-            </Button>
+
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {trains.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No trains added yet. Click "Add Train" to begin.</p>
+            <p className="text-sm text-muted-foreground text-center py-4">No trains added yet.</p>
           ) : (
-            trains.map((train, index) => (
-              <div key={train.id} className="p-4 border rounded-lg space-y-4 relative bg-card">
-                <div className="absolute top-2 right-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => deleteTrain(index)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Train Name</Label>
-                    <Input
-                      placeholder="e.g., Rajdhani Express"
-                      value={train.name}
-                      onChange={(e) => updateTrain(index, 'name', e.target.value)}
-                    />
+            trains.map((train, index) => {
+              const isCollapsed = collapsedTrains[index] ?? false;
+              const summary = train.name || `Train ${index + 1}`;
+              const subSummary = [train.trainNumber, train.class, train.timing].filter(Boolean).join(' · ');
+              return (
+                <div key={train.id} className="border rounded-lg bg-card overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
+                    <button type="button" className="flex items-center gap-2 flex-1 text-left min-w-0"
+                      onClick={() => setCollapsedTrains(prev => { const n = [...prev]; n[index] = !n[index]; return n; })}>
+                      {isCollapsed ? <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 shrink-0 text-muted-foreground" />}
+                      <span className="font-medium text-sm truncate">{summary}</span>
+                      {subSummary && <span className="text-xs text-muted-foreground hidden sm:inline">{subSummary}</span>}
+                      {isCollapsed && train.totalCostINR > 0 && <span className="text-xs text-primary ml-auto mr-2 shrink-0">{formatCurrency(train.totalCostINR, 'INR')}</span>}
+                    </button>
+                    <Button size="sm" variant="ghost" onClick={() => deleteTrain(index)} className="text-destructive hover:text-destructive h-7 w-7 p-0 shrink-0">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Train Number</Label>
-                    <Input
-                      placeholder="e.g., 12301"
-                      value={train.trainNumber}
-                      onChange={(e) => updateTrain(index, 'trainNumber', e.target.value)}
-                    />
-                  </div>
+                  {!isCollapsed && (
+                    <div className="p-4 space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2"><Label>Train Name</Label><Input placeholder="e.g., Rajdhani Express" value={train.name} onChange={(e) => updateTrain(index, 'name', e.target.value)} /></div>
+                        <div className="space-y-2"><Label>Train Number</Label><Input placeholder="e.g., 12301" value={train.trainNumber} onChange={(e) => updateTrain(index, 'trainNumber', e.target.value)} /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2"><Label>Class</Label><Input placeholder="e.g., 3AC, 2AC, Sleeper" value={train.class} onChange={(e) => updateTrain(index, 'class', e.target.value)} /></div>
+                        <div className="space-y-2"><Label>Timing</Label><Input placeholder="e.g., 08:00 - 14:00" value={train.timing} onChange={(e) => updateTrain(index, 'timing', e.target.value)} /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2"><Label>Cost Per Person</Label><Input type="number" placeholder="0" value={train.costPerPerson || ''} onChange={(e) => updateTrain(index, 'costPerPerson', parseFloat(e.target.value) || 0)} /></div>
+                        <div className="space-y-2">
+                          <Label>Currency</Label>
+                          <Select value={train.currency} onValueChange={(v) => updateTrain(index, 'currency', v)} disabled={isLoadingMasterData}>
+                            <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                            <SelectContent className="bg-popover">{currencies.map((c) => <SelectItem key={c.id} value={c.code}>{c.code} ({c.symbol})</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="space-y-2"><Label>Description</Label><Textarea placeholder="Route, additional details..." value={train.description} onChange={(e) => updateTrain(index, 'description', e.target.value)} rows={2} /></div>
+                      <div className="pt-2 border-t"><p className="text-sm font-semibold text-primary">Total: {formatCurrency(train.totalCostINR, 'INR')}</p></div>
+                    </div>
+                  )}
                 </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Class</Label>
-                    <Input
-                      placeholder="e.g., 3AC, 2AC, Sleeper"
-                      value={train.class}
-                      onChange={(e) => updateTrain(index, 'class', e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Timing</Label>
-                    <Input
-                      placeholder="e.g., 08:00 - 14:00"
-                      value={train.timing}
-                      onChange={(e) => updateTrain(index, 'timing', e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Cost Per Person</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={train.costPerPerson || ''}
-                      onChange={(e) => updateTrain(index, 'costPerPerson', parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Currency</Label>
-                    <Select
-                      value={train.currency}
-                      onValueChange={(v) => updateTrain(index, 'currency', v)}
-                      disabled={isLoadingMasterData}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select currency"} />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        {currencies.map((currency) => (
-                          <SelectItem key={currency.id} value={currency.code}>
-                            {currency.code} ({currency.symbol})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Textarea
-                    placeholder="Route, additional details..."
-                    value={train.description}
-                    onChange={(e) => updateTrain(index, 'description', e.target.value)}
-                    rows={2}
-                  />
-                </div>
-
-                <div className="pt-2 border-t">
-                  <p className="text-sm font-semibold text-primary">
-                    Total: {formatCurrency(train.totalCostINR, 'INR')}
-                  </p>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
+          <Button type="button" variant="outline" className="w-full h-10 border-dashed" onClick={addTrain}>
+            <Plus className="w-4 h-4 mr-2" /> Add Train
+          </Button>
         </CardContent>
       </Card>
 
@@ -2153,28 +1991,33 @@ export default function CreateTrip() {
               <HotelIcon className="w-5 h-5 text-primary" />
               Accommodation
             </div>
-            <Button onClick={addAccommodation} size="sm" className="gradient-primary text-primary-foreground">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Hotel
-            </Button>
+
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {accommodations.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No accommodations added yet. Click "Add Hotel" to begin.</p>
+            <p className="text-sm text-muted-foreground text-center py-4">No accommodations added yet.</p>
           ) : (
-            accommodations.map((accommodation, index) => (
-              <div key={accommodation.id} className="p-6 border rounded-lg space-y-6 relative bg-card">
-                <div className="absolute top-2 right-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => deleteAccommodation(index)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="w-4 h-4" />
+            accommodations.map((accommodation, index) => {
+              const isCollapsed = collapsedAccommodations[index] ?? false;
+              const summary = accommodation.hotelName || accommodation.city || `Hotel ${index + 1}`;
+              const subSummary = [accommodation.city, accommodation.numberOfNights ? `${accommodation.numberOfNights} nights` : ''].filter(Boolean).join(' · ');
+              return (
+              <div key={accommodation.id} className="border rounded-lg bg-card overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
+                  <button type="button" className="flex items-center gap-2 flex-1 text-left min-w-0"
+                    onClick={() => setCollapsedAccommodations(prev => { const n = [...prev]; n[index] = !n[index]; return n; })}>
+                    {isCollapsed ? <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 shrink-0 text-muted-foreground" />}
+                    <span className="font-medium text-sm truncate">{summary}</span>
+                    {subSummary && <span className="text-xs text-muted-foreground hidden sm:inline">{subSummary}</span>}
+                    {isCollapsed && accommodation.totalCostINR > 0 && <span className="text-xs text-primary ml-auto mr-2 shrink-0">{formatCurrency(accommodation.totalCostINR, 'INR')}</span>}
+                  </button>
+                  <Button size="sm" variant="ghost" onClick={() => deleteAccommodation(index)} className="text-destructive hover:text-destructive h-7 w-7 p-0 shrink-0">
+                    <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
+                {!isCollapsed && (
+                <div className="p-6 space-y-6">
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -2716,9 +2559,15 @@ export default function CreateTrip() {
                     Total Cost: {formatCurrency(accommodation.totalCostINR, 'INR')}
                   </p>
                 </div>
+                </div>
+                )}
               </div>
-            ))
+              );
+            })
           )}
+          <Button type="button" variant="outline" className="w-full h-10 border-dashed" onClick={addAccommodation}>
+            <Plus className="w-4 h-4 mr-2" /> Add Hotel
+          </Button>
         </CardContent>
       </Card>
 
@@ -2805,28 +2654,33 @@ export default function CreateTrip() {
               <Ticket className="w-5 h-5 text-primary" />
               Activities & Sightseeing
             </div>
-            <Button onClick={addActivity} size="sm" className="gradient-primary text-primary-foreground">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Activity
-            </Button>
+
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {activities.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No activities added yet. Click "Add Activity" to begin.</p>
+            <p className="text-sm text-muted-foreground text-center py-4">No activities added yet.</p>
           ) : (
-            activities.map((activity, index) => (
-              <div key={activity.id} className="p-4 border rounded-lg space-y-4 relative bg-card">
-                <div className="absolute top-2 right-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => deleteActivity(index)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="w-4 h-4" />
+            activities.map((activity, index) => {
+              const isCollapsed = collapsedActivities[index] ?? false;
+              const summary = activity.name || `Activity ${index + 1}`;
+              const subSummary = activity.city || '';
+              return (
+              <div key={activity.id} className="border rounded-lg bg-card overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
+                  <button type="button" className="flex items-center gap-2 flex-1 text-left min-w-0"
+                    onClick={() => setCollapsedActivities(prev => { const n = [...prev]; n[index] = !n[index]; return n; })}>
+                    {isCollapsed ? <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 shrink-0 text-muted-foreground" />}
+                    <span className="font-medium text-sm truncate">{summary}</span>
+                    {subSummary && <span className="text-xs text-muted-foreground hidden sm:inline">{subSummary}</span>}
+                    {isCollapsed && activity.totalCostINR > 0 && <span className="text-xs text-primary ml-auto mr-2 shrink-0">{formatCurrency(activity.totalCostINR, 'INR')}</span>}
+                  </button>
+                  <Button size="sm" variant="ghost" onClick={() => deleteActivity(index)} className="text-destructive hover:text-destructive h-7 w-7 p-0 shrink-0">
+                    <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
+                {!isCollapsed && (
+                <div className="p-4 space-y-4">
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -2925,9 +2779,15 @@ export default function CreateTrip() {
                     Total: {formatCurrency(activity.totalCostINR, 'INR')}
                   </p>
                 </div>
+                </div>
+                )}
               </div>
-            ))
+              );
+            })
           )}
+          <Button type="button" variant="outline" className="w-full h-10 border-dashed" onClick={addActivity}>
+            <Plus className="w-4 h-4 mr-2" /> Add Activity
+          </Button>
         </CardContent>
       </Card>
 
@@ -3086,28 +2946,31 @@ export default function CreateTrip() {
               <Shield className="w-5 h-5 text-primary" />
               Overheads
             </div>
-            <Button onClick={addOverhead} size="sm" className="gradient-primary text-primary-foreground">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Overhead
-            </Button>
+
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {overheads.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No overheads added yet. Click "Add Overhead" to begin.</p>
+            <p className="text-sm text-muted-foreground text-center py-4">No overheads added yet.</p>
           ) : (
-            overheads.map((overhead, index) => (
-              <div key={overhead.id} className="p-4 border rounded-lg space-y-4 relative bg-card">
-                <div className="absolute top-2 right-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => deleteOverhead(index)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="w-4 h-4" />
+            overheads.map((overhead, index) => {
+              const isCollapsed = collapsedOverheads[index] ?? false;
+              const summary = overhead.name || `Overhead ${index + 1}`;
+              return (
+              <div key={overhead.id} className="border rounded-lg bg-card overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
+                  <button type="button" className="flex items-center gap-2 flex-1 text-left min-w-0"
+                    onClick={() => setCollapsedOverheads(prev => { const n = [...prev]; n[index] = !n[index]; return n; })}>
+                    {isCollapsed ? <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 shrink-0 text-muted-foreground" />}
+                    <span className="font-medium text-sm truncate">{summary}</span>
+                    {isCollapsed && overhead.totalCostINR > 0 && <span className="text-xs text-primary ml-auto mr-2 shrink-0">{formatCurrency(overhead.totalCostINR, 'INR')}</span>}
+                  </button>
+                  <Button size="sm" variant="ghost" onClick={() => deleteOverhead(index)} className="text-destructive hover:text-destructive h-7 w-7 p-0 shrink-0">
+                    <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
+                {!isCollapsed && (
+                <div className="p-4 space-y-4">
 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
@@ -3164,9 +3027,15 @@ export default function CreateTrip() {
                     Total: {formatCurrency(overhead.totalCostINR, 'INR')}
                   </p>
                 </div>
+                </div>
+                )}
               </div>
-            ))
+              );
+            })
           )}
+          <Button type="button" variant="outline" className="w-full h-10 border-dashed" onClick={addOverhead}>
+            <Plus className="w-4 h-4 mr-2" /> Add Overhead
+          </Button>
         </CardContent>
       </Card>
 
