@@ -130,6 +130,8 @@ export default function CreateTrip() {
 
   // NEW: Multi-city selection state
   const [selectedCityForAdd, setSelectedCityForAdd] = useState('');
+  const [pendingCityFromDate, setPendingCityFromDate] = useState('');
+  const [pendingCityToDate, setPendingCityToDate] = useState('');
 
   // NEW: Multi-country selection state
   const [selectedCountryForAdd, setSelectedCountryForAdd] = useState('');
@@ -456,12 +458,10 @@ export default function CreateTrip() {
   };
 
   const removeCity = (cityName: string) => {
-    setFormData(prev => {
-      const updated = prev.cities.filter(c => c.name !== cityName);
-      const startDate = updated[0]?.fromDate || '';
-      const endDate = updated[updated.length - 1]?.toDate || '';
-      return { ...prev, cities: updated, startDate, endDate };
-    });
+    setFormData(prev => ({
+      ...prev,
+      cities: prev.cities.filter(c => c.name !== cityName)
+    }));
   };
 
   const updateCityDate = (cityName: string, field: 'fromDate' | 'toDate', value: string) => {
@@ -469,9 +469,9 @@ export default function CreateTrip() {
       const updated = prev.cities.map(c =>
         c.name === cityName ? { ...c, [field]: value } : c
       );
-      // Trip start = first city fromDate, Trip end = last city toDate
-      const startDate = updated[0]?.fromDate || '';
-      const endDate = updated[updated.length - 1]?.toDate || '';
+      // Auto-derive trip start/end from first and last city dates
+      const startDate = updated[0]?.fromDate || prev.startDate;
+      const endDate = updated[updated.length - 1]?.toDate || prev.endDate;
       return { ...prev, cities: updated, startDate, endDate };
     });
   };
@@ -1271,21 +1271,7 @@ export default function CreateTrip() {
             </div>
           </div>
 
-          {/* Row 2: Trip dates — auto-derived from city itinerary */}
-          {formData.startDate && formData.endDate && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Start Date</Label>
-                <Input type="date" value={formData.startDate} readOnly className="bg-muted cursor-not-allowed" />
-              </div>
-              <div className="space-y-2">
-                <Label>End Date</Label>
-                <Input type="date" value={formData.endDate} readOnly className="bg-muted cursor-not-allowed" />
-              </div>
-            </div>
-          )}
-
-          {/* Row 3: Itinerary */}
+          {/* Row 2: Itinerary */}
           <div className="space-y-2">
             <Label>Itinerary *</Label>
 
@@ -1342,65 +1328,109 @@ export default function CreateTrip() {
               </div>
             )}
 
-            {/* Add city controls — always below rows */}
-            <div className="flex items-center gap-2 pt-1">
-              <Select
-                value={selectedCountryForAdd}
-                onValueChange={(val) => {
-                  setSelectedCountryForAdd(val);
-                  setSelectedCityForAdd('');
-                }}
-                disabled={isLoadingMasterData}
-              >
-                <SelectTrigger className="flex-1 h-9 text-sm">
-                  <SelectValue placeholder="Select country" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  {countries.map((country) => (
-                    <SelectItem key={country.id} value={country.id}>
-                      {country.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={selectedCityForAdd}
-                onValueChange={setSelectedCityForAdd}
-                disabled={!selectedCountryForAdd || isLoadingMasterData}
-              >
-                <SelectTrigger className="flex-1 h-9 text-sm">
-                  <SelectValue placeholder={!selectedCountryForAdd ? "Country first" : "Select city"} />
-                </SelectTrigger>
-                <SelectContent className="bg-popover">
-                  {cities
-                    .filter(c => c.country_id === selectedCountryForAdd)
-                    .map((city) => (
-                      <SelectItem key={city.id} value={city.name}>
-                        {city.name}
+            {/* Add city form — country, city, dates, then Add City button */}
+            <div className="rounded-lg border p-3 space-y-3 bg-muted/30">
+              <p className="text-xs font-medium text-muted-foreground">Add City to Itinerary</p>
+              {/* Row 1: Country + City */}
+              <div className="grid grid-cols-2 gap-2">
+                <Select
+                  value={selectedCountryForAdd}
+                  onValueChange={(val) => {
+                    setSelectedCountryForAdd(val);
+                    setSelectedCityForAdd('');
+                  }}
+                  disabled={isLoadingMasterData}
+                >
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Select country" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {countries.map((country) => (
+                      <SelectItem key={country.id} value={country.id}>
+                        {country.name}
                       </SelectItem>
                     ))}
-                </SelectContent>
-              </Select>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={selectedCityForAdd}
+                  onValueChange={setSelectedCityForAdd}
+                  disabled={!selectedCountryForAdd || isLoadingMasterData}
+                >
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder={!selectedCountryForAdd ? "Select country first" : "Select city"} />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {cities
+                      .filter(c => c.country_id === selectedCountryForAdd)
+                      .map((city) => (
+                        <SelectItem key={city.id} value={city.name}>
+                          {city.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Row 2: From + To dates — only shown once city is selected */}
+              {selectedCityForAdd && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">From Date</Label>
+                    <Input
+                      type="date"
+                      className="h-9 text-sm"
+                      value={pendingCityFromDate}
+                      max={pendingCityToDate || undefined}
+                      onChange={(e) => setPendingCityFromDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">To Date</Label>
+                    <Input
+                      type="date"
+                      className="h-9 text-sm"
+                      value={pendingCityToDate}
+                      min={pendingCityFromDate || undefined}
+                      onChange={(e) => setPendingCityToDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+              {/* Add City button */}
               <Button
                 type="button"
                 size="sm"
-                className="h-9 px-4 shrink-0"
-                disabled={!selectedCityForAdd}
+                className="h-9 px-4"
+                disabled={!selectedCityForAdd || !pendingCityFromDate || !pendingCityToDate}
                 onClick={() => {
-                  if (selectedCityForAdd && !formData.cities.find(c => c.name === selectedCityForAdd)) {
+                  if (selectedCityForAdd && pendingCityFromDate && pendingCityToDate &&
+                      !formData.cities.find(c => c.name === selectedCityForAdd)) {
+                    const newCity = { name: selectedCityForAdd, fromDate: pendingCityFromDate, toDate: pendingCityToDate };
                     if (selectedCountryForAdd && !formData.countries.includes(selectedCountryForAdd)) {
-                      setFormData(prev => ({
-                        ...prev,
-                        countries: [...prev.countries, selectedCountryForAdd],
-                        cities: [...prev.cities, { name: selectedCityForAdd, fromDate: '', toDate: '' }]
-                      }));
+                      setFormData(prev => {
+                        const updated = [...prev.cities, newCity];
+                        return {
+                          ...prev,
+                          countries: [...prev.countries, selectedCountryForAdd],
+                          cities: updated,
+                          startDate: updated[0].fromDate,
+                          endDate: updated[updated.length - 1].toDate,
+                        };
+                      });
                     } else {
-                      setFormData(prev => ({
-                        ...prev,
-                        cities: [...prev.cities, { name: selectedCityForAdd, fromDate: '', toDate: '' }]
-                      }));
+                      setFormData(prev => {
+                        const updated = [...prev.cities, newCity];
+                        return {
+                          ...prev,
+                          cities: updated,
+                          startDate: updated[0].fromDate,
+                          endDate: updated[updated.length - 1].toDate,
+                        };
+                      });
                     }
                     setSelectedCityForAdd('');
+                    setPendingCityFromDate('');
+                    setPendingCityToDate('');
                   }
                 }}
               >
@@ -1409,11 +1439,32 @@ export default function CreateTrip() {
             </div>
           </div>
 
-          {/* Duration summary */}
+          {/* Row 3: Start Date + End Date */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Start Date *</Label>
+              <Input
+                type="date"
+                value={formData.startDate}
+                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>End Date *</Label>
+              <Input
+                type="date"
+                value={formData.endDate}
+                min={formData.startDate}
+                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+              />
+            </div>
+          </div>
+
+          {/* Duration summary — shown below cities, derived from city dates */}
           {formData.startDate && formData.endDate && (
             <div className="p-3 bg-muted rounded-lg">
               <p className="text-sm font-semibold">
-                Duration: {calculateTripDuration().days} days, {calculateTripDuration().nights} nights
+                Trip: {formData.startDate} → {formData.endDate} &nbsp;·&nbsp; {calculateTripDuration().days} days, {calculateTripDuration().nights} nights
               </p>
             </div>
           )}
