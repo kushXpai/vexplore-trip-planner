@@ -32,7 +32,8 @@ import {
 } from 'lucide-react';
 import {
   Flight, Bus as BusType, Train as TrainType, Accommodation, Activity, Overhead,
-  TripCategory, TripType, TripExtras, RoomPreferences, CityWithDates
+  TripCategory, TripType, TripExtras, RoomPreferences, CityWithDates,
+  FlightClassEntry, FlightSeatUpgrade, FlightMealUpgrade, FlightClass, FLIGHT_CLASS_LABELS
 } from '@/types/trip';
 import { toast } from 'sonner';
 import { createTrip, updateTrip, getTripById } from '@/services/tripService';
@@ -290,9 +291,11 @@ export default function CreateTrip() {
           flightNumber: f.flight_number,
           departureTime: f.departure_time,
           arrivalTime: f.arrival_time,
-          costPerPerson: f.cost_per_person,
           currency: f.currency,
-          description: f.description,
+          description: f.description || '',
+          classes: f.classes || [],
+          seatUpgrades: f.seat_upgrades || [],
+          mealUpgrades: f.meal_upgrades || [],
           totalCost: f.total_cost,
           totalCostINR: f.total_cost_inr,
         })));
@@ -548,27 +551,110 @@ export default function CreateTrip() {
       flightNumber: '',
       departureTime: '',
       arrivalTime: '',
-      costPerPerson: 0,
       currency: defaultCurrency,
       description: '',
+      classes: [],
+      seatUpgrades: [],
+      mealUpgrades: [],
       totalCost: 0,
       totalCostINR: 0,
     }]);
   };
 
-  const updateFlight = (index: number, field: keyof Flight, value: any) => {
+  const recalculateFlightTotal = (flight: Flight, currency: string): { totalCost: number; totalCostINR: number } => {
+    const classesTotal = flight.classes.reduce((sum, c) => sum + c.costPerPerson * c.passengerCount, 0);
+    const seatsTotal = flight.seatUpgrades.reduce((sum, s) => sum + s.costPerSeat * s.seatCount, 0);
+    const mealsTotal = flight.mealUpgrades.reduce((sum, m) => sum + m.costPerMeal * m.mealCount, 0);
+    const totalCost = classesTotal + seatsTotal + mealsTotal;
+    return { totalCost, totalCostINR: totalCost * getCurrencyRate(currency) };
+  };
+
+  const updateFlightBasic = (index: number, field: 'from' | 'to' | 'airline' | 'flightNumber' | 'departureTime' | 'arrivalTime' | 'description', value: string) => {
     const updated = [...flights];
     updated[index] = { ...updated[index], [field]: value };
+    setFlights(updated);
+  };
 
-    if (field === 'costPerPerson' || field === 'currency') {
-      const totalParticipants = calculateTotalParticipants();
-      const cost = field === 'costPerPerson' ? value : updated[index].costPerPerson;
-      const currency = field === 'currency' ? value : updated[index].currency;
+  const updateFlightCurrency = (index: number, currency: string) => {
+    const updated = [...flights];
+    updated[index] = { ...updated[index], currency };
+    const totals = recalculateFlightTotal(updated[index], currency);
+    updated[index] = { ...updated[index], ...totals };
+    setFlights(updated);
+  };
 
-      updated[index].totalCost = cost * totalParticipants;
-      updated[index].totalCostINR = cost * totalParticipants * getCurrencyRate(currency);
-    }
+  const addFlightClass = (flightIndex: number) => {
+    const updated = [...flights];
+    const newClass: FlightClassEntry = { id: `cls-${Date.now()}`, class: 'economy', passengerCount: 0, costPerPerson: 0 };
+    updated[flightIndex] = { ...updated[flightIndex], classes: [...updated[flightIndex].classes, newClass] };
+    const totals = recalculateFlightTotal(updated[flightIndex], updated[flightIndex].currency);
+    updated[flightIndex] = { ...updated[flightIndex], ...totals };
+    setFlights(updated);
+  };
 
+  const updateFlightClass = (flightIndex: number, classIndex: number, field: keyof FlightClassEntry, value: any) => {
+    const updated = [...flights];
+    const classes = [...updated[flightIndex].classes];
+    classes[classIndex] = { ...classes[classIndex], [field]: value };
+    updated[flightIndex] = { ...updated[flightIndex], classes };
+    const totals = recalculateFlightTotal(updated[flightIndex], updated[flightIndex].currency);
+    updated[flightIndex] = { ...updated[flightIndex], ...totals };
+    setFlights(updated);
+  };
+
+  const removeFlightClass = (flightIndex: number, classIndex: number) => {
+    const updated = [...flights];
+    updated[flightIndex] = { ...updated[flightIndex], classes: updated[flightIndex].classes.filter((_, i) => i !== classIndex) };
+    const totals = recalculateFlightTotal(updated[flightIndex], updated[flightIndex].currency);
+    updated[flightIndex] = { ...updated[flightIndex], ...totals };
+    setFlights(updated);
+  };
+
+  const addFlightSeatUpgrade = (flightIndex: number) => {
+    const updated = [...flights];
+    updated[flightIndex] = { ...updated[flightIndex], seatUpgrades: [...updated[flightIndex].seatUpgrades, { id: `seat-${Date.now()}`, label: '', costPerSeat: 0, seatCount: 0 }] };
+    setFlights(updated);
+  };
+
+  const updateFlightSeatUpgrade = (flightIndex: number, upgradeIndex: number, field: keyof FlightSeatUpgrade, value: any) => {
+    const updated = [...flights];
+    const seatUpgrades = [...updated[flightIndex].seatUpgrades];
+    seatUpgrades[upgradeIndex] = { ...seatUpgrades[upgradeIndex], [field]: value };
+    updated[flightIndex] = { ...updated[flightIndex], seatUpgrades };
+    const totals = recalculateFlightTotal(updated[flightIndex], updated[flightIndex].currency);
+    updated[flightIndex] = { ...updated[flightIndex], ...totals };
+    setFlights(updated);
+  };
+
+  const removeFlightSeatUpgrade = (flightIndex: number, upgradeIndex: number) => {
+    const updated = [...flights];
+    updated[flightIndex] = { ...updated[flightIndex], seatUpgrades: updated[flightIndex].seatUpgrades.filter((_, i) => i !== upgradeIndex) };
+    const totals = recalculateFlightTotal(updated[flightIndex], updated[flightIndex].currency);
+    updated[flightIndex] = { ...updated[flightIndex], ...totals };
+    setFlights(updated);
+  };
+
+  const addFlightMealUpgrade = (flightIndex: number) => {
+    const updated = [...flights];
+    updated[flightIndex] = { ...updated[flightIndex], mealUpgrades: [...updated[flightIndex].mealUpgrades, { id: `fmeal-${Date.now()}`, label: '', costPerMeal: 0, mealCount: 0 }] };
+    setFlights(updated);
+  };
+
+  const updateFlightMealUpgrade = (flightIndex: number, upgradeIndex: number, field: keyof FlightMealUpgrade, value: any) => {
+    const updated = [...flights];
+    const mealUpgrades = [...updated[flightIndex].mealUpgrades];
+    mealUpgrades[upgradeIndex] = { ...mealUpgrades[upgradeIndex], [field]: value };
+    updated[flightIndex] = { ...updated[flightIndex], mealUpgrades };
+    const totals = recalculateFlightTotal(updated[flightIndex], updated[flightIndex].currency);
+    updated[flightIndex] = { ...updated[flightIndex], ...totals };
+    setFlights(updated);
+  };
+
+  const removeFlightMealUpgrade = (flightIndex: number, upgradeIndex: number) => {
+    const updated = [...flights];
+    updated[flightIndex] = { ...updated[flightIndex], mealUpgrades: updated[flightIndex].mealUpgrades.filter((_, i) => i !== upgradeIndex) };
+    const totals = recalculateFlightTotal(updated[flightIndex], updated[flightIndex].currency);
+    updated[flightIndex] = { ...updated[flightIndex], ...totals };
     setFlights(updated);
   };
 
@@ -1848,7 +1934,6 @@ export default function CreateTrip() {
               <Plane className="w-5 h-5 text-primary" />
               Flights
             </div>
-
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -1874,31 +1959,156 @@ export default function CreateTrip() {
                     </Button>
                   </div>
                   {!isCollapsed && (
-                    <div className="p-4 space-y-4">
+                    <div className="p-4 space-y-5">
+
+                      {/* Basic flight info */}
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2"><Label>From</Label><Input placeholder="Departure city" value={flight.from} onChange={(e) => updateFlight(index, 'from', e.target.value)} /></div>
-                        <div className="space-y-2"><Label>To</Label><Input placeholder="Arrival city" value={flight.to} onChange={(e) => updateFlight(index, 'to', e.target.value)} /></div>
+                        <div className="space-y-2"><Label>From</Label><Input placeholder="Departure city" value={flight.from} onChange={(e) => updateFlightBasic(index, 'from', e.target.value)} /></div>
+                        <div className="space-y-2"><Label>To</Label><Input placeholder="Arrival city" value={flight.to} onChange={(e) => updateFlightBasic(index, 'to', e.target.value)} /></div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2"><Label>Airline</Label><Input placeholder="e.g., Air India" value={flight.airline} onChange={(e) => updateFlight(index, 'airline', e.target.value)} /></div>
-                        <div className="space-y-2"><Label>Flight Number</Label><Input placeholder="e.g., AI 101" value={flight.flightNumber} onChange={(e) => updateFlight(index, 'flightNumber', e.target.value)} /></div>
+                        <div className="space-y-2"><Label>Airline</Label><Input placeholder="e.g., Air India" value={flight.airline} onChange={(e) => updateFlightBasic(index, 'airline', e.target.value)} /></div>
+                        <div className="space-y-2"><Label>Flight Number</Label><Input placeholder="e.g., AI 101" value={flight.flightNumber} onChange={(e) => updateFlightBasic(index, 'flightNumber', e.target.value)} /></div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2"><Label>Departure Time</Label><Input type="datetime-local" value={flight.departureTime} onChange={(e) => updateFlight(index, 'departureTime', e.target.value)} /></div>
-                        <div className="space-y-2"><Label>Arrival Time</Label><Input type="datetime-local" value={flight.arrivalTime} onChange={(e) => updateFlight(index, 'arrivalTime', e.target.value)} /></div>
+                        <div className="space-y-2"><Label>Departure Time</Label><Input type="datetime-local" value={flight.departureTime} onChange={(e) => updateFlightBasic(index, 'departureTime', e.target.value)} /></div>
+                        <div className="space-y-2"><Label>Arrival Time</Label><Input type="datetime-local" value={flight.arrivalTime} onChange={(e) => updateFlightBasic(index, 'arrivalTime', e.target.value)} /></div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2"><Label>Cost Per Person</Label><Input type="number" placeholder="0" value={flight.costPerPerson || ''} onChange={(e) => updateFlight(index, 'costPerPerson', parseFloat(e.target.value) || 0)} /></div>
-                        <div className="space-y-2">
-                          <Label>Currency</Label>
-                          <Select value={flight.currency} onValueChange={(v) => updateFlight(index, 'currency', v)} disabled={isLoadingMasterData}>
-                            <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
-                            <SelectContent className="bg-popover">{currencies.map((c) => <SelectItem key={c.id} value={c.code}>{c.code} ({c.symbol})</SelectItem>)}</SelectContent>
-                          </Select>
+                      <div className="space-y-2">
+                        <Label>Currency</Label>
+                        <Select value={flight.currency} onValueChange={(v) => updateFlightCurrency(index, v)} disabled={isLoadingMasterData}>
+                          <SelectTrigger className="w-48"><SelectValue placeholder="Select currency" /></SelectTrigger>
+                          <SelectContent className="bg-popover">{currencies.map((c) => <SelectItem key={c.id} value={c.code}>{c.code} ({c.symbol})</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Classes */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-semibold">Cabin Classes</Label>
+                          <Button type="button" size="sm" variant="outline" onClick={() => addFlightClass(index)} className="h-7 text-xs">
+                            <Plus className="w-3 h-3 mr-1" /> Add Class
+                          </Button>
                         </div>
+                        {flight.classes.length === 0 && (
+                          <p className="text-xs text-muted-foreground italic">No classes added. Click "Add Class" to specify passenger breakdown by cabin.</p>
+                        )}
+                        {flight.classes.map((cls, ci) => (
+                          <div key={cls.id} className="grid grid-cols-[1fr_1fr_1fr_32px] gap-3 items-end p-3 rounded-lg bg-muted/30 border">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Cabin Class</Label>
+                              <Select value={cls.class} onValueChange={(v) => updateFlightClass(index, ci, 'class', v as FlightClass)}>
+                                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                                <SelectContent className="bg-popover">
+                                  {(Object.keys(FLIGHT_CLASS_LABELS) as FlightClass[]).map(fc => (
+                                    <SelectItem key={fc} value={fc}>{FLIGHT_CLASS_LABELS[fc]}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Passengers</Label>
+                              <Input className="h-8 text-sm" type="number" placeholder="0" value={cls.passengerCount || ''} onChange={(e) => updateFlightClass(index, ci, 'passengerCount', parseInt(e.target.value) || 0)} />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Cost / Person ({flight.currency})</Label>
+                              <Input className="h-8 text-sm" type="number" placeholder="0" value={cls.costPerPerson || ''} onChange={(e) => updateFlightClass(index, ci, 'costPerPerson', parseFloat(e.target.value) || 0)} />
+                            </div>
+                            <Button type="button" size="sm" variant="ghost" onClick={() => removeFlightClass(index, ci)} className="text-destructive hover:text-destructive h-8 w-8 p-0">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                        {flight.classes.length > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            Classes subtotal: {formatCurrency(flight.classes.reduce((s, c) => s + c.costPerPerson * c.passengerCount, 0), flight.currency)}
+                            {' '}= {formatCurrency(flight.classes.reduce((s, c) => s + c.costPerPerson * c.passengerCount, 0) * getCurrencyRate(flight.currency), 'INR')}
+                          </p>
+                        )}
                       </div>
-                      <div className="space-y-2"><Label>Description</Label><Textarea placeholder="Additional flight details..." value={flight.description} onChange={(e) => updateFlight(index, 'description', e.target.value)} rows={2} /></div>
-                      <div className="pt-2 border-t"><p className="text-sm font-semibold text-primary">Total: {formatCurrency(flight.totalCostINR, 'INR')}</p></div>
+
+                      {/* Seat Upgrades */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-semibold">Seat Upgrades</Label>
+                          <Button type="button" size="sm" variant="outline" onClick={() => addFlightSeatUpgrade(index)} className="h-7 text-xs">
+                            <Plus className="w-3 h-3 mr-1" /> Add Seat Upgrade
+                          </Button>
+                        </div>
+                        {flight.seatUpgrades.length === 0 && (
+                          <p className="text-xs text-muted-foreground italic">No seat upgrades. Add types like Window Seat, Extra Legroom, etc.</p>
+                        )}
+                        {flight.seatUpgrades.map((su, si) => (
+                          <div key={su.id} className="grid grid-cols-[1fr_1fr_1fr_32px] gap-3 items-end p-3 rounded-lg bg-muted/30 border">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Upgrade Label</Label>
+                              <Input className="h-8 text-sm" placeholder="e.g., Window Seat" value={su.label} onChange={(e) => updateFlightSeatUpgrade(index, si, 'label', e.target.value)} />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Seats Selected</Label>
+                              <Input className="h-8 text-sm" type="number" placeholder="0" value={su.seatCount || ''} onChange={(e) => updateFlightSeatUpgrade(index, si, 'seatCount', parseInt(e.target.value) || 0)} />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Cost / Seat ({flight.currency})</Label>
+                              <Input className="h-8 text-sm" type="number" placeholder="0" value={su.costPerSeat || ''} onChange={(e) => updateFlightSeatUpgrade(index, si, 'costPerSeat', parseFloat(e.target.value) || 0)} />
+                            </div>
+                            <Button type="button" size="sm" variant="ghost" onClick={() => removeFlightSeatUpgrade(index, si)} className="text-destructive hover:text-destructive h-8 w-8 p-0">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                        {flight.seatUpgrades.length > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            Seat upgrades subtotal: {formatCurrency(flight.seatUpgrades.reduce((s, u) => s + u.costPerSeat * u.seatCount, 0), flight.currency)}
+                            {' '}= {formatCurrency(flight.seatUpgrades.reduce((s, u) => s + u.costPerSeat * u.seatCount, 0) * getCurrencyRate(flight.currency), 'INR')}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Meal Upgrades */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-semibold">Meal Upgrades</Label>
+                          <Button type="button" size="sm" variant="outline" onClick={() => addFlightMealUpgrade(index)} className="h-7 text-xs">
+                            <Plus className="w-3 h-3 mr-1" /> Add Meal Upgrade
+                          </Button>
+                        </div>
+                        {flight.mealUpgrades.length === 0 && (
+                          <p className="text-xs text-muted-foreground italic">No meal upgrades. Add types like Veg Meal, Special Meal, etc.</p>
+                        )}
+                        {flight.mealUpgrades.map((mu, mi) => (
+                          <div key={mu.id} className="grid grid-cols-[1fr_1fr_1fr_32px] gap-3 items-end p-3 rounded-lg bg-muted/30 border">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Meal Type</Label>
+                              <Input className="h-8 text-sm" placeholder="e.g., Veg Meal" value={mu.label} onChange={(e) => updateFlightMealUpgrade(index, mi, 'label', e.target.value)} />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Meals Ordered</Label>
+                              <Input className="h-8 text-sm" type="number" placeholder="0" value={mu.mealCount || ''} onChange={(e) => updateFlightMealUpgrade(index, mi, 'mealCount', parseInt(e.target.value) || 0)} />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Cost / Meal ({flight.currency})</Label>
+                              <Input className="h-8 text-sm" type="number" placeholder="0" value={mu.costPerMeal || ''} onChange={(e) => updateFlightMealUpgrade(index, mi, 'costPerMeal', parseFloat(e.target.value) || 0)} />
+                            </div>
+                            <Button type="button" size="sm" variant="ghost" onClick={() => removeFlightMealUpgrade(index, mi)} className="text-destructive hover:text-destructive h-8 w-8 p-0">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                        {flight.mealUpgrades.length > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            Meal upgrades subtotal: {formatCurrency(flight.mealUpgrades.reduce((s, m) => s + m.costPerMeal * m.mealCount, 0), flight.currency)}
+                            {' '}= {formatCurrency(flight.mealUpgrades.reduce((s, m) => s + m.costPerMeal * m.mealCount, 0) * getCurrencyRate(flight.currency), 'INR')}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2"><Label>Description / Notes</Label><Textarea placeholder="Additional flight details..." value={flight.description} onChange={(e) => updateFlightBasic(index, 'description', e.target.value)} rows={2} /></div>
+
+                      <div className="pt-2 border-t flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">Flight Total</p>
+                        <p className="text-sm font-semibold text-primary">{formatCurrency(flight.totalCostINR, 'INR')}</p>
+                      </div>
                     </div>
                   )}
                 </div>

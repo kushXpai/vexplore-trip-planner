@@ -1,86 +1,68 @@
 // src/services/tripService.ts
 import { supabase } from '@/supabase/client';
-import type { 
+import type {
   Trip,
   TripCategory,
   TripType,
-  Flight, 
-  Bus, 
-  Train, 
-  Accommodation, 
-  Activity, 
+  Flight,
+  Bus,
+  Train,
+  Accommodation,
+  Activity,
   Overhead,
   Participants,
   TripExtras,
-  CityWithDates
+  CityWithDates,
+  FlightClassEntry,
+  FlightSeatUpgrade,
+  FlightMealUpgrade,
 } from '@/types/trip';
 
 /**
  * Database Type Mappings
- * Maps from frontend types to database snake_case columns
  */
 
 interface DbTrip {
   id?: string;
   name: string;
   institution: string;
-  
-  // NEW: Trip classification
   trip_category: TripCategory;
   trip_type: TripType;
-  
-  // CHANGED: Now supports multiple countries as JSONB array
   countries: string[];
-  
-  // CHANGED: Multi-city support (JSONB array)
   cities: CityWithDates[];
-  
   start_date: string;
   end_date: string;
   total_days: number;
   total_nights: number;
-  
   default_currency: string;
   status: string;
-  
-  // Cost fields
   subtotal_before_tax: number;
   profit: number;
-  
-  // NEW: Tax fields
   gst_percentage: number;
   gst_amount: number;
   tcs_percentage: number;
   tcs_amount: number;
   tds_percentage: number;
   tds_amount: number;
-  
   grand_total: number;
   grand_total_inr: number;
   cost_per_participant: number;
-  
   created_by?: string;
 }
 
 interface DbParticipants {
   trip_id: string;
-  
-  // Institute trip fields
   boys: number;
   girls: number;
   male_faculty: number;
   female_faculty: number;
   male_vxplorers: number;
   female_vxplorers: number;
-  
-  // Commercial trip fields
   male_count: number;
   female_count: number;
   other_count: number;
-  commercial_male_vxplorers: number;  // NEW
-  commercial_female_vxplorers: number;  // NEW
-  
-  // Totals
+  commercial_male_vxplorers: number;
+  commercial_female_vxplorers: number;
   total_students: number;
   total_faculty: number;
   total_vxplorers: number;
@@ -88,29 +70,23 @@ interface DbParticipants {
   total_participants: number;
 }
 
-// NEW: Trip Extras interface
 interface DbTripExtras {
   trip_id: string;
-  
-  // Visa
   visa_cost_per_person: number;
   visa_currency: string;
   visa_total_cost: number;
   visa_total_cost_inr: number;
-  
-  // Tips
   tips_cost_per_person: number;
   tips_currency: string;
   tips_total_cost: number;
   tips_total_cost_inr: number;
-  
-  // Insurance
   insurance_cost_per_person: number;
   insurance_currency: string;
   insurance_total_cost: number;
   insurance_total_cost_inr: number;
 }
 
+// Updated: no more cost_per_person — uses classes/seat_upgrades/meal_upgrades JSONB
 interface DbFlight {
   id?: string;
   trip_id: string;
@@ -120,9 +96,11 @@ interface DbFlight {
   flight_number: string;
   departure_time: string;
   arrival_time: string;
-  cost_per_person: number;
   currency: string;
   description: string;
+  classes: FlightClassEntry[];
+  seat_upgrades: FlightSeatUpgrade[];
+  meal_upgrades: FlightMealUpgrade[];
   total_cost: number;
   total_cost_inr: number;
 }
@@ -166,16 +144,16 @@ interface DbAccommodation {
   total_rooms: number;
   total_cost: number;
   total_cost_inr: number;
-  room_allocation?: any;  // JSONB
-  room_types?: any;       // JSONB
-  room_preferences?: any; // NEW: JSONB
+  room_allocation?: any;
+  room_types?: any;
+  room_preferences?: any;
 }
 
 interface DbActivity {
   id?: string;
   trip_id: string;
   name: string;
-  city?: string;  // NEW: Optional city for multi-city trips
+  city?: string;
   entry_cost: number;
   transport_cost: number;
   guide_cost: number;
@@ -203,7 +181,6 @@ interface DbMeals {
   total_cost_inr: number;
 }
 
-// Frontend shape for a single hotel meal row (as sent from CreateTrip)
 interface HotelMealInput {
   accommodation_id: string;
   hotel_name: string;
@@ -237,43 +214,26 @@ interface DbOverhead {
  * Create a new trip with all related data
  */
 export async function createTrip(tripData: {
-  // Basic Info
   name: string;
   institution: string;
-  tripCategory: TripCategory;  // NEW
-  tripType: TripType;          // NEW
-  countries: string[];         // CHANGED: Now accepts multiple countries
-  cities: CityWithDates[];            // CHANGED: Multi-city array
+  tripCategory: TripCategory;
+  tripType: TripType;
+  countries: string[];
+  cities: CityWithDates[];
   startDate: string;
   endDate: string;
   totalDays: number;
   totalNights: number;
-  defaultCurrency: string;     // CHANGED: defaultCurrency instead of currency
-  
-  // Participants
+  defaultCurrency: string;
   participants: Participants;
-  
-  // Transport
   flights: Flight[];
   buses: Bus[];
   trains: Train[];
-  
-  // Accommodation
   accommodations: Accommodation[];
-  
-  // Meals (hotel-wise array)
   meals: HotelMealInput[];
-
-  // Activities
   activities: Activity[];
-
-  // Overheads
   overheads: Overhead[];
-
-  // Extras (visa, tips, insurance)
   extras?: TripExtras;
-
-  // Costs
   subtotalBeforeTax: number;
   profit: number;
   gstPercentage: number;
@@ -287,20 +247,17 @@ export async function createTrip(tripData: {
   costPerParticipant: number;
 }) {
   try {
-    // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      throw new Error('User not authenticated');
-    }
+    if (userError || !user) throw new Error('User not authenticated');
 
-    // 1. Create the main trip record
+    // 1. Create main trip record
     const dbTrip: DbTrip = {
       name: tripData.name,
       institution: tripData.institution,
       trip_category: tripData.tripCategory,
       trip_type: tripData.tripType,
-      countries: tripData.countries,  // CHANGED: Now stores array of countries
-      cities: tripData.cities,        // JSONB array
+      countries: tripData.countries,
+      cities: tripData.cities,
       start_date: tripData.startDate,
       end_date: tripData.endDate,
       total_days: tripData.totalDays,
@@ -332,7 +289,7 @@ export async function createTrip(tripData: {
 
     const tripId = trip.id;
 
-    // 2. Create participants record
+    // 2. Participants
     const dbParticipants: DbParticipants = {
       trip_id: tripId,
       boys: tripData.participants.boys,
@@ -356,10 +313,9 @@ export async function createTrip(tripData: {
     const { error: participantsError } = await supabase
       .from('trip_participants')
       .insert(dbParticipants);
-
     if (participantsError) throw participantsError;
 
-    // 3. Create flights
+    // 3. Flights — now stores classes, seat_upgrades, meal_upgrades as JSONB
     if (tripData.flights.length > 0) {
       const dbFlights: DbFlight[] = tripData.flights.map(flight => ({
         trip_id: tripId,
@@ -369,9 +325,11 @@ export async function createTrip(tripData: {
         flight_number: flight.flightNumber,
         departure_time: flight.departureTime,
         arrival_time: flight.arrivalTime,
-        cost_per_person: flight.costPerPerson,
         currency: flight.currency,
         description: flight.description || '',
+        classes: flight.classes,
+        seat_upgrades: flight.seatUpgrades,
+        meal_upgrades: flight.mealUpgrades,
         total_cost: flight.totalCost,
         total_cost_inr: flight.totalCostINR,
       }));
@@ -379,11 +337,10 @@ export async function createTrip(tripData: {
       const { error: flightsError } = await supabase
         .from('trip_flights')
         .insert(dbFlights);
-
       if (flightsError) throw flightsError;
     }
 
-    // 4. Create buses
+    // 4. Buses
     if (tripData.buses.length > 0) {
       const dbBuses: DbBus[] = tripData.buses.map(bus => ({
         trip_id: tripId,
@@ -401,11 +358,10 @@ export async function createTrip(tripData: {
       const { error: busesError } = await supabase
         .from('trip_buses')
         .insert(dbBuses);
-
       if (busesError) throw busesError;
     }
 
-    // 5. Create trains
+    // 5. Trains
     if (tripData.trains.length > 0) {
       const dbTrains: DbTrain[] = tripData.trains.map(train => ({
         trip_id: tripId,
@@ -423,11 +379,10 @@ export async function createTrip(tripData: {
       const { error: trainsError } = await supabase
         .from('trip_trains')
         .insert(dbTrains);
-
       if (trainsError) throw trainsError;
     }
 
-    // 6. Create accommodations
+    // 6. Accommodations
     if (tripData.accommodations.length > 0) {
       const dbAccommodations: DbAccommodation[] = tripData.accommodations.map(acc => ({
         trip_id: tripId,
@@ -447,11 +402,10 @@ export async function createTrip(tripData: {
       const { error: accommodationsError } = await supabase
         .from('trip_accommodations')
         .insert(dbAccommodations);
-
       if (accommodationsError) throw accommodationsError;
     }
 
-    // 7. Create meals (hotel-wise — one row per accommodation)
+    // 7. Meals
     if (tripData.meals && tripData.meals.length > 0) {
       const dbMealsRows: DbMeals[] = tripData.meals.map(m => ({
         trip_id: tripId,
@@ -474,11 +428,10 @@ export async function createTrip(tripData: {
       const { error: mealsError } = await supabase
         .from('trip_meals')
         .insert(dbMealsRows);
-
       if (mealsError) throw mealsError;
     }
 
-    // NEW: 7.5. Create extras (visa, tips, insurance)
+    // 7.5. Extras
     if (tripData.extras) {
       const dbExtras: DbTripExtras = {
         trip_id: tripId,
@@ -499,11 +452,10 @@ export async function createTrip(tripData: {
       const { error: extrasError } = await supabase
         .from('trip_extras')
         .insert(dbExtras);
-
       if (extrasError) throw extrasError;
     }
 
-    // 8. Create activities
+    // 8. Activities
     if (tripData.activities.length > 0) {
       const dbActivities: DbActivity[] = tripData.activities.map(activity => ({
         trip_id: tripId,
@@ -521,11 +473,10 @@ export async function createTrip(tripData: {
       const { error: activitiesError } = await supabase
         .from('trip_activities')
         .insert(dbActivities);
-
       if (activitiesError) throw activitiesError;
     }
 
-    // 9. Create overheads
+    // 9. Overheads
     if (tripData.overheads.length > 0) {
       const dbOverheads: DbOverhead[] = tripData.overheads.map(overhead => ({
         trip_id: tripId,
@@ -541,16 +492,15 @@ export async function createTrip(tripData: {
       const { error: overheadsError } = await supabase
         .from('trip_overheads')
         .insert(dbOverheads);
-
       if (overheadsError) throw overheadsError;
     }
 
     return { success: true, tripId };
   } catch (error) {
     console.error('Error creating trip:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error occurred' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
     };
   }
 }
@@ -559,43 +509,26 @@ export async function createTrip(tripData: {
  * Update an existing trip with all related data
  */
 export async function updateTrip(tripId: string, tripData: {
-  // Basic Info
   name: string;
   institution: string;
   tripCategory: TripCategory;
   tripType: TripType;
-  countries: string[];         // CHANGED: Now accepts multiple countries
+  countries: string[];
   cities: CityWithDates[];
   startDate: string;
   endDate: string;
   totalDays: number;
   totalNights: number;
   defaultCurrency: string;
-  
-  // Participants
   participants: Participants;
-  
-  // Transport
   flights: Flight[];
   buses: Bus[];
   trains: Train[];
-  
-  // Accommodation
   accommodations: Accommodation[];
-  
-  // Meals (hotel-wise array)
   meals: HotelMealInput[];
-  
-  // Activities
   activities: Activity[];
-  
-  // Overheads
   overheads: Overhead[];
-  
-  // NEW: Extras
   extras?: TripExtras;
-  
-  // Costs
   subtotalBeforeTax: number;
   profit: number;
   gstPercentage: number;
@@ -609,13 +542,13 @@ export async function updateTrip(tripId: string, tripData: {
   costPerParticipant: number;
 }) {
   try {
-    // 1. Update the main trip record
+    // 1. Update main trip
     const dbTrip: Partial<DbTrip> = {
       name: tripData.name,
       institution: tripData.institution,
       trip_category: tripData.tripCategory,
       trip_type: tripData.tripType,
-      countries: tripData.countries,  // CHANGED: Now stores array of countries
+      countries: tripData.countries,
       cities: tripData.cities,
       start_date: tripData.startDate,
       end_date: tripData.endDate,
@@ -639,10 +572,9 @@ export async function updateTrip(tripId: string, tripData: {
       .from('trips')
       .update(dbTrip)
       .eq('id', tripId);
-
     if (tripError) throw tripError;
 
-    // 2. Update participants (upsert)
+    // 2. Upsert participants
     const dbParticipants: DbParticipants = {
       trip_id: tripId,
       boys: tripData.participants.boys,
@@ -666,7 +598,6 @@ export async function updateTrip(tripId: string, tripData: {
     const { error: participantsError } = await supabase
       .from('trip_participants')
       .upsert(dbParticipants, { onConflict: 'trip_id' });
-
     if (participantsError) throw participantsError;
 
     // 3. Delete and re-insert flights
@@ -680,9 +611,11 @@ export async function updateTrip(tripId: string, tripData: {
         flight_number: flight.flightNumber,
         departure_time: flight.departureTime,
         arrival_time: flight.arrivalTime,
-        cost_per_person: flight.costPerPerson,
         currency: flight.currency,
         description: flight.description || '',
+        classes: flight.classes,
+        seat_upgrades: flight.seatUpgrades,
+        meal_upgrades: flight.mealUpgrades,
         total_cost: flight.totalCost,
         total_cost_inr: flight.totalCostINR,
       }));
@@ -745,9 +678,8 @@ export async function updateTrip(tripId: string, tripData: {
       await supabase.from('trip_accommodations').insert(dbAccommodations);
     }
 
-    // 8. Update meals (hotel-wise — delete all then re-insert)
+    // 7. Delete and re-insert meals
     await supabase.from('trip_meals').delete().eq('trip_id', tripId);
-
     if (tripData.meals && tripData.meals.length > 0) {
       const dbMealsRows: DbMeals[] = tripData.meals.map(m => ({
         trip_id: tripId,
@@ -770,11 +702,10 @@ export async function updateTrip(tripId: string, tripData: {
       const { error: mealsError } = await supabase
         .from('trip_meals')
         .insert(dbMealsRows);
-
       if (mealsError) throw mealsError;
     }
 
-    // NEW: 8.5. Update or insert extras (upsert like meals)
+    // 7.5. Upsert extras
     if (tripData.extras) {
       const dbExtras: DbTripExtras = {
         trip_id: tripId,
@@ -795,11 +726,10 @@ export async function updateTrip(tripId: string, tripData: {
       const { error: extrasError } = await supabase
         .from('trip_extras')
         .upsert(dbExtras, { onConflict: 'trip_id' });
-
       if (extrasError) throw extrasError;
     }
 
-    // 9. Delete and re-insert activities
+    // 8. Delete and re-insert activities
     await supabase.from('trip_activities').delete().eq('trip_id', tripId);
     if (tripData.activities.length > 0) {
       const dbActivities: DbActivity[] = tripData.activities.map(activity => ({
@@ -817,14 +747,14 @@ export async function updateTrip(tripId: string, tripData: {
       await supabase.from('trip_activities').insert(dbActivities);
     }
 
-    // 10. Delete and re-insert overheads
+    // 9. Delete and re-insert overheads
     await supabase.from('trip_overheads').delete().eq('trip_id', tripId);
     if (tripData.overheads.length > 0) {
       const dbOverheads: DbOverhead[] = tripData.overheads.map(overhead => ({
         trip_id: tripId,
         name: overhead.name,
         cost_type: overhead.costType,
-        amount_per_participant: overhead.amountPerParticipant,  // CHANGED
+        amount_per_participant: overhead.amountPerParticipant,
         currency: overhead.currency,
         hide_from_client: overhead.hideFromClient,
         total_cost: overhead.totalCost,
@@ -836,9 +766,9 @@ export async function updateTrip(tripId: string, tripData: {
     return { success: true, tripId };
   } catch (error) {
     console.error('Error updating trip:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error occurred' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
     };
   }
 }
@@ -848,7 +778,6 @@ export async function updateTrip(tripId: string, tripData: {
  */
 export async function getTripById(tripId: string) {
   try {
-    // Fetch main trip
     const { data: trip, error: tripError } = await supabase
       .from('trips')
       .select('*')
@@ -858,89 +787,69 @@ export async function getTripById(tripId: string) {
     if (tripError) throw tripError;
     if (!trip) throw new Error('Trip not found');
 
-    // Fetch participants
     const { data: participants, error: participantsError } = await supabase
       .from('trip_participants')
       .select('*')
       .eq('trip_id', tripId)
       .single();
-
     if (participantsError) throw participantsError;
 
-    // Fetch extras
     const { data: extras, error: extrasError } = await supabase
       .from('trip_extras')
       .select('*')
       .eq('trip_id', tripId)
       .single();
-
-    // Don't throw error if extras not found (optional)
     if (extrasError && extrasError.code !== 'PGRST116') throw extrasError;
 
-    // Fetch flights
     const { data: flights, error: flightsError } = await supabase
       .from('trip_flights')
       .select('*')
       .eq('trip_id', tripId);
-
     if (flightsError) throw flightsError;
 
-    // Fetch buses
     const { data: buses, error: busesError } = await supabase
       .from('trip_buses')
       .select('*')
       .eq('trip_id', tripId);
-
     if (busesError) throw busesError;
 
-    // Fetch trains
     const { data: trains, error: trainsError } = await supabase
       .from('trip_trains')
       .select('*')
       .eq('trip_id', tripId);
-
     if (trainsError) throw trainsError;
 
-    // Fetch accommodations
     const { data: accommodations, error: accommodationsError } = await supabase
       .from('trip_accommodations')
       .select('*')
       .eq('trip_id', tripId);
-
     if (accommodationsError) throw accommodationsError;
 
-    // Fetch meals (hotel-wise array)
     const { data: meals, error: mealsError } = await supabase
       .from('trip_meals')
       .select('*')
       .eq('trip_id', tripId)
       .order('created_at');
-
     if (mealsError && mealsError.code !== 'PGRST116') throw mealsError;
 
-    // Fetch activities
     const { data: activities, error: activitiesError } = await supabase
       .from('trip_activities')
       .select('*')
       .eq('trip_id', tripId);
-
     if (activitiesError) throw activitiesError;
 
-    // Fetch overheads
     const { data: overheads, error: overheadsError } = await supabase
       .from('trip_overheads')
       .select('*')
       .eq('trip_id', tripId);
-
     if (overheadsError) throw overheadsError;
 
-    // Transform to frontend format
     return {
       success: true,
       data: {
         trip,
         participants,
-        extras: extras || null,  // NEW
+        extras: extras || null,
         flights: flights || [],
         buses: buses || [],
         trains: trains || [],
@@ -970,7 +879,6 @@ export async function deleteTrip(tripId: string) {
       .eq('id', tripId);
 
     if (error) throw error;
-
     return { success: true };
   } catch (error) {
     console.error('Error deleting trip:', error);
@@ -987,9 +895,7 @@ export async function deleteTrip(tripId: string) {
 export async function getUserTrips() {
   try {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      throw new Error('User not authenticated');
-    }
+    if (userError || !user) throw new Error('User not authenticated');
 
     const { data: trips, error: tripsError } = await supabase
       .from('trips')
@@ -997,7 +903,6 @@ export async function getUserTrips() {
       .order('created_at', { ascending: false });
 
     if (tripsError) throw tripsError;
-
     return { success: true, data: trips || [] };
   } catch (error) {
     console.error('Error fetching trips:', error);
@@ -1023,7 +928,6 @@ export async function updateTripStatus(
       .eq('id', tripId);
 
     if (error) throw error;
-
     return { success: true };
   } catch (error) {
     console.error('Error updating trip status:', error);
@@ -1034,37 +938,8 @@ export async function updateTripStatus(
   }
 }
 
-/**
- * Send trip for approval (changes status from draft to sent)
- */
-export async function sendTripForApproval(tripId: string) {
-  return updateTripStatus(tripId, 'sent');
-}
-
-/**
- * Approve trip (changes status from sent to approved)
- */
-export async function approveTrip(tripId: string) {
-  return updateTripStatus(tripId, 'approved');
-}
-
-/**
- * Reject trip (changes status from sent to rejected)
- */
-export async function rejectTrip(tripId: string) {
-  return updateTripStatus(tripId, 'rejected');
-}
-
-/**
- * Complete trip (changes status from approved to completed)
- */
-export async function completeTrip(tripId: string) {
-  return updateTripStatus(tripId, 'completed');
-}
-
-/**
- * Lock trip (changes status to locked)
- */
-export async function lockTrip(tripId: string) {
-  return updateTripStatus(tripId, 'locked');
-}
+export const sendTripForApproval = (tripId: string) => updateTripStatus(tripId, 'sent');
+export const approveTrip = (tripId: string) => updateTripStatus(tripId, 'approved');
+export const rejectTrip = (tripId: string) => updateTripStatus(tripId, 'rejected');
+export const completeTrip = (tripId: string) => updateTripStatus(tripId, 'completed');
+export const lockTrip = (tripId: string) => updateTripStatus(tripId, 'locked');

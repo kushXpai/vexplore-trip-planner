@@ -138,6 +138,43 @@ export interface Transport {
   trains: Train[];
 }
 
+/* =========================
+   Flight - Updated with classes, seat upgrades, meal upgrades
+========================= */
+
+export type FlightClass = 'economy' | 'premium_economy' | 'business' | 'first';
+
+export const FLIGHT_CLASS_LABELS: Record<FlightClass, string> = {
+  economy: 'Economy',
+  premium_economy: 'Premium Economy',
+  business: 'Business',
+  first: 'First Class',
+};
+
+// Each class row: which class, how many passengers, what cost per person
+export interface FlightClassEntry {
+  id: string;          // local UI id e.g. "cls-1234"
+  class: FlightClass;
+  passengerCount: number;
+  costPerPerson: number;
+}
+
+// A single seat upgrade type e.g. "Window Seat – ₹1,000 × 10 seats"
+export interface FlightSeatUpgrade {
+  id: string;          // local UI id
+  label: string;       // e.g. "Window Seat"
+  costPerSeat: number;
+  seatCount: number;
+}
+
+// A single meal upgrade type e.g. "Veg Meal – ₹500 × 8"
+export interface FlightMealUpgrade {
+  id: string;          // local UI id
+  label: string;       // e.g. "Veg Meal"
+  costPerMeal: number;
+  mealCount: number;
+}
+
 export interface Flight {
   id: string;
   from: string;
@@ -146,9 +183,14 @@ export interface Flight {
   flightNumber: string;
   departureTime: string;
   arrivalTime: string;
-  costPerPerson: number;
   currency: string;
   description: string;
+
+  // New structured fields
+  classes: FlightClassEntry[];
+  seatUpgrades: FlightSeatUpgrade[];
+  mealUpgrades: FlightMealUpgrade[];
+
   totalCost: number;
   totalCostINR: number;
 }
@@ -376,7 +418,7 @@ export interface Institution {
 }
 
 /* =========================
-   NEW: Tax Rates
+   Tax Rates
 ========================= */
 
 export interface TaxRate {
@@ -391,7 +433,7 @@ export interface TaxRate {
 }
 
 /* =========================
-   NEW: City with date range for itinerary
+   City with date range for itinerary
 ========================= */
 export interface CityWithDates {
   name: string;
