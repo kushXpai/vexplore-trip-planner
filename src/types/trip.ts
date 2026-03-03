@@ -312,6 +312,7 @@ export interface Activity {
 export interface Overhead {
   id: string;
   name: string;
+  costType: 'per_person' | 'lump_sum';
   amountPerParticipant: number;
   currency: string;
   hideFromClient: boolean;

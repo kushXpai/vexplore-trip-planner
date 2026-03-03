@@ -185,6 +185,7 @@ CREATE TABLE public.trip_overheads (
   total_cost numeric NOT NULL DEFAULT 0,
   total_cost_inr numeric NOT NULL DEFAULT 0,
   hide_from_client boolean NOT NULL DEFAULT false,
+  cost_type text NOT NULL DEFAULT 'per_person'::text CHECK (cost_type = ANY (ARRAY['per_person'::text, 'lump_sum'::text])),
   CONSTRAINT trip_overheads_pkey PRIMARY KEY (id),
   CONSTRAINT trip_overheads_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
 );

@@ -225,7 +225,8 @@ interface DbOverhead {
   id?: string;
   trip_id: string;
   name: string;
-  amount_per_participant: number;  // CHANGED: Per participant pricing
+  cost_type: 'per_person' | 'lump_sum';
+  amount_per_participant: number;
   currency: string;
   hide_from_client: boolean;
   total_cost: number;
@@ -529,6 +530,7 @@ export async function createTrip(tripData: {
       const dbOverheads: DbOverhead[] = tripData.overheads.map(overhead => ({
         trip_id: tripId,
         name: overhead.name,
+        cost_type: overhead.costType,
         amount_per_participant: overhead.amountPerParticipant,
         currency: overhead.currency,
         hide_from_client: overhead.hideFromClient,
@@ -821,6 +823,7 @@ export async function updateTrip(tripId: string, tripData: {
       const dbOverheads: DbOverhead[] = tripData.overheads.map(overhead => ({
         trip_id: tripId,
         name: overhead.name,
+        cost_type: overhead.costType,
         amount_per_participant: overhead.amountPerParticipant,  // CHANGED
         currency: overhead.currency,
         hide_from_client: overhead.hideFromClient,

@@ -359,6 +359,7 @@ export default function CreateTrip() {
         setOverheads(dbOverheads.map(o => ({
           id: o.id!,
           name: o.name,
+          costType: (o.cost_type as 'per_person' | 'lump_sum') || 'per_person',
           amountPerParticipant: o.amount_per_participant,  // CHANGED
           currency: o.currency,
           hideFromClient: o.hide_from_client,
@@ -876,6 +877,7 @@ export default function CreateTrip() {
       hideFromClient: false,
       totalCost: 0,
       totalCostINR: 0,
+      costType: 'per_person'
     }]);
   };
 
@@ -883,13 +885,16 @@ export default function CreateTrip() {
     const updated = [...overheads];
     updated[index] = { ...updated[index], [field]: value };
 
-    if (field === 'amountPerParticipant' || field === 'currency') {
+    if (field === 'amountPerParticipant' || field === 'currency' || field === 'costType') {
       const totalParticipants = calculateTotalParticipants();
       const amountPerParticipant = field === 'amountPerParticipant' ? value : updated[index].amountPerParticipant;
       const currency = field === 'currency' ? value : updated[index].currency;
+      const costType = field === 'costType' ? value : updated[index].costType;
 
-      updated[index].totalCost = amountPerParticipant * totalParticipants;
-      updated[index].totalCostINR = amountPerParticipant * totalParticipants * getCurrencyRate(currency);
+      updated[index].totalCost = costType === 'lump_sum'
+        ? amountPerParticipant
+        : amountPerParticipant * totalParticipants;
+      updated[index].totalCostINR = updated[index].totalCost * getCurrencyRate(currency);
     }
 
     setOverheads(updated);
@@ -1077,8 +1082,8 @@ export default function CreateTrip() {
           maleCount: formData.maleCount,
           femaleCount: formData.femaleCount,
           otherCount: formData.otherCount,
-          commercialMaleVXplorers: formData.commercialMaleVXplorers,  // NEW
-          commercialFemaleVXplorers: formData.commercialFemaleVXplorers,  // NEW
+          commercialMaleVXplorers: tripType === 'fti' ? 0 : formData.commercialMaleVXplorers,
+          commercialFemaleVXplorers: tripType === 'fti' ? 0 : formData.commercialFemaleVXplorers,
           totalStudents: calculateTotalStudents(),
           totalFaculty: calculateTotalFaculty(),
           totalVXplorers: formData.maleVXplorers + formData.femaleVXplorers + formData.commercialMaleVXplorers + formData.commercialFemaleVXplorers,  // UPDATED
@@ -1349,8 +1354,8 @@ export default function CreateTrip() {
             <Input
               placeholder={
                 tripType === 'institute' ? "e.g., St. Mary's High School" :
-                tripType === 'commercial' ? "e.g., Acme Corp" :
-                "e.g., The Sharma Family"
+                  tripType === 'commercial' ? "e.g., Acme Corp" :
+                    "e.g., The Sharma Family"
               }
               value={formData.institution}
               onChange={(e) => setFormData({ ...formData, institution: e.target.value })}
@@ -1498,7 +1503,7 @@ export default function CreateTrip() {
                     disabled={!selectedCityForAdd || !pendingCityFromDate || !pendingCityToDate}
                     onClick={() => {
                       if (selectedCityForAdd && pendingCityFromDate && pendingCityToDate &&
-                          !formData.cities.find(c => c.name === selectedCityForAdd)) {
+                        !formData.cities.find(c => c.name === selectedCityForAdd)) {
                         const newCity = { name: selectedCityForAdd, fromDate: pendingCityFromDate, toDate: pendingCityToDate };
                         setFormData(prev => {
                           const updated = [...prev.cities, newCity];
@@ -2058,565 +2063,565 @@ export default function CreateTrip() {
               const summary = accommodation.hotelName || accommodation.city || `Hotel ${index + 1}`;
               const subSummary = [accommodation.city, accommodation.numberOfNights ? `${accommodation.numberOfNights} nights` : ''].filter(Boolean).join(' · ');
               return (
-              <div key={accommodation.id} className="border rounded-lg bg-card overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
-                  <button type="button" className="flex items-center gap-2 flex-1 text-left min-w-0"
-                    onClick={() => setCollapsedAccommodations(prev => { const n = [...prev]; n[index] = !n[index]; return n; })}>
-                    {isCollapsed ? <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 shrink-0 text-muted-foreground" />}
-                    <span className="font-medium text-sm truncate">{summary}</span>
-                    {subSummary && <span className="text-xs text-muted-foreground hidden sm:inline">{subSummary}</span>}
-                    {isCollapsed && accommodation.totalCostINR > 0 && <span className="text-xs text-primary ml-auto mr-2 shrink-0">{formatCurrency(accommodation.totalCostINR, 'INR')}</span>}
-                  </button>
-                  <Button size="sm" variant="ghost" onClick={() => deleteAccommodation(index)} className="text-destructive hover:text-destructive h-7 w-7 p-0 shrink-0">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-                {!isCollapsed && (
-                <div className="p-6 space-y-6">
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>City</Label>
-                    <Select
-                      value={accommodation.city || '__no_city__'}
-                      onValueChange={(v) => {
-                        if (v === '__no_city__') return;
-                        setAccommodations(prev => {
-                          const updated = [...prev];
-                          updated[index] = { ...updated[index], city: v, hotelName: '' };
-                          return updated;
-                        });
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select city" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        <SelectItem value="__no_city__" disabled>Select city</SelectItem>
-                        {formData.cities.map((city) => (
-                          <SelectItem key={city.name} value={city.name}>
-                            {city.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                <div key={accommodation.id} className="border rounded-lg bg-card overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
+                    <button type="button" className="flex items-center gap-2 flex-1 text-left min-w-0"
+                      onClick={() => setCollapsedAccommodations(prev => { const n = [...prev]; n[index] = !n[index]; return n; })}>
+                      {isCollapsed ? <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 shrink-0 text-muted-foreground" />}
+                      <span className="font-medium text-sm truncate">{summary}</span>
+                      {subSummary && <span className="text-xs text-muted-foreground hidden sm:inline">{subSummary}</span>}
+                      {isCollapsed && accommodation.totalCostINR > 0 && <span className="text-xs text-primary ml-auto mr-2 shrink-0">{formatCurrency(accommodation.totalCostINR, 'INR')}</span>}
+                    </button>
+                    <Button size="sm" variant="ghost" onClick={() => deleteAccommodation(index)} className="text-destructive hover:text-destructive h-7 w-7 p-0 shrink-0">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Hotel</Label>
-                    {(() => {
-                      const cityObj = cities.find(c => c.name === accommodation.city);
-                      const hotelsForCity = cityObj
-                        ? hotelsMasterList.filter(h => h.cityid === cityObj.id)
-                        : [];
-                      return (
+                  {!isCollapsed && (
+                    <div className="p-6 space-y-6">
+
+                      <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
+                          <Label>City</Label>
                           <Select
-                            value={accommodation.hotelName || '__no_hotel__'}
+                            value={accommodation.city || '__no_city__'}
                             onValueChange={(v) => {
-                              if (v === '__no_hotel__') return;
-                              const selectedHotel = hotelsMasterList.find(h => h.hotelname === v);
+                              if (v === '__no_city__') return;
                               setAccommodations(prev => {
                                 const updated = [...prev];
-                                updated[index] = {
-                                  ...updated[index],
-                                  hotelName: v,
-                                  breakfastIncluded: selectedHotel?.breakfastincluded ?? updated[index].breakfastIncluded,
-                                };
+                                updated[index] = { ...updated[index], city: v, hotelName: '' };
                                 return updated;
                               });
                             }}
-                            disabled={!accommodation.city}
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder={!accommodation.city ? 'Select city first' : hotelsForCity.length === 0 ? 'No hotels — add one' : 'Select hotel'} />
+                              <SelectValue placeholder="Select city" />
                             </SelectTrigger>
                             <SelectContent className="bg-popover">
-                              <SelectItem value="__no_hotel__" disabled>Select hotel</SelectItem>
-                              {hotelsForCity.map(h => (
-                                <SelectItem key={h.id} value={h.hotelname}>
-                                  {h.hotelname}{h.breakfastincluded ? ' ✓ Breakfast' : ''}
+                              <SelectItem value="__no_city__" disabled>Select city</SelectItem>
+                              {formData.cities.map((city) => (
+                                <SelectItem key={city.name} value={city.name}>
+                                  {city.name}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
-                          {accommodation.city && (
-                            <button
-                              type="button"
-                              className="text-xs text-muted-foreground underline hover:text-primary"
-                              onClick={() => {
-                                setAddHotelDialogAccIndex(index);
-                                setAddHotelDialogForm({ hotelname: '', breakfastincluded: false, remarks: '' });
-                                setAddHotelDialogOpen(true);
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Hotel</Label>
+                          {(() => {
+                            const cityObj = cities.find(c => c.name === accommodation.city);
+                            const hotelsForCity = cityObj
+                              ? hotelsMasterList.filter(h => h.cityid === cityObj.id)
+                              : [];
+                            return (
+                              <div className="space-y-2">
+                                <Select
+                                  value={accommodation.hotelName || '__no_hotel__'}
+                                  onValueChange={(v) => {
+                                    if (v === '__no_hotel__') return;
+                                    const selectedHotel = hotelsMasterList.find(h => h.hotelname === v);
+                                    setAccommodations(prev => {
+                                      const updated = [...prev];
+                                      updated[index] = {
+                                        ...updated[index],
+                                        hotelName: v,
+                                        breakfastIncluded: selectedHotel?.breakfastincluded ?? updated[index].breakfastIncluded,
+                                      };
+                                      return updated;
+                                    });
+                                  }}
+                                  disabled={!accommodation.city}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={!accommodation.city ? 'Select city first' : hotelsForCity.length === 0 ? 'No hotels — add one' : 'Select hotel'} />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-popover">
+                                    <SelectItem value="__no_hotel__" disabled>Select hotel</SelectItem>
+                                    {hotelsForCity.map(h => (
+                                      <SelectItem key={h.id} value={h.hotelname}>
+                                        {h.hotelname}{h.breakfastincluded ? ' ✓ Breakfast' : ''}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {accommodation.city && (
+                                  <button
+                                    type="button"
+                                    className="text-xs text-muted-foreground underline hover:text-primary"
+                                    onClick={() => {
+                                      setAddHotelDialogAccIndex(index);
+                                      setAddHotelDialogForm({ hotelname: '', breakfastincluded: false, remarks: '' });
+                                      setAddHotelDialogOpen(true);
+                                    }}
+                                  >
+                                    {hotelsForCity.length === 0
+                                      ? "No hotel found — add new hotel"
+                                      : "Can't find your hotel? Add new hotel"}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>Number of Nights</Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            value={accommodation.numberOfNights || ''}
+                            onChange={(e) => updateAccommodation(index, 'numberOfNights', parseInt(e.target.value) || 0)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Currency</Label>
+                          <Select
+                            value={accommodation.currency}
+                            onValueChange={(v) => updateAccommodation(index, 'currency', v)}
+                            disabled={isLoadingMasterData}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select currency"} />
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover">
+                              {currencies.map((currency) => (
+                                <SelectItem key={currency.id} value={currency.code}>
+                                  {currency.code} ({currency.symbol})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2 flex items-center gap-2 pt-6">
+                          <Switch
+                            checked={accommodation.breakfastIncluded}
+                            onCheckedChange={(checked) => updateAccommodation(index, 'breakfastIncluded', checked)}
+                          />
+                          <Label>Breakfast Included</Label>
+                        </div>
+                      </div>
+
+                      {/* Room Types Configuration */}
+                      <div className="space-y-4 pt-4 border-t">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-base font-semibold">Room Types & Pricing</Label>
+                          <div className="flex gap-2">
+                            <Select
+                              onValueChange={(preset) => {
+                                const presets = getRoomTypePresets();
+                                const selectedPreset = presets[preset];
+                                if (selectedPreset) {
+                                  updateAccommodation(index, 'roomTypes', selectedPreset);
+                                }
                               }}
                             >
-                              {hotelsForCity.length === 0
-                                ? "No hotel found — add new hotel"
-                                : "Can't find your hotel? Add new hotel"}
-                            </button>
-                          )}
+                              <SelectTrigger className="w-[200px]">
+                                <SelectValue placeholder="Load Preset" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-popover">
+                                {Object.keys(getRoomTypePresets()).map((presetName) => (
+                                  <SelectItem key={presetName} value={presetName}>
+                                    {presetName}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                const newRoomTypes = [...accommodation.roomTypes, { roomType: '', capacityPerRoom: 2, costPerRoom: 0 }];
+                                updateAccommodation(index, 'roomTypes', newRoomTypes);
+                              }}
+                            >
+                              <Plus className="w-4 h-4 mr-2" />
+                              Add Room Type
+                            </Button>
+                          </div>
                         </div>
-                      );
-                    })()}
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label>Number of Nights</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={accommodation.numberOfNights || ''}
-                      onChange={(e) => updateAccommodation(index, 'numberOfNights', parseInt(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Currency</Label>
-                    <Select
-                      value={accommodation.currency}
-                      onValueChange={(v) => updateAccommodation(index, 'currency', v)}
-                      disabled={isLoadingMasterData}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select currency"} />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        {currencies.map((currency) => (
-                          <SelectItem key={currency.id} value={currency.code}>
-                            {currency.code} ({currency.symbol})
-                          </SelectItem>
+                        {accommodation.roomTypes.map((roomType, rtIndex) => (
+                          <div key={rtIndex} className="grid grid-cols-4 gap-4 items-end">
+                            <div className="space-y-2">
+                              <Label>Room Type</Label>
+                              <Input
+                                placeholder="e.g., Double, Triple"
+                                value={roomType.roomType}
+                                onChange={(e) => {
+                                  const newRoomTypes = [...accommodation.roomTypes];
+                                  newRoomTypes[rtIndex] = { ...newRoomTypes[rtIndex], roomType: e.target.value };
+                                  updateAccommodation(index, 'roomTypes', newRoomTypes);
+                                }}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Capacity</Label>
+                              <Input
+                                type="number"
+                                placeholder="2"
+                                value={roomType.capacityPerRoom || ''}
+                                onChange={(e) => {
+                                  const newRoomTypes = [...accommodation.roomTypes];
+                                  newRoomTypes[rtIndex] = { ...newRoomTypes[rtIndex], capacityPerRoom: parseInt(e.target.value) || 0 };
+                                  updateAccommodation(index, 'roomTypes', newRoomTypes);
+                                }}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Cost Per Room ({accommodation.currency})</Label>
+                              <Input
+                                type="number"
+                                placeholder="0"
+                                value={roomType.costPerRoom || ''}
+                                onChange={(e) => {
+                                  const newRoomTypes = [...accommodation.roomTypes];
+                                  newRoomTypes[rtIndex] = { ...newRoomTypes[rtIndex], costPerRoom: parseFloat(e.target.value) || 0 };
+                                  updateAccommodation(index, 'roomTypes', newRoomTypes);
+                                }}
+                              />
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                const newRoomTypes = accommodation.roomTypes.filter((_, i) => i !== rtIndex);
+                                updateAccommodation(index, 'roomTypes', newRoomTypes);
+                              }}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2 flex items-center gap-2 pt-6">
-                    <Switch
-                      checked={accommodation.breakfastIncluded}
-                      onCheckedChange={(checked) => updateAccommodation(index, 'breakfastIncluded', checked)}
-                    />
-                    <Label>Breakfast Included</Label>
-                  </div>
-                </div>
-
-                {/* Room Types Configuration */}
-                <div className="space-y-4 pt-4 border-t">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-base font-semibold">Room Types & Pricing</Label>
-                    <div className="flex gap-2">
-                      <Select
-                        onValueChange={(preset) => {
-                          const presets = getRoomTypePresets();
-                          const selectedPreset = presets[preset];
-                          if (selectedPreset) {
-                            updateAccommodation(index, 'roomTypes', selectedPreset);
-                          }
-                        }}
-                      >
-                        <SelectTrigger className="w-[200px]">
-                          <SelectValue placeholder="Load Preset" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-popover">
-                          {Object.keys(getRoomTypePresets()).map((presetName) => (
-                            <SelectItem key={presetName} value={presetName}>
-                              {presetName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          const newRoomTypes = [...accommodation.roomTypes, { roomType: '', capacityPerRoom: 2, costPerRoom: 0 }];
-                          updateAccommodation(index, 'roomTypes', newRoomTypes);
-                        }}
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Room Type
-                      </Button>
-                    </div>
-                  </div>
-
-                  {accommodation.roomTypes.map((roomType, rtIndex) => (
-                    <div key={rtIndex} className="grid grid-cols-4 gap-4 items-end">
-                      <div className="space-y-2">
-                        <Label>Room Type</Label>
-                        <Input
-                          placeholder="e.g., Double, Triple"
-                          value={roomType.roomType}
-                          onChange={(e) => {
-                            const newRoomTypes = [...accommodation.roomTypes];
-                            newRoomTypes[rtIndex] = { ...newRoomTypes[rtIndex], roomType: e.target.value };
-                            updateAccommodation(index, 'roomTypes', newRoomTypes);
-                          }}
-                        />
                       </div>
-                      <div className="space-y-2">
-                        <Label>Capacity</Label>
-                        <Input
-                          type="number"
-                          placeholder="2"
-                          value={roomType.capacityPerRoom || ''}
-                          onChange={(e) => {
-                            const newRoomTypes = [...accommodation.roomTypes];
-                            newRoomTypes[rtIndex] = { ...newRoomTypes[rtIndex], capacityPerRoom: parseInt(e.target.value) || 0 };
-                            updateAccommodation(index, 'roomTypes', newRoomTypes);
-                          }}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Cost Per Room ({accommodation.currency})</Label>
-                        <Input
-                          type="number"
-                          placeholder="0"
-                          value={roomType.costPerRoom || ''}
-                          onChange={(e) => {
-                            const newRoomTypes = [...accommodation.roomTypes];
-                            newRoomTypes[rtIndex] = { ...newRoomTypes[rtIndex], costPerRoom: parseFloat(e.target.value) || 0 };
-                            updateAccommodation(index, 'roomTypes', newRoomTypes);
-                          }}
-                        />
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          const newRoomTypes = accommodation.roomTypes.filter((_, i) => i !== rtIndex);
-                          updateAccommodation(index, 'roomTypes', newRoomTypes);
-                        }}
-                        className="text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
 
-                {/* Room Preferences */}
-                <div className="space-y-4 pt-4 border-t">
-                  <Label className="text-base font-semibold">Room Preferences (Priority Order)</Label>
-                  <div className="text-sm text-muted-foreground mb-2">
-                    Select room types in order of preference. The system will allocate rooms starting with the first preference.
-                  </div>
-
-                  {tripType === 'institute' ? (
-                    <>
-                      {/* Students Preference */}
-                      <div className="space-y-2">
-                        <Label className="text-sm">Students (Boys & Girls)</Label>
-                        <div className="flex flex-wrap gap-2">
-                          {accommodation.roomTypes.map((rt) => (
-                            <Button
-                              key={rt.roomType}
-                              size="sm"
-                              variant={accommodation.roomPreferences?.students?.includes(rt.roomType.toLowerCase()) ? "default" : "outline"}
-                              onClick={() => {
-                                const currentPrefs = accommodation.roomPreferences?.students || [];
-                                const newPrefs = currentPrefs.includes(rt.roomType.toLowerCase())
-                                  ? currentPrefs.filter(p => p !== rt.roomType.toLowerCase())
-                                  : [...currentPrefs, rt.roomType.toLowerCase()];
-                                updateAccommodation(index, 'roomPreferences', {
-                                  ...accommodation.roomPreferences,
-                                  students: newPrefs
-                                });
-                              }}
-                            >
-                              {rt.roomType}
-                              {accommodation.roomPreferences?.students?.includes(rt.roomType.toLowerCase()) && (
-                                <Badge variant="secondary" className="ml-2">
-                                  {accommodation.roomPreferences.students.indexOf(rt.roomType.toLowerCase()) + 1}
-                                </Badge>
-                              )}
-                            </Button>
-                          ))}
+                      {/* Room Preferences */}
+                      <div className="space-y-4 pt-4 border-t">
+                        <Label className="text-base font-semibold">Room Preferences (Priority Order)</Label>
+                        <div className="text-sm text-muted-foreground mb-2">
+                          Select room types in order of preference. The system will allocate rooms starting with the first preference.
                         </div>
+
+                        {tripType === 'institute' ? (
+                          <>
+                            {/* Students Preference */}
+                            <div className="space-y-2">
+                              <Label className="text-sm">Students (Boys & Girls)</Label>
+                              <div className="flex flex-wrap gap-2">
+                                {accommodation.roomTypes.map((rt) => (
+                                  <Button
+                                    key={rt.roomType}
+                                    size="sm"
+                                    variant={accommodation.roomPreferences?.students?.includes(rt.roomType.toLowerCase()) ? "default" : "outline"}
+                                    onClick={() => {
+                                      const currentPrefs = accommodation.roomPreferences?.students || [];
+                                      const newPrefs = currentPrefs.includes(rt.roomType.toLowerCase())
+                                        ? currentPrefs.filter(p => p !== rt.roomType.toLowerCase())
+                                        : [...currentPrefs, rt.roomType.toLowerCase()];
+                                      updateAccommodation(index, 'roomPreferences', {
+                                        ...accommodation.roomPreferences,
+                                        students: newPrefs
+                                      });
+                                    }}
+                                  >
+                                    {rt.roomType}
+                                    {accommodation.roomPreferences?.students?.includes(rt.roomType.toLowerCase()) && (
+                                      <Badge variant="secondary" className="ml-2">
+                                        {accommodation.roomPreferences.students.indexOf(rt.roomType.toLowerCase()) + 1}
+                                      </Badge>
+                                    )}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Faculty always gets single rooms - just show info */}
+                            <div className="space-y-2">
+                              <Label className="text-sm">Faculty</Label>
+                              <div className="p-3 bg-muted rounded-lg">
+                                <p className="text-sm text-muted-foreground">
+                                  ✓ Faculty always get single rooms (1 person per room)
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* NEW: VXplorers Preference */}
+                            <div className="space-y-2">
+                              <Label className="text-sm">VXplorers</Label>
+                              <div className="flex flex-wrap gap-2">
+                                {accommodation.roomTypes.map((rt) => (
+                                  <Button
+                                    key={rt.roomType}
+                                    size="sm"
+                                    variant={accommodation.roomPreferences?.vxplorers?.includes(rt.roomType.toLowerCase()) ? "default" : "outline"}
+                                    onClick={() => {
+                                      const currentPrefs = accommodation.roomPreferences?.vxplorers || [];
+                                      const newPrefs = currentPrefs.includes(rt.roomType.toLowerCase())
+                                        ? currentPrefs.filter(p => p !== rt.roomType.toLowerCase())
+                                        : [...currentPrefs, rt.roomType.toLowerCase()];
+                                      updateAccommodation(index, 'roomPreferences', {
+                                        ...accommodation.roomPreferences,
+                                        vxplorers: newPrefs
+                                      });
+                                    }}
+                                  >
+                                    {rt.roomType}
+                                    {accommodation.roomPreferences?.vxplorers?.includes(rt.roomType.toLowerCase()) && (
+                                      <Badge variant="secondary" className="ml-2">
+                                        {accommodation.roomPreferences.vxplorers.indexOf(rt.roomType.toLowerCase()) + 1}
+                                      </Badge>
+                                    )}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            {/* Commercial: Participants Preference */}
+                            <div className="space-y-2">
+                              <Label className="text-sm">Participants</Label>
+                              <div className="flex flex-wrap gap-2">
+                                {accommodation.roomTypes.map((rt) => (
+                                  <Button
+                                    key={rt.roomType}
+                                    size="sm"
+                                    variant={accommodation.roomPreferences?.participants?.includes(rt.roomType.toLowerCase()) ? "default" : "outline"}
+                                    onClick={() => {
+                                      const currentPrefs = accommodation.roomPreferences?.participants || [];
+                                      const newPrefs = currentPrefs.includes(rt.roomType.toLowerCase())
+                                        ? currentPrefs.filter(p => p !== rt.roomType.toLowerCase())
+                                        : [...currentPrefs, rt.roomType.toLowerCase()];
+                                      updateAccommodation(index, 'roomPreferences', {
+                                        ...accommodation.roomPreferences,
+                                        participants: newPrefs
+                                      });
+                                    }}
+                                  >
+                                    {rt.roomType}
+                                    {accommodation.roomPreferences?.participants?.includes(rt.roomType.toLowerCase()) && (
+                                      <Badge variant="secondary" className="ml-2">
+                                        {accommodation.roomPreferences.participants.indexOf(rt.roomType.toLowerCase()) + 1}
+                                      </Badge>
+                                    )}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* NEW: Commercial VXplorers Preference */}
+                            <div className="space-y-2">
+                              <Label className="text-sm">VXplorers</Label>
+                              <div className="flex flex-wrap gap-2">
+                                {accommodation.roomTypes.map((rt) => (
+                                  <Button
+                                    key={rt.roomType}
+                                    size="sm"
+                                    variant={accommodation.roomPreferences?.commercialVXplorers?.includes(rt.roomType.toLowerCase()) ? "default" : "outline"}
+                                    onClick={() => {
+                                      const currentPrefs = accommodation.roomPreferences?.commercialVXplorers || [];
+                                      const newPrefs = currentPrefs.includes(rt.roomType.toLowerCase())
+                                        ? currentPrefs.filter(p => p !== rt.roomType.toLowerCase())
+                                        : [...currentPrefs, rt.roomType.toLowerCase()];
+                                      updateAccommodation(index, 'roomPreferences', {
+                                        ...accommodation.roomPreferences,
+                                        commercialVXplorers: newPrefs
+                                      });
+                                    }}
+                                  >
+                                    {rt.roomType}
+                                    {accommodation.roomPreferences?.commercialVXplorers?.includes(rt.roomType.toLowerCase()) && (
+                                      <Badge variant="secondary" className="ml-2">
+                                        {accommodation.roomPreferences.commercialVXplorers.indexOf(rt.roomType.toLowerCase()) + 1}
+                                      </Badge>
+                                    )}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
 
-                      {/* Faculty always gets single rooms - just show info */}
-                      <div className="space-y-2">
-                        <Label className="text-sm">Faculty</Label>
-                        <div className="p-3 bg-muted rounded-lg">
-                          <p className="text-sm text-muted-foreground">
-                            ✓ Faculty always get single rooms (1 person per room)
-                          </p>
+                      {/* Auto-allocate button and results */}
+                      <div className="space-y-4 pt-4 border-t">
+                        {/* Cost Optimization Toggle */}
+                        <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+                          <Switch
+                            checked={optimizeRoomsByCost}
+                            onCheckedChange={setOptimizeRoomsByCost}
+                          />
+                          <div className="flex-1">
+                            <Label className="text-sm font-medium">Optimize by Cost</Label>
+                            <p className="text-xs text-muted-foreground">
+                              {optimizeRoomsByCost
+                                ? "Finding cheapest room combination within preferences"
+                                : "Following strict preference order (greedy allocation)"}
+                            </p>
+                          </div>
                         </div>
+
+                        <Button
+                          onClick={() => autoAllocateAccommodationRooms(index)}
+                          variant="outline"
+                          className="w-full"
+                        >
+                          <Calculator className="w-4 h-4 mr-2" />
+                          Auto-Allocate Rooms
+                        </Button>
+
+                        {accommodation.roomAllocation?.breakdown && (
+                          <div className="space-y-3 p-4 bg-muted rounded-lg">
+                            <h4 className="font-semibold text-sm">Room Allocation Summary</h4>
+
+                            {tripType === 'institute' ? (
+                              <>
+                                {accommodation.roomAllocation.breakdown.boys.length > 0 && (
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-medium text-muted-foreground">Boys ({formData.boys} students)</p>
+                                    {accommodation.roomAllocation.breakdown.boys.map((b, i) => (
+                                      <p key={i} className="text-xs ml-2">
+                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {accommodation.roomAllocation.breakdown.girls.length > 0 && (
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-medium text-muted-foreground">Girls ({formData.girls} students)</p>
+                                    {accommodation.roomAllocation.breakdown.girls.map((b, i) => (
+                                      <p key={i} className="text-xs ml-2">
+                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {accommodation.roomAllocation.breakdown.maleFaculty.length > 0 && (
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-medium text-muted-foreground">Male Faculty ({formData.maleFaculty})</p>
+                                    {accommodation.roomAllocation.breakdown.maleFaculty.map((b, i) => (
+                                      <p key={i} className="text-xs ml-2">
+                                        • {b.numberOfRooms}x {b.roomType} (single rooms)
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {accommodation.roomAllocation.breakdown.femaleFaculty.length > 0 && (
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-medium text-muted-foreground">Female Faculty ({formData.femaleFaculty})</p>
+                                    {accommodation.roomAllocation.breakdown.femaleFaculty.map((b, i) => (
+                                      <p key={i} className="text-xs ml-2">
+                                        • {b.numberOfRooms}x {b.roomType} (single rooms)
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {accommodation.roomAllocation.breakdown.maleVXplorers.length > 0 && (
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-medium text-muted-foreground">Male VXplorers ({formData.maleVXplorers})</p>
+                                    {accommodation.roomAllocation.breakdown.maleVXplorers.map((b, i) => (
+                                      <p key={i} className="text-xs ml-2">
+                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {accommodation.roomAllocation.breakdown.femaleVXplorers.length > 0 && (
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-medium text-muted-foreground">Female VXplorers ({formData.femaleVXplorers})</p>
+                                    {accommodation.roomAllocation.breakdown.femaleVXplorers.map((b, i) => (
+                                      <p key={i} className="text-xs ml-2">
+                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                {accommodation.roomAllocation.breakdown.commercialMale.length > 0 && (
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-medium text-muted-foreground">Male Participants ({formData.maleCount})</p>
+                                    {accommodation.roomAllocation.breakdown.commercialMale.map((b, i) => (
+                                      <p key={i} className="text-xs ml-2">
+                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {accommodation.roomAllocation.breakdown.commercialFemale.length > 0 && (
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-medium text-muted-foreground">Female Participants ({formData.femaleCount})</p>
+                                    {accommodation.roomAllocation.breakdown.commercialFemale.map((b, i) => (
+                                      <p key={i} className="text-xs ml-2">
+                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {accommodation.roomAllocation.breakdown.commercialOther.length > 0 && (
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-medium text-muted-foreground">Other Participants ({formData.otherCount})</p>
+                                    {accommodation.roomAllocation.breakdown.commercialOther.map((b, i) => (
+                                      <p key={i} className="text-xs ml-2">
+                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* NEW: Commercial Male VXplorers */}
+                                {accommodation.roomAllocation.breakdown.commercialMaleVXplorers && accommodation.roomAllocation.breakdown.commercialMaleVXplorers.length > 0 && (
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-medium text-muted-foreground">Male VXplorers ({formData.commercialMaleVXplorers})</p>
+                                    {accommodation.roomAllocation.breakdown.commercialMaleVXplorers.map((b, i) => (
+                                      <p key={i} className="text-xs ml-2">
+                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* NEW: Commercial Female VXplorers */}
+                                {accommodation.roomAllocation.breakdown.commercialFemaleVXplorers && accommodation.roomAllocation.breakdown.commercialFemaleVXplorers.length > 0 && (
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-medium text-muted-foreground">Female VXplorers ({formData.commercialFemaleVXplorers})</p>
+                                    {accommodation.roomAllocation.breakdown.commercialFemaleVXplorers.map((b, i) => (
+                                      <p key={i} className="text-xs ml-2">
+                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            )}
+
+                            <div className="pt-2 border-t mt-3">
+                              <p className="text-sm font-semibold">
+                                Total Rooms: {accommodation.roomAllocation.totalRooms}
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
-                      {/* NEW: VXplorers Preference */}
-                      <div className="space-y-2">
-                        <Label className="text-sm">VXplorers</Label>
-                        <div className="flex flex-wrap gap-2">
-                          {accommodation.roomTypes.map((rt) => (
-                            <Button
-                              key={rt.roomType}
-                              size="sm"
-                              variant={accommodation.roomPreferences?.vxplorers?.includes(rt.roomType.toLowerCase()) ? "default" : "outline"}
-                              onClick={() => {
-                                const currentPrefs = accommodation.roomPreferences?.vxplorers || [];
-                                const newPrefs = currentPrefs.includes(rt.roomType.toLowerCase())
-                                  ? currentPrefs.filter(p => p !== rt.roomType.toLowerCase())
-                                  : [...currentPrefs, rt.roomType.toLowerCase()];
-                                updateAccommodation(index, 'roomPreferences', {
-                                  ...accommodation.roomPreferences,
-                                  vxplorers: newPrefs
-                                });
-                              }}
-                            >
-                              {rt.roomType}
-                              {accommodation.roomPreferences?.vxplorers?.includes(rt.roomType.toLowerCase()) && (
-                                <Badge variant="secondary" className="ml-2">
-                                  {accommodation.roomPreferences.vxplorers.indexOf(rt.roomType.toLowerCase()) + 1}
-                                </Badge>
-                              )}
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      {/* Commercial: Participants Preference */}
-                      <div className="space-y-2">
-                        <Label className="text-sm">Participants</Label>
-                        <div className="flex flex-wrap gap-2">
-                          {accommodation.roomTypes.map((rt) => (
-                            <Button
-                              key={rt.roomType}
-                              size="sm"
-                              variant={accommodation.roomPreferences?.participants?.includes(rt.roomType.toLowerCase()) ? "default" : "outline"}
-                              onClick={() => {
-                                const currentPrefs = accommodation.roomPreferences?.participants || [];
-                                const newPrefs = currentPrefs.includes(rt.roomType.toLowerCase())
-                                  ? currentPrefs.filter(p => p !== rt.roomType.toLowerCase())
-                                  : [...currentPrefs, rt.roomType.toLowerCase()];
-                                updateAccommodation(index, 'roomPreferences', {
-                                  ...accommodation.roomPreferences,
-                                  participants: newPrefs
-                                });
-                              }}
-                            >
-                              {rt.roomType}
-                              {accommodation.roomPreferences?.participants?.includes(rt.roomType.toLowerCase()) && (
-                                <Badge variant="secondary" className="ml-2">
-                                  {accommodation.roomPreferences.participants.indexOf(rt.roomType.toLowerCase()) + 1}
-                                </Badge>
-                              )}
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* NEW: Commercial VXplorers Preference */}
-                      <div className="space-y-2">
-                        <Label className="text-sm">VXplorers</Label>
-                        <div className="flex flex-wrap gap-2">
-                          {accommodation.roomTypes.map((rt) => (
-                            <Button
-                              key={rt.roomType}
-                              size="sm"
-                              variant={accommodation.roomPreferences?.commercialVXplorers?.includes(rt.roomType.toLowerCase()) ? "default" : "outline"}
-                              onClick={() => {
-                                const currentPrefs = accommodation.roomPreferences?.commercialVXplorers || [];
-                                const newPrefs = currentPrefs.includes(rt.roomType.toLowerCase())
-                                  ? currentPrefs.filter(p => p !== rt.roomType.toLowerCase())
-                                  : [...currentPrefs, rt.roomType.toLowerCase()];
-                                updateAccommodation(index, 'roomPreferences', {
-                                  ...accommodation.roomPreferences,
-                                  commercialVXplorers: newPrefs
-                                });
-                              }}
-                            >
-                              {rt.roomType}
-                              {accommodation.roomPreferences?.commercialVXplorers?.includes(rt.roomType.toLowerCase()) && (
-                                <Badge variant="secondary" className="ml-2">
-                                  {accommodation.roomPreferences.commercialVXplorers.indexOf(rt.roomType.toLowerCase()) + 1}
-                                </Badge>
-                              )}
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Auto-allocate button and results */}
-                <div className="space-y-4 pt-4 border-t">
-                  {/* Cost Optimization Toggle */}
-                  <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
-                    <Switch
-                      checked={optimizeRoomsByCost}
-                      onCheckedChange={setOptimizeRoomsByCost}
-                    />
-                    <div className="flex-1">
-                      <Label className="text-sm font-medium">Optimize by Cost</Label>
-                      <p className="text-xs text-muted-foreground">
-                        {optimizeRoomsByCost
-                          ? "Finding cheapest room combination within preferences"
-                          : "Following strict preference order (greedy allocation)"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <Button
-                    onClick={() => autoAllocateAccommodationRooms(index)}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    <Calculator className="w-4 h-4 mr-2" />
-                    Auto-Allocate Rooms
-                  </Button>
-
-                  {accommodation.roomAllocation?.breakdown && (
-                    <div className="space-y-3 p-4 bg-muted rounded-lg">
-                      <h4 className="font-semibold text-sm">Room Allocation Summary</h4>
-
-                      {tripType === 'institute' ? (
-                        <>
-                          {accommodation.roomAllocation.breakdown.boys.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-muted-foreground">Boys ({formData.boys} students)</p>
-                              {accommodation.roomAllocation.breakdown.boys.map((b, i) => (
-                                <p key={i} className="text-xs ml-2">
-                                  • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                </p>
-                              ))}
-                            </div>
-                          )}
-
-                          {accommodation.roomAllocation.breakdown.girls.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-muted-foreground">Girls ({formData.girls} students)</p>
-                              {accommodation.roomAllocation.breakdown.girls.map((b, i) => (
-                                <p key={i} className="text-xs ml-2">
-                                  • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                </p>
-                              ))}
-                            </div>
-                          )}
-
-                          {accommodation.roomAllocation.breakdown.maleFaculty.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-muted-foreground">Male Faculty ({formData.maleFaculty})</p>
-                              {accommodation.roomAllocation.breakdown.maleFaculty.map((b, i) => (
-                                <p key={i} className="text-xs ml-2">
-                                  • {b.numberOfRooms}x {b.roomType} (single rooms)
-                                </p>
-                              ))}
-                            </div>
-                          )}
-
-                          {accommodation.roomAllocation.breakdown.femaleFaculty.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-muted-foreground">Female Faculty ({formData.femaleFaculty})</p>
-                              {accommodation.roomAllocation.breakdown.femaleFaculty.map((b, i) => (
-                                <p key={i} className="text-xs ml-2">
-                                  • {b.numberOfRooms}x {b.roomType} (single rooms)
-                                </p>
-                              ))}
-                            </div>
-                          )}
-
-                          {accommodation.roomAllocation.breakdown.maleVXplorers.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-muted-foreground">Male VXplorers ({formData.maleVXplorers})</p>
-                              {accommodation.roomAllocation.breakdown.maleVXplorers.map((b, i) => (
-                                <p key={i} className="text-xs ml-2">
-                                  • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                </p>
-                              ))}
-                            </div>
-                          )}
-
-                          {accommodation.roomAllocation.breakdown.femaleVXplorers.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-muted-foreground">Female VXplorers ({formData.femaleVXplorers})</p>
-                              {accommodation.roomAllocation.breakdown.femaleVXplorers.map((b, i) => (
-                                <p key={i} className="text-xs ml-2">
-                                  • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                </p>
-                              ))}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {accommodation.roomAllocation.breakdown.commercialMale.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-muted-foreground">Male Participants ({formData.maleCount})</p>
-                              {accommodation.roomAllocation.breakdown.commercialMale.map((b, i) => (
-                                <p key={i} className="text-xs ml-2">
-                                  • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                </p>
-                              ))}
-                            </div>
-                          )}
-
-                          {accommodation.roomAllocation.breakdown.commercialFemale.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-muted-foreground">Female Participants ({formData.femaleCount})</p>
-                              {accommodation.roomAllocation.breakdown.commercialFemale.map((b, i) => (
-                                <p key={i} className="text-xs ml-2">
-                                  • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                </p>
-                              ))}
-                            </div>
-                          )}
-
-                          {accommodation.roomAllocation.breakdown.commercialOther.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-muted-foreground">Other Participants ({formData.otherCount})</p>
-                              {accommodation.roomAllocation.breakdown.commercialOther.map((b, i) => (
-                                <p key={i} className="text-xs ml-2">
-                                  • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                </p>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* NEW: Commercial Male VXplorers */}
-                          {accommodation.roomAllocation.breakdown.commercialMaleVXplorers && accommodation.roomAllocation.breakdown.commercialMaleVXplorers.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-muted-foreground">Male VXplorers ({formData.commercialMaleVXplorers})</p>
-                              {accommodation.roomAllocation.breakdown.commercialMaleVXplorers.map((b, i) => (
-                                <p key={i} className="text-xs ml-2">
-                                  • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                </p>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* NEW: Commercial Female VXplorers */}
-                          {accommodation.roomAllocation.breakdown.commercialFemaleVXplorers && accommodation.roomAllocation.breakdown.commercialFemaleVXplorers.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-muted-foreground">Female VXplorers ({formData.commercialFemaleVXplorers})</p>
-                              {accommodation.roomAllocation.breakdown.commercialFemaleVXplorers.map((b, i) => (
-                                <p key={i} className="text-xs ml-2">
-                                  • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                </p>
-                              ))}
-                            </div>
-                          )}
-                        </>
-                      )}
-
-                      <div className="pt-2 border-t mt-3">
-                        <p className="text-sm font-semibold">
-                          Total Rooms: {accommodation.roomAllocation.totalRooms}
+                      <div className="pt-2 border-t">
+                        <p className="text-sm font-semibold text-primary">
+                          Total Cost: {formatCurrency(accommodation.totalCostINR, 'INR')}
                         </p>
                       </div>
                     </div>
                   )}
                 </div>
-
-                <div className="pt-2 border-t">
-                  <p className="text-sm font-semibold text-primary">
-                    Total Cost: {formatCurrency(accommodation.totalCostINR, 'INR')}
-                  </p>
-                </div>
-                </div>
-                )}
-              </div>
               );
             })
           )}
@@ -2800,122 +2805,122 @@ export default function CreateTrip() {
               const summary = activity.name || `Activity ${index + 1}`;
               const subSummary = activity.city || '';
               return (
-              <div key={activity.id} className="border rounded-lg bg-card overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
-                  <button type="button" className="flex items-center gap-2 flex-1 text-left min-w-0"
-                    onClick={() => setCollapsedActivities(prev => { const n = [...prev]; n[index] = !n[index]; return n; })}>
-                    {isCollapsed ? <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 shrink-0 text-muted-foreground" />}
-                    <span className="font-medium text-sm truncate">{summary}</span>
-                    {subSummary && <span className="text-xs text-muted-foreground hidden sm:inline">{subSummary}</span>}
-                    {isCollapsed && activity.totalCostINR > 0 && <span className="text-xs text-primary ml-auto mr-2 shrink-0">{formatCurrency(activity.totalCostINR, 'INR')}</span>}
-                  </button>
-                  <Button size="sm" variant="ghost" onClick={() => deleteActivity(index)} className="text-destructive hover:text-destructive h-7 w-7 p-0 shrink-0">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-                {!isCollapsed && (
-                <div className="p-4 space-y-4">
+                <div key={activity.id} className="border rounded-lg bg-card overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
+                    <button type="button" className="flex items-center gap-2 flex-1 text-left min-w-0"
+                      onClick={() => setCollapsedActivities(prev => { const n = [...prev]; n[index] = !n[index]; return n; })}>
+                      {isCollapsed ? <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 shrink-0 text-muted-foreground" />}
+                      <span className="font-medium text-sm truncate">{summary}</span>
+                      {subSummary && <span className="text-xs text-muted-foreground hidden sm:inline">{subSummary}</span>}
+                      {isCollapsed && activity.totalCostINR > 0 && <span className="text-xs text-primary ml-auto mr-2 shrink-0">{formatCurrency(activity.totalCostINR, 'INR')}</span>}
+                    </button>
+                    <Button size="sm" variant="ghost" onClick={() => deleteActivity(index)} className="text-destructive hover:text-destructive h-7 w-7 p-0 shrink-0">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                  {!isCollapsed && (
+                    <div className="p-4 space-y-4">
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Activity Name</Label>
-                    <Input
-                      placeholder="e.g., Eiffel Tower Visit"
-                      value={activity.name}
-                      onChange={(e) => updateActivity(index, 'name', e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>City (Optional)</Label>
-                    <Select
-                      value={activity.city || 'none'}
-                      onValueChange={(v) => updateActivity(index, 'city', v === 'none' ? undefined : v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select city" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        <SelectItem value="none">No specific city</SelectItem>
-                        {formData.cities.map((city) => (
-                          <SelectItem key={city.name} value={city.name}>
-                            {city.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Activity Name</Label>
+                          <Input
+                            placeholder="e.g., Eiffel Tower Visit"
+                            value={activity.name}
+                            onChange={(e) => updateActivity(index, 'name', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>City (Optional)</Label>
+                          <Select
+                            value={activity.city || 'none'}
+                            onValueChange={(v) => updateActivity(index, 'city', v === 'none' ? undefined : v)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select city" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover">
+                              <SelectItem value="none">No specific city</SelectItem>
+                              {formData.cities.map((city) => (
+                                <SelectItem key={city.name} value={city.name}>
+                                  {city.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
 
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="space-y-2">
-                    <Label>Currency</Label>
-                    <Select
-                      value={activity.currency}
-                      onValueChange={(v) => updateActivity(index, 'currency', v)}
-                      disabled={isLoadingMasterData}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select currency"} />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        {currencies.map((currency) => (
-                          <SelectItem key={currency.id} value={currency.code}>
-                            {currency.code} ({currency.symbol})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                      <div className="grid grid-cols-1 gap-4">
+                        <div className="space-y-2">
+                          <Label>Currency</Label>
+                          <Select
+                            value={activity.currency}
+                            onValueChange={(v) => updateActivity(index, 'currency', v)}
+                            disabled={isLoadingMasterData}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select currency"} />
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover">
+                              {currencies.map((currency) => (
+                                <SelectItem key={currency.id} value={currency.code}>
+                                  {currency.code} ({currency.symbol})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
 
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label>Entry Cost ({activity.currency})</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={activity.entryCost || ''}
-                      onChange={(e) => updateActivity(index, 'entryCost', parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Transport ({activity.currency})</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={activity.transportCost || ''}
-                      onChange={(e) => updateActivity(index, 'transportCost', parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Guide ({activity.currency})</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={activity.guideCost || ''}
-                      onChange={(e) => updateActivity(index, 'guideCost', parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-                </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>Entry Cost ({activity.currency})</Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            value={activity.entryCost || ''}
+                            onChange={(e) => updateActivity(index, 'entryCost', parseFloat(e.target.value) || 0)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Transport ({activity.currency})</Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            value={activity.transportCost || ''}
+                            onChange={(e) => updateActivity(index, 'transportCost', parseFloat(e.target.value) || 0)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Guide ({activity.currency})</Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            value={activity.guideCost || ''}
+                            onChange={(e) => updateActivity(index, 'guideCost', parseFloat(e.target.value) || 0)}
+                          />
+                        </div>
+                      </div>
 
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Textarea
-                    placeholder="Activity details..."
-                    value={activity.description}
-                    onChange={(e) => updateActivity(index, 'description', e.target.value)}
-                    rows={2}
-                  />
-                </div>
+                      <div className="space-y-2">
+                        <Label>Description</Label>
+                        <Textarea
+                          placeholder="Activity details..."
+                          value={activity.description}
+                          onChange={(e) => updateActivity(index, 'description', e.target.value)}
+                          rows={2}
+                        />
+                      </div>
 
-                <div className="pt-2 border-t">
-                  <p className="text-sm font-semibold text-primary">
-                    Total: {formatCurrency(activity.totalCostINR, 'INR')}
-                  </p>
+                      <div className="pt-2 border-t">
+                        <p className="text-sm font-semibold text-primary">
+                          Total: {formatCurrency(activity.totalCostINR, 'INR')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                </div>
-                )}
-              </div>
               );
             })
           )}
@@ -3091,79 +3096,97 @@ export default function CreateTrip() {
               const isCollapsed = collapsedOverheads[index] ?? false;
               const summary = overhead.name || `Overhead ${index + 1}`;
               return (
-              <div key={overhead.id} className="border rounded-lg bg-card overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
-                  <button type="button" className="flex items-center gap-2 flex-1 text-left min-w-0"
-                    onClick={() => setCollapsedOverheads(prev => { const n = [...prev]; n[index] = !n[index]; return n; })}>
-                    {isCollapsed ? <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 shrink-0 text-muted-foreground" />}
-                    <span className="font-medium text-sm truncate">{summary}</span>
-                    {isCollapsed && overhead.totalCostINR > 0 && <span className="text-xs text-primary ml-auto mr-2 shrink-0">{formatCurrency(overhead.totalCostINR, 'INR')}</span>}
-                  </button>
-                  <Button size="sm" variant="ghost" onClick={() => deleteOverhead(index)} className="text-destructive hover:text-destructive h-7 w-7 p-0 shrink-0">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-                {!isCollapsed && (
-                <div className="p-4 space-y-4">
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label>Name</Label>
-                    <Input
-                      placeholder="Contingency, Admin Fee, etc."
-                      value={overhead.name}
-                      onChange={(e) => updateOverhead(index, 'name', e.target.value)}
-                    />
+                <div key={overhead.id} className="border rounded-lg bg-card overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
+                    <button type="button" className="flex items-center gap-2 flex-1 text-left min-w-0"
+                      onClick={() => setCollapsedOverheads(prev => { const n = [...prev]; n[index] = !n[index]; return n; })}>
+                      {isCollapsed ? <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 shrink-0 text-muted-foreground" />}
+                      <span className="font-medium text-sm truncate">{summary}</span>
+                      {isCollapsed && overhead.totalCostINR > 0 && <span className="text-xs text-primary ml-auto mr-2 shrink-0">{formatCurrency(overhead.totalCostINR, 'INR')}</span>}
+                    </button>
+                    <Button size="sm" variant="ghost" onClick={() => deleteOverhead(index)} className="text-destructive hover:text-destructive h-7 w-7 p-0 shrink-0">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Amount Per Participant</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={overhead.amountPerParticipant || ''}
-                      onChange={(e) => updateOverhead(index, 'amountPerParticipant', parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Currency</Label>
-                    <Select
-                      value={overhead.currency}
-                      onValueChange={(v) => updateOverhead(index, 'currency', v)}
-                      disabled={isLoadingMasterData}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select currency"} />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        {currencies.map((currency) => (
-                          <SelectItem key={currency.id} value={currency.code}>
-                            {currency.code} ({currency.symbol})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                  {!isCollapsed && (
+                    <div className="p-4 space-y-4">
 
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={overhead.hideFromClient}
-                    onCheckedChange={(checked) => updateOverhead(index, 'hideFromClient', checked)}
-                  />
-                  <Label>Hide from Client</Label>
-                </div>
+                      <div className="grid grid-cols-4 gap-4">
+                        <div className="space-y-2">
+                          <Label>Name</Label>
+                          <Input
+                            placeholder="Contingency, Admin Fee, etc."
+                            value={overhead.name}
+                            onChange={(e) => updateOverhead(index, 'name', e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Cost Type</Label>
+                          <Select
+                            value={overhead.costType}
+                            onValueChange={(v) => updateOverhead(index, 'costType', v as 'per_person' | 'lump_sum')}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover">
+                              <SelectItem value="per_person">Per Person</SelectItem>
+                              <SelectItem value="lump_sum">Lump Sum</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{overhead.costType === 'lump_sum' ? 'Total Amount' : 'Amount Per Participant'}</Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            value={overhead.amountPerParticipant || ''}
+                            onChange={(e) => updateOverhead(index, 'amountPerParticipant', parseFloat(e.target.value) || 0)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Currency</Label>
+                          <Select
+                            value={overhead.currency}
+                            onValueChange={(v) => updateOverhead(index, 'currency', v)}
+                            disabled={isLoadingMasterData}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder={isLoadingMasterData ? "Loading..." : "Select currency"} />
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover">
+                              {currencies.map((currency) => (
+                                <SelectItem key={currency.id} value={currency.code}>
+                                  {currency.code} ({currency.symbol})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
 
-                <div className="pt-2 border-t">
-                  <p className="text-sm text-muted-foreground">
-                    {formatCurrency(overhead.amountPerParticipant, overhead.currency)} × {calculateTotalParticipants()} participants
-                  </p>
-                  <p className="text-sm font-semibold text-primary">
-                    Total: {formatCurrency(overhead.totalCostINR, 'INR')}
-                  </p>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={overhead.hideFromClient}
+                          onCheckedChange={(checked) => updateOverhead(index, 'hideFromClient', checked)}
+                        />
+                        <Label>Hide from Client</Label>
+                      </div>
+
+                      <div className="pt-2 border-t">
+                        <p className="text-sm text-muted-foreground">
+                          {overhead.costType === 'lump_sum'
+                            ? `Lump Sum: ${formatCurrency(overhead.amountPerParticipant, overhead.currency)}`
+                            : `${formatCurrency(overhead.amountPerParticipant, overhead.currency)} × ${calculateTotalParticipants()} participants`
+                          }
+                        </p>
+                        <p className="text-sm font-semibold text-primary">
+                          Total: {formatCurrency(overhead.totalCostINR, 'INR')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                </div>
-                )}
-              </div>
               );
             })
           )}
