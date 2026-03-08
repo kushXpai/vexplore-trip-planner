@@ -45,6 +45,7 @@ import {
   getDefaultRoomPreferences
 } from '@/utils/roomAllocation';
 import { RoomTypeConfig } from '@/types/trip';
+import { TripSectionNavDesktop, TripSectionNavMobile } from '@/components/TripSectionNav';
 
 export default function CreateTrip() {
   const navigate = useNavigate();
@@ -1256,9 +1257,10 @@ export default function CreateTrip() {
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="flex flex-col h-[calc(100vh-64px)]">
+      {/* Fixed header */}
+      <div className="px-6 pt-6 pb-4 shrink-0">
+        <div className="max-w-7xl mx-auto">
           <h1 className="text-3xl font-bold gradient-text">
             {isEditing ? 'Edit Trip' : 'Create New Trip'}
           </h1>
@@ -1268,8 +1270,15 @@ export default function CreateTrip() {
         </div>
       </div>
 
+      {/* Scrollable body */}
+      <div id="trip-scroll-container" className="flex-1 overflow-y-auto px-6 pb-6">
+        <div className="max-w-7xl mx-auto flex gap-8 items-start">
+          <TripSectionNavDesktop />
+
+          <div className="flex-1 min-w-0 space-y-6">
+
       {/* STEP 1: Trip Classification (NEW) */}
-      <Card className="shadow-card">
+      <Card id="section-classification" className="shadow-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Info className="w-5 h-5 text-primary" />
@@ -1416,7 +1425,7 @@ export default function CreateTrip() {
       </Card>
 
       {/* Basic Information */}
-      <Card className="shadow-card">
+      <Card id="section-basic" className="shadow-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Info className="w-5 h-5 text-primary" />
@@ -1660,7 +1669,7 @@ export default function CreateTrip() {
       </Card>
 
       {/* Participants - Different based on trip type */}
-      <Card className="shadow-card">
+      <Card id="section-participants" className="shadow-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="w-5 h-5 text-primary" />
@@ -1896,7 +1905,7 @@ export default function CreateTrip() {
       </Card>
 
       {/* Transport - Flights */}
-      <Card className="shadow-card">
+      <Card id="section-flights" className="shadow-card">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -2101,7 +2110,7 @@ export default function CreateTrip() {
       )}
 
       {/* Transport - Buses */}
-      <Card className="shadow-card">
+      <Card id="section-buses" className="shadow-card">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -2176,7 +2185,7 @@ export default function CreateTrip() {
       )}
 
       {/* Transport - Trains */}
-      <Card className="shadow-card">
+      <Card id="section-trains" className="shadow-card">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -2253,7 +2262,7 @@ export default function CreateTrip() {
       )}
 
       {/* Accommodation */}
-      <Card className="shadow-card">
+      <Card id="section-accommodation" className="shadow-card">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -2851,7 +2860,7 @@ export default function CreateTrip() {
       )}
 
       {/* Meals */}
-      <Card className="shadow-card">
+      <Card id="section-meals" className="shadow-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Utensils className="w-5 h-5 text-primary" />
@@ -3015,7 +3024,7 @@ export default function CreateTrip() {
       )}
 
       {/* Activities */}
-      <Card className="shadow-card">
+      <Card id="section-activities" className="shadow-card">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -3170,7 +3179,7 @@ export default function CreateTrip() {
       )}
 
       {/* Visa, Tips and Insurance */}
-      <Card className="shadow-card">
+      <Card id="section-extras" className="shadow-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <IdCard className="w-5 h-5 text-primary" />
@@ -3327,7 +3336,7 @@ export default function CreateTrip() {
       )}
 
       {/* Overheads */}
-      <Card className="shadow-card">
+      <Card id="section-overheads" className="shadow-card">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -3456,7 +3465,7 @@ export default function CreateTrip() {
       )}
 
       {/* Cost Summary with GST and TCS */}
-      <Card className="shadow-card">
+      <Card id="section-summary" className="shadow-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calculator className="w-5 h-5 text-primary" />
@@ -3689,6 +3698,12 @@ export default function CreateTrip() {
           )}
         </Button>
       </div>
+
+        </div>{/* end flex-1 content column */}
+        </div>{/* end max-w-7xl flex row */}
+      </div>{/* end scrollable body */}
+
+      <TripSectionNavMobile />
     </div>
   );
 }
