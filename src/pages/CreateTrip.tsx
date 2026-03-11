@@ -914,30 +914,35 @@ export default function CreateTrip() {
   };
 
   // Update a specific room type's count in the breakdown manually (after auto-allocation)
+  // roomTypeTemplate is passed when the room type doesn't exist in the breakdown yet (count was 0)
   const updateRoomBreakdownCount = (
     accIndex: number,
     groupKey: keyof NonNullable<typeof accommodations[0]['roomAllocation']['breakdown']>,
     breakdownIndex: number,
-    delta: number
+    delta: number,
+    roomTypeTemplate?: import('@/types/trip').RoomTypeBreakdown
   ) => {
     const updated = [...accommodations];
     const acc = { ...updated[accIndex] };
     if (!acc.roomAllocation?.breakdown) return;
 
-    const breakdown = acc.roomAllocation.breakdown[groupKey] as import('@/types/trip').RoomTypeBreakdown[];
-    const entry = breakdown[breakdownIndex];
-    const newCount = Math.max(0, entry.numberOfRooms + delta);
-    const newPeople = newCount * entry.capacityPerRoom;
+    const breakdown = [...(acc.roomAllocation.breakdown[groupKey] as import('@/types/trip').RoomTypeBreakdown[])];
 
-    const newBreakdown = breakdown.map((b, i) =>
-      i === breakdownIndex
-        ? { ...b, numberOfRooms: newCount, peopleAccommodated: newPeople }
-        : b
-    );
+    // If index is beyond current breakdown length, it's a new room type — insert it
+    if (breakdownIndex >= breakdown.length && roomTypeTemplate) {
+      if (delta <= 0) return; // nothing to do for a new entry with decrement
+      const newEntry = { ...roomTypeTemplate, numberOfRooms: 1, peopleAccommodated: roomTypeTemplate.capacityPerRoom };
+      breakdown.push(newEntry);
+    } else {
+      const entry = breakdown[breakdownIndex];
+      const newCount = Math.max(0, entry.numberOfRooms + delta);
+      const newPeople = newCount * entry.capacityPerRoom;
+      breakdown[breakdownIndex] = { ...entry, numberOfRooms: newCount, peopleAccommodated: newPeople };
+    }
 
-    const newBreakdowns = { ...acc.roomAllocation.breakdown, [groupKey]: newBreakdown };
+    const newBreakdowns = { ...acc.roomAllocation.breakdown, [groupKey]: breakdown };
 
-    // Recalculate group room totals
+    // Recalculate total rooms
     const totalRooms = Object.values(newBreakdowns).reduce(
       (sum, grp) => sum + (grp as import('@/types/trip').RoomTypeBreakdown[]).reduce((s, b) => s + b.numberOfRooms, 0), 0
     );
@@ -2596,13 +2601,34 @@ export default function CreateTrip() {
                               </div>
                             </div>
 
-                            {/* Faculty always gets single rooms - just show info */}
+                            {/* Faculty Preference - same as students/vxplorers */}
                             <div className="space-y-2">
                               <Label className="text-sm">Faculty</Label>
-                              <div className="p-3 bg-muted rounded-lg">
-                                <p className="text-sm text-muted-foreground">
-                                  ✓ Faculty always get single rooms (1 person per room)
-                                </p>
+                              <div className="flex flex-wrap gap-2">
+                                {accommodation.roomTypes.map((rt) => (
+                                  <Button
+                                    key={rt.roomType}
+                                    size="sm"
+                                    variant={accommodation.roomPreferences?.faculty?.includes(rt.roomType.toLowerCase()) ? "default" : "outline"}
+                                    onClick={() => {
+                                      const currentPrefs = accommodation.roomPreferences?.faculty || [];
+                                      const newPrefs = currentPrefs.includes(rt.roomType.toLowerCase())
+                                        ? currentPrefs.filter(p => p !== rt.roomType.toLowerCase())
+                                        : [...currentPrefs, rt.roomType.toLowerCase()];
+                                      updateAccommodation(index, 'roomPreferences', {
+                                        ...accommodation.roomPreferences,
+                                        faculty: newPrefs
+                                      });
+                                    }}
+                                  >
+                                    {rt.roomType}
+                                    {accommodation.roomPreferences?.faculty?.includes(rt.roomType.toLowerCase()) && (
+                                      <Badge variant="secondary" className="ml-2">
+                                        {accommodation.roomPreferences.faculty.indexOf(rt.roomType.toLowerCase()) + 1}
+                                      </Badge>
+                                    )}
+                                  </Button>
+                                ))}
                               </div>
                             </div>
 
@@ -2732,7 +2758,25 @@ export default function CreateTrip() {
                         </Button>
 
                         {accommodation.roomAllocation?.breakdown && (() => {
-                          // Helper to render a group's counter rows
+                          // Build full rows for a group: always show ALL room types,
+                          // merging auto-allocated rows with zeros for unallocated types
+                          const buildFullRows = (
+                            groupKey: keyof NonNullable<typeof accommodation.roomAllocation.breakdown>
+                          ): import('@/types/trip').RoomTypeBreakdown[] => {
+                            const existing = (accommodation.roomAllocation.breakdown![groupKey] as import('@/types/trip').RoomTypeBreakdown[]) || [];
+                            return accommodation.roomTypes.map(rt => {
+                              const found = existing.find(b => b.roomType.toLowerCase() === rt.roomType.toLowerCase());
+                              return found ?? {
+                                roomType: rt.roomType,
+                                capacityPerRoom: rt.capacityPerRoom,
+                                numberOfRooms: 0,
+                                peopleAccommodated: 0,
+                                costPerRoom: rt.costPerRoom,
+                              };
+                            });
+                          };
+
+                          // Helper to render a group's counter rows — always shows all room types
                           const RoomCounterGroup = ({
                             label,
                             totalPeople,
@@ -2742,8 +2786,8 @@ export default function CreateTrip() {
                             totalPeople: number;
                             groupKey: keyof NonNullable<typeof accommodation.roomAllocation.breakdown>;
                           }) => {
-                            const rows = (accommodation.roomAllocation.breakdown![groupKey] as import('@/types/trip').RoomTypeBreakdown[]);
-                            if (!rows || rows.length === 0) return null;
+                            if (totalPeople === 0) return null;
+                            const rows = buildFullRows(groupKey);
                             const accommodated = rows.reduce((s, b) => s + b.peopleAccommodated, 0);
                             const isOver = accommodated > totalPeople;
                             const isUnder = accommodated < totalPeople;
@@ -2755,46 +2799,50 @@ export default function CreateTrip() {
                                     {accommodated}/{totalPeople} people
                                   </span>
                                 </div>
-                                {rows.map((b, i) => (
-                                  <div key={i} className="flex items-center justify-between bg-background border rounded-md px-3 py-2">
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-xs font-medium">{b.roomType}</p>
-                                      <p className="text-xs text-muted-foreground">{b.capacityPerRoom} per room · {b.numberOfRooms * b.capacityPerRoom} people</p>
+                                {rows.map((b, i) => {
+                                  const isZero = b.numberOfRooms === 0;
+                                  // Find the real index in the existing breakdown for updateRoomBreakdownCount
+                                  const existing = (accommodation.roomAllocation.breakdown![groupKey] as import('@/types/trip').RoomTypeBreakdown[]) || [];
+                                  const existingIndex = existing.findIndex(e => e.roomType.toLowerCase() === b.roomType.toLowerCase());
+                                  return (
+                                    <div key={b.roomType} className={`flex items-center justify-between bg-background border rounded-md px-3 py-2 ${isZero ? 'opacity-40' : ''}`}>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-medium">{b.roomType}</p>
+                                        <p className="text-xs text-muted-foreground">{b.capacityPerRoom} per room · {b.numberOfRooms * b.capacityPerRoom} people</p>
+                                      </div>
+                                      <div className="flex items-center gap-2 ml-3">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-7 w-7 p-0"
+                                          onClick={() => updateRoomBreakdownCount(index, groupKey, existingIndex >= 0 ? existingIndex : existing.length, -1, b)}
+                                          disabled={b.numberOfRooms <= 0}
+                                        >
+                                          <Minus className="w-3 h-3" />
+                                        </Button>
+                                        <span className="text-sm font-bold w-6 text-center">{b.numberOfRooms}</span>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-7 w-7 p-0"
+                                          onClick={() => updateRoomBreakdownCount(index, groupKey, existingIndex >= 0 ? existingIndex : existing.length, 1, b)}
+                                        >
+                                          <Plus className="w-3 h-3" />
+                                        </Button>
+                                      </div>
                                     </div>
-                                    <div className="flex items-center gap-2 ml-3">
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 w-7 p-0"
-                                        onClick={() => updateRoomBreakdownCount(index, groupKey, i, -1)}
-                                        disabled={b.numberOfRooms <= 0}
-                                      >
-                                        <Minus className="w-3 h-3" />
-                                      </Button>
-                                      <span className="text-sm font-bold w-6 text-center">{b.numberOfRooms}</span>
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 w-7 p-0"
-                                        onClick={() => updateRoomBreakdownCount(index, groupKey, i, 1)}
-                                      >
-                                        <Plus className="w-3 h-3" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             );
                           };
 
-                          const totalParticipants = calculateTotalParticipants();
-
                           return (
                             <div className="space-y-4 p-4 bg-muted rounded-lg">
                               <h4 className="font-semibold text-sm">Room Allocation Summary</h4>
-                              <p className="text-xs text-muted-foreground -mt-2">Adjust room counts manually after auto-allocation. Cost updates instantly.</p>
+                              <p className="text-xs text-muted-foreground -mt-2">All room types shown. Dimmed ones are at 0 — bump them up manually if needed.</p>
 
                               {tripType === 'institute' ? (
                                 <>

@@ -23,22 +23,6 @@ function allocateRoomsWithCostOptimization(
     throw new Error('No room types available');
   }
 
-  // CRITICAL: Faculty ALWAYS get single rooms
-  if (isFaculty) {
-    const singleRoom = roomTypes.find(rt => rt.roomType.toLowerCase() === 'single');
-    if (!singleRoom) {
-      throw new Error('Single room type required for faculty allocation');
-    }
-
-    return [{
-      roomType: singleRoom.roomType,
-      capacityPerRoom: 1,
-      numberOfRooms: numberOfPeople,
-      peopleAccommodated: numberOfPeople,
-      costPerRoom: singleRoom.costPerRoom,
-    }];
-  }
-
   // Filter room types to only include those in preferences
   const preferredRoomTypes = preferences
     .map(pref => roomTypes.find(rt => rt.roomType.toLowerCase() === pref.toLowerCase()))
@@ -144,23 +128,6 @@ function allocateRoomsWithPreferences(
   if (numberOfPeople === 0) return [];
   if (roomTypes.length === 0) {
     throw new Error('No room types available');
-  }
-
-  // CRITICAL: Faculty ALWAYS get single rooms
-  if (isFaculty) {
-    const singleRoom = roomTypes.find(rt => rt.roomType.toLowerCase() === 'single');
-    if (!singleRoom) {
-      throw new Error('Single room type required for faculty allocation');
-    }
-
-    // Allocate one single room per faculty member
-    return [{
-      roomType: singleRoom.roomType,
-      capacityPerRoom: 1,
-      numberOfRooms: numberOfPeople,
-      peopleAccommodated: numberOfPeople,
-      costPerRoom: singleRoom.costPerRoom,
-    }];
   }
 
   // Filter room types to only include those in preferences
@@ -410,13 +377,19 @@ export function autoAllocateRooms(
         : allocateRoomsForGroup(participants.girls, roomTypes))
       : [];
 
-    // FACULTY ALWAYS GET SINGLE ROOMS (never optimized, always single)
+    // Faculty allocation with preferences (same as students/vxplorers)
+    const facultyPrefs = preferences?.faculty || [];
+
     maleFacultyBreakdown = participants.maleFaculty > 0
-      ? allocateRoomsWithPreferences(participants.maleFaculty, roomTypes, ['single'], true)
+      ? (facultyPrefs.length > 0
+        ? allocationFunction(participants.maleFaculty, roomTypes, facultyPrefs)
+        : allocateRoomsForGroup(participants.maleFaculty, roomTypes))
       : [];
 
     femaleFacultyBreakdown = participants.femaleFaculty > 0
-      ? allocateRoomsWithPreferences(participants.femaleFaculty, roomTypes, ['single'], true)
+      ? (facultyPrefs.length > 0
+        ? allocationFunction(participants.femaleFaculty, roomTypes, facultyPrefs)
+        : allocateRoomsForGroup(participants.femaleFaculty, roomTypes))
       : [];
 
     // VXplorers allocation with preferences
@@ -551,20 +524,7 @@ export function validateRoomAllocation(
       }
     });
 
-    // Validate faculty have single rooms
-    const maleFacultyHasNonSingle = roomAllocation.breakdown.maleFaculty.some(
-      b => b.roomType.toLowerCase() !== 'single'
-    );
-    const femaleFacultyHasNonSingle = roomAllocation.breakdown.femaleFaculty.some(
-      b => b.roomType.toLowerCase() !== 'single'
-    );
 
-    if (maleFacultyHasNonSingle) {
-      errors.push('Male faculty must have single rooms only');
-    }
-    if (femaleFacultyHasNonSingle) {
-      errors.push('Female faculty must have single rooms only');
-    }
   }
 
   return errors;
@@ -611,7 +571,7 @@ export function getDefaultRoomPreferences(tripType: TripType): RoomPreferences {
   } else {
     return {
       students: [],
-      faculty: ['single'],  // ALWAYS single for faculty (non-negotiable)
+      faculty: [],
       vxplorers: []
     };
   }
