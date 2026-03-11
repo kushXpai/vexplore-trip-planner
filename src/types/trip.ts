@@ -254,6 +254,7 @@ export interface Accommodation {
   totalRooms: number;
   totalCost: number;
   totalCostINR: number;
+  driverRoom: boolean;
 }
 
 export interface RoomAllocation {

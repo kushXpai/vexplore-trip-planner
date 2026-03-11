@@ -147,6 +147,7 @@ interface DbAccommodation {
   room_allocation?: any;
   room_types?: any;
   room_preferences?: any;
+  driver_room?: boolean;
 }
 
 interface DbActivity {
@@ -397,6 +398,7 @@ export async function createTrip(tripData: {
         room_allocation: acc.roomAllocation,
         room_types: acc.roomTypes,
         room_preferences: acc.roomPreferences,
+        driver_room: (acc as any).driverRoom ?? false,
       }));
 
       const { error: accommodationsError } = await supabase
@@ -674,6 +676,7 @@ export async function updateTrip(tripId: string, tripData: {
         room_allocation: acc.roomAllocation,
         room_types: acc.roomTypes,
         room_preferences: acc.roomPreferences,
+        driver_room: (acc as any).driverRoom ?? false,
       }));
       await supabase.from('trip_accommodations').insert(dbAccommodations);
     }

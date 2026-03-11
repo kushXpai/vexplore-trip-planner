@@ -87,6 +87,7 @@ CREATE TABLE public.trip_accommodations (
   total_cost numeric NOT NULL DEFAULT 0,
   total_cost_inr numeric NOT NULL DEFAULT 0,
   created_at timestamp with time zone DEFAULT now(),
+  driver_room boolean NOT NULL DEFAULT false,
   CONSTRAINT trip_accommodations_pkey PRIMARY KEY (id),
   CONSTRAINT trip_accommodations_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
 );

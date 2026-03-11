@@ -142,6 +142,9 @@ export default function CreateTrip() {
   // NEW: Cost optimization toggle state
   const [optimizeRoomsByCost, setOptimizeRoomsByCost] = useState(false);
 
+  // Per-accommodation allocation mode: 'auto' | 'manual'
+  const [allocationModes, setAllocationModes] = useState<Record<string, 'auto' | 'manual'>>({});
+
   // City add form state
   const [showAddCityForm, setShowAddCityForm] = useState(false);
   const [selectedCountryForAdd, setSelectedCountryForAdd] = useState('');
@@ -343,6 +346,7 @@ export default function CreateTrip() {
           totalRooms: a.total_rooms,
           totalCost: a.total_cost,
           totalCostINR: a.total_cost_inr,
+          driverRoom: a.driver_room ?? false,
         })));
 
         // Map activities
@@ -776,6 +780,7 @@ export default function CreateTrip() {
       totalRooms: 0,
       totalCost: 0,
       totalCostINR: 0,
+      driverRoom: false,
     }]);
   };
 
@@ -830,16 +835,23 @@ export default function CreateTrip() {
       }
     }
 
-    // Recalculate costs when nights or currency change
-    if (field === 'numberOfNights' || field === 'currency') {
+    // Recalculate costs when nights, currency, or driverRoom change
+    if (field === 'numberOfNights' || field === 'currency' || field === ('driverRoom' as any)) {
       if (updated[index].roomAllocation.totalRooms > 0) {
         const costs = calculateAccommodationCost(
           updated[index].roomAllocation,
           updated[index].numberOfNights,
           getCurrencyRate(updated[index].currency)
         );
-        updated[index].totalCost = costs.totalCost;
-        updated[index].totalCostINR = costs.totalCostINR;
+        // Add driver single room cost if enabled
+        const driverRoom = updated[index].driverRoom ?? false;
+        const singleRoomType = updated[index].roomTypes.find(rt => rt.roomType.toLowerCase() === 'single');
+        const driverCost = driverRoom && singleRoomType
+          ? singleRoomType.costPerRoom * updated[index].numberOfNights
+          : 0;
+        const driverCostINR = driverCost * getCurrencyRate(updated[index].currency);
+        updated[index].totalCost = costs.totalCost + driverCost;
+        updated[index].totalCostINR = costs.totalCostINR + driverCostINR;
       }
     }
 
@@ -2561,8 +2573,51 @@ export default function CreateTrip() {
                         ))}
                       </div>
 
-                      {/* Room Preferences */}
-                      <div className="space-y-4 pt-4 border-t">
+                      {/* Allocation Mode selector - right after room types */}
+                      <div className="space-y-2 pt-4 border-t">
+                        <Label className="text-base font-semibold">Room Allocation Method</Label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setAllocationModes(prev => ({ ...prev, [accommodation.id]: 'auto' }))}
+                            className={`flex flex-col items-start gap-1 p-3 rounded-lg border-2 transition-colors text-left ${(allocationModes[accommodation.id] ?? 'auto') === 'auto' ? 'border-primary bg-primary/5' : 'border-muted hover:border-muted-foreground/40'}`}
+                          >
+                            <span className="text-sm font-semibold flex items-center gap-2"><Calculator className="w-4 h-4" /> Auto Allocate</span>
+                            <span className="text-xs text-muted-foreground">System allocates rooms based on preferences</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAllocationModes(prev => ({ ...prev, [accommodation.id]: 'manual' }));
+                              const updated = [...accommodations];
+                              updated[index] = {
+                                ...updated[index],
+                                roomAllocation: {
+                                  ...updated[index].roomAllocation,
+                                  breakdown: {
+                                    boys: [], girls: [], maleFaculty: [], femaleFaculty: [],
+                                    maleVXplorers: [], femaleVXplorers: [],
+                                    commercialMale: [], commercialFemale: [], commercialOther: [],
+                                    commercialMaleVXplorers: [], commercialFemaleVXplorers: [],
+                                  },
+                                  totalRooms: 0,
+                                },
+                                totalRooms: 0,
+                                totalCost: 0,
+                                totalCostINR: 0,
+                              };
+                              setAccommodations(updated);
+                            }}
+                            className={`flex flex-col items-start gap-1 p-3 rounded-lg border-2 transition-colors text-left ${allocationModes[accommodation.id] === 'manual' ? 'border-primary bg-primary/5' : 'border-muted hover:border-muted-foreground/40'}`}
+                          >
+                            <span className="text-sm font-semibold flex items-center gap-2"><Users className="w-4 h-4" /> Manual Allocate</span>
+                            <span className="text-xs text-muted-foreground">Set room counts yourself for each group</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Room Preferences - only shown in auto mode */}
+                      {(allocationModes[accommodation.id] ?? 'auto') === 'auto' && <div className="space-y-4 pt-4 border-t">
                         <Label className="text-base font-semibold">Room Preferences (Priority Order)</Label>
                         <div className="text-sm text-muted-foreground mb-2">
                           Select room types in order of preference. The system will allocate rooms starting with the first preference.
@@ -2728,11 +2783,12 @@ export default function CreateTrip() {
                             </div>
                           </>
                         )}
-                      </div>
+                      </div>}
 
-                      {/* Auto-allocate button and results */}
+                      {/* Allocation Mode + controls */}
                       <div className="space-y-4 pt-4 border-t">
-                        {/* Cost Optimization Toggle */}
+                        {/* Auto mode controls */}
+                        {(allocationModes[accommodation.id] ?? 'auto') === 'auto' && (<>
                         <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
                           <Switch
                             checked={optimizeRoomsByCost}
@@ -2756,8 +2812,22 @@ export default function CreateTrip() {
                           <Calculator className="w-4 h-4 mr-2" />
                           Auto-Allocate Rooms
                         </Button>
+                        </>)}
 
-                        {accommodation.roomAllocation?.breakdown && (() => {
+                        {(allocationModes[accommodation.id] === 'manual' || accommodation.roomAllocation?.breakdown) && (() => {
+                          // For manual mode with no breakdown yet, seed empty breakdown structure
+                          if (allocationModes[accommodation.id] === 'manual' && !accommodation.roomAllocation?.breakdown) {
+                            const emptyBreakdown = {
+                              boys: [], girls: [], maleFaculty: [], femaleFaculty: [],
+                              maleVXplorers: [], femaleVXplorers: [],
+                              commercialMale: [], commercialFemale: [], commercialOther: [],
+                              commercialMaleVXplorers: [], commercialFemaleVXplorers: [],
+                            };
+                            const updated = [...accommodations];
+                            updated[index] = { ...updated[index], roomAllocation: { ...updated[index].roomAllocation, breakdown: emptyBreakdown } };
+                            setTimeout(() => setAccommodations(updated), 0);
+                            return null;
+                          }
                           // Build full rows for a group: always show ALL room types,
                           // merging auto-allocated rows with zeros for unallocated types
                           const buildFullRows = (
@@ -2863,9 +2933,28 @@ export default function CreateTrip() {
                                 </>
                               )}
 
+                              {/* Driver room toggle */}
+                              <div className="flex items-center justify-between pt-2 border-t">
+                                <div className="flex items-center gap-2">
+                                  <Switch
+                                    checked={accommodation.driverRoom ?? false}
+                                    onCheckedChange={(checked) => updateAccommodation(index, 'driverRoom' as any, checked)}
+                                  />
+                                  <div>
+                                    <p className="text-xs font-semibold">Driver Room</p>
+                                    <p className="text-xs text-muted-foreground">1 single room for driver</p>
+                                  </div>
+                                </div>
+                                {accommodation.driverRoom && (
+                                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">+1 Single Room</span>
+                                )}
+                              </div>
+
                               <div className="pt-2 border-t flex items-center justify-between">
                                 <p className="text-sm font-semibold">Total Rooms</p>
-                                <p className="text-sm font-bold text-primary">{accommodation.roomAllocation.totalRooms}</p>
+                                <p className="text-sm font-bold text-primary">
+                                  {accommodation.roomAllocation.totalRooms + (accommodation.driverRoom ? 1 : 0)}
+                                </p>
                               </div>
                             </div>
                           );
