@@ -1148,33 +1148,30 @@ export default function CreateTrip() {
 
   // Save trip
   const handleSaveTrip = async () => {
-    // Validation
-    if (!formData.name.trim()) {
-      toast.error('Please enter trip name');
-      return;
-    }
-    if (!formData.institution.trim()) {
-      toast.error('Please enter institution name');
-      return;
-    }
-    if (formData.countries.length === 0) {
-      toast.error('Please select at least one country');
-      return;
-    }
-    if (formData.cities.length === 0) {
-      toast.error('Please add at least one city');
-      return;
-    }
-    if (formData.cities.some(c => !c.fromDate || !c.toDate)) {
-      toast.error('Please set from and to dates for all cities');
-      return;
-    }
-    if (!formData.startDate || !formData.endDate) {
-      toast.error('Please select start and end dates');
-      return;
-    }
-    if (calculateTotalParticipants() === 0) {
-      toast.error('Please add at least one participant');
+    // Validation — collect all errors and show them together
+    const validationErrors: string[] = [];
+
+    if (!formData.name.trim())
+      validationErrors.push('Trip name is required');
+    if (!formData.institution.trim())
+      validationErrors.push('Institution name is required');
+    if (formData.countries.length === 0)
+      validationErrors.push('At least one country must be selected');
+    if (formData.cities.length === 0)
+      validationErrors.push('At least one city must be added');
+    if (formData.cities.some(c => !c.fromDate || !c.toDate))
+      validationErrors.push('All cities must have from and to dates');
+    if (!formData.startDate || !formData.endDate)
+      validationErrors.push('Start and end dates are required');
+    if (calculateTotalParticipants() === 0)
+      validationErrors.push('At least one participant is required');
+    if (!extras.insuranceCostPerPerson || extras.insuranceCostPerPerson <= 0)
+      validationErrors.push('Insurance cost per person is required');
+    if (tripCategory === 'international' && (!extras.visaCostPerPerson || extras.visaCostPerPerson <= 0))
+      validationErrors.push('Visa cost per person is required for international trips');
+
+    if (validationErrors.length > 0) {
+      validationErrors.forEach(err => toast.error(err));
       return;
     }
 
@@ -1255,8 +1252,8 @@ export default function CreateTrip() {
         activities,
         overheads,
 
-        // NEW: Include extras only if applicable
-        extras: (tripCategory === 'international' || extras.insuranceCostPerPerson > 0) ? extras : undefined,
+        // Always include extras (visa and insurance are mandatory)
+        extras,
 
         subtotalBeforeTax: totals.subtotalBeforeTax,
         profit: profit,
