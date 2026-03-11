@@ -27,7 +27,7 @@ import {
 import type { Currency, Country, City } from '@/services/masterDataService';
 import type { Hotel } from '@/services/masterDataService';
 import {
-  Plane, Bus, Train, Hotel as HotelIcon, Utensils, Ticket, Calculator, Shield, Info, Plus, Trash2,
+  Plane, Bus, Train, Hotel as HotelIcon, Utensils, Ticket, Calculator, Shield, Info, Plus, Trash2, Minus,
   Loader2, Users, Calendar, MapPin, Save, Globe, Building2, IdCard, Heart, BadgePercent, ChevronDown, ChevronUp
 } from 'lucide-react';
 import {
@@ -911,6 +911,50 @@ export default function CreateTrip() {
     } catch (error: any) {
       toast.error(error.message);
     }
+  };
+
+  // Update a specific room type's count in the breakdown manually (after auto-allocation)
+  const updateRoomBreakdownCount = (
+    accIndex: number,
+    groupKey: keyof NonNullable<typeof accommodations[0]['roomAllocation']['breakdown']>,
+    breakdownIndex: number,
+    delta: number
+  ) => {
+    const updated = [...accommodations];
+    const acc = { ...updated[accIndex] };
+    if (!acc.roomAllocation?.breakdown) return;
+
+    const breakdown = acc.roomAllocation.breakdown[groupKey] as import('@/types/trip').RoomTypeBreakdown[];
+    const entry = breakdown[breakdownIndex];
+    const newCount = Math.max(0, entry.numberOfRooms + delta);
+    const newPeople = newCount * entry.capacityPerRoom;
+
+    const newBreakdown = breakdown.map((b, i) =>
+      i === breakdownIndex
+        ? { ...b, numberOfRooms: newCount, peopleAccommodated: newPeople }
+        : b
+    );
+
+    const newBreakdowns = { ...acc.roomAllocation.breakdown, [groupKey]: newBreakdown };
+
+    // Recalculate group room totals
+    const totalRooms = Object.values(newBreakdowns).reduce(
+      (sum, grp) => sum + (grp as import('@/types/trip').RoomTypeBreakdown[]).reduce((s, b) => s + b.numberOfRooms, 0), 0
+    );
+
+    acc.roomAllocation = { ...acc.roomAllocation, breakdown: newBreakdowns, totalRooms };
+    acc.totalRooms = totalRooms;
+
+    const costs = calculateAccommodationCost(
+      acc.roomAllocation,
+      acc.numberOfNights,
+      getCurrencyRate(acc.currency)
+    );
+    acc.totalCost = costs.totalCost;
+    acc.totalCostINR = costs.totalCostINR;
+
+    updated[accIndex] = acc;
+    setAccommodations(updated);
   };
 
   // Activity functions
@@ -2690,146 +2734,97 @@ export default function CreateTrip() {
                           Auto-Allocate Rooms
                         </Button>
 
-                        {accommodation.roomAllocation?.breakdown && (
-                          <div className="space-y-3 p-4 bg-muted rounded-lg">
-                            <h4 className="font-semibold text-sm">Room Allocation Summary</h4>
-
-                            {tripType === 'institute' ? (
-                              <>
-                                {accommodation.roomAllocation.breakdown.boys.length > 0 && (
-                                  <div className="space-y-1">
-                                    <p className="text-xs font-medium text-muted-foreground">Boys ({formData.boys} students)</p>
-                                    {accommodation.roomAllocation.breakdown.boys.map((b, i) => (
-                                      <p key={i} className="text-xs ml-2">
-                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                      </p>
-                                    ))}
+                        {accommodation.roomAllocation?.breakdown && (() => {
+                          // Helper to render a group's counter rows
+                          const RoomCounterGroup = ({
+                            label,
+                            totalPeople,
+                            groupKey,
+                          }: {
+                            label: string;
+                            totalPeople: number;
+                            groupKey: keyof NonNullable<typeof accommodation.roomAllocation.breakdown>;
+                          }) => {
+                            const rows = (accommodation.roomAllocation.breakdown![groupKey] as import('@/types/trip').RoomTypeBreakdown[]);
+                            if (!rows || rows.length === 0) return null;
+                            const accommodated = rows.reduce((s, b) => s + b.peopleAccommodated, 0);
+                            const isOver = accommodated > totalPeople;
+                            const isUnder = accommodated < totalPeople;
+                            return (
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-xs font-semibold text-foreground">{label}</p>
+                                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isOver ? 'bg-yellow-100 text-yellow-700' : isUnder ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
+                                    {accommodated}/{totalPeople} people
+                                  </span>
+                                </div>
+                                {rows.map((b, i) => (
+                                  <div key={i} className="flex items-center justify-between bg-background border rounded-md px-3 py-2">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-medium">{b.roomType}</p>
+                                      <p className="text-xs text-muted-foreground">{b.capacityPerRoom} per room · {b.numberOfRooms * b.capacityPerRoom} people</p>
+                                    </div>
+                                    <div className="flex items-center gap-2 ml-3">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 w-7 p-0"
+                                        onClick={() => updateRoomBreakdownCount(index, groupKey, i, -1)}
+                                        disabled={b.numberOfRooms <= 0}
+                                      >
+                                        <Minus className="w-3 h-3" />
+                                      </Button>
+                                      <span className="text-sm font-bold w-6 text-center">{b.numberOfRooms}</span>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 w-7 p-0"
+                                        onClick={() => updateRoomBreakdownCount(index, groupKey, i, 1)}
+                                      >
+                                        <Plus className="w-3 h-3" />
+                                      </Button>
+                                    </div>
                                   </div>
-                                )}
+                                ))}
+                              </div>
+                            );
+                          };
 
-                                {accommodation.roomAllocation.breakdown.girls.length > 0 && (
-                                  <div className="space-y-1">
-                                    <p className="text-xs font-medium text-muted-foreground">Girls ({formData.girls} students)</p>
-                                    {accommodation.roomAllocation.breakdown.girls.map((b, i) => (
-                                      <p key={i} className="text-xs ml-2">
-                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                      </p>
-                                    ))}
-                                  </div>
-                                )}
+                          const totalParticipants = calculateTotalParticipants();
 
-                                {accommodation.roomAllocation.breakdown.maleFaculty.length > 0 && (
-                                  <div className="space-y-1">
-                                    <p className="text-xs font-medium text-muted-foreground">Male Faculty ({formData.maleFaculty})</p>
-                                    {accommodation.roomAllocation.breakdown.maleFaculty.map((b, i) => (
-                                      <p key={i} className="text-xs ml-2">
-                                        • {b.numberOfRooms}x {b.roomType} (single rooms)
-                                      </p>
-                                    ))}
-                                  </div>
-                                )}
+                          return (
+                            <div className="space-y-4 p-4 bg-muted rounded-lg">
+                              <h4 className="font-semibold text-sm">Room Allocation Summary</h4>
+                              <p className="text-xs text-muted-foreground -mt-2">Adjust room counts manually after auto-allocation. Cost updates instantly.</p>
 
-                                {accommodation.roomAllocation.breakdown.femaleFaculty.length > 0 && (
-                                  <div className="space-y-1">
-                                    <p className="text-xs font-medium text-muted-foreground">Female Faculty ({formData.femaleFaculty})</p>
-                                    {accommodation.roomAllocation.breakdown.femaleFaculty.map((b, i) => (
-                                      <p key={i} className="text-xs ml-2">
-                                        • {b.numberOfRooms}x {b.roomType} (single rooms)
-                                      </p>
-                                    ))}
-                                  </div>
-                                )}
+                              {tripType === 'institute' ? (
+                                <>
+                                  <RoomCounterGroup label={`Boys (${formData.boys} students)`} totalPeople={formData.boys} groupKey="boys" />
+                                  <RoomCounterGroup label={`Girls (${formData.girls} students)`} totalPeople={formData.girls} groupKey="girls" />
+                                  <RoomCounterGroup label={`Male Faculty (${formData.maleFaculty})`} totalPeople={formData.maleFaculty} groupKey="maleFaculty" />
+                                  <RoomCounterGroup label={`Female Faculty (${formData.femaleFaculty})`} totalPeople={formData.femaleFaculty} groupKey="femaleFaculty" />
+                                  <RoomCounterGroup label={`Male VXplorers (${formData.maleVXplorers})`} totalPeople={formData.maleVXplorers} groupKey="maleVXplorers" />
+                                  <RoomCounterGroup label={`Female VXplorers (${formData.femaleVXplorers})`} totalPeople={formData.femaleVXplorers} groupKey="femaleVXplorers" />
+                                </>
+                              ) : (
+                                <>
+                                  <RoomCounterGroup label={`Male Participants (${formData.maleCount})`} totalPeople={formData.maleCount} groupKey="commercialMale" />
+                                  <RoomCounterGroup label={`Female Participants (${formData.femaleCount})`} totalPeople={formData.femaleCount} groupKey="commercialFemale" />
+                                  <RoomCounterGroup label={`Other Participants (${formData.otherCount})`} totalPeople={formData.otherCount} groupKey="commercialOther" />
+                                  <RoomCounterGroup label={`Male VXplorers (${formData.commercialMaleVXplorers})`} totalPeople={formData.commercialMaleVXplorers} groupKey="commercialMaleVXplorers" />
+                                  <RoomCounterGroup label={`Female VXplorers (${formData.commercialFemaleVXplorers})`} totalPeople={formData.commercialFemaleVXplorers} groupKey="commercialFemaleVXplorers" />
+                                </>
+                              )}
 
-                                {accommodation.roomAllocation.breakdown.maleVXplorers.length > 0 && (
-                                  <div className="space-y-1">
-                                    <p className="text-xs font-medium text-muted-foreground">Male VXplorers ({formData.maleVXplorers})</p>
-                                    {accommodation.roomAllocation.breakdown.maleVXplorers.map((b, i) => (
-                                      <p key={i} className="text-xs ml-2">
-                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                      </p>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {accommodation.roomAllocation.breakdown.femaleVXplorers.length > 0 && (
-                                  <div className="space-y-1">
-                                    <p className="text-xs font-medium text-muted-foreground">Female VXplorers ({formData.femaleVXplorers})</p>
-                                    {accommodation.roomAllocation.breakdown.femaleVXplorers.map((b, i) => (
-                                      <p key={i} className="text-xs ml-2">
-                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                      </p>
-                                    ))}
-                                  </div>
-                                )}
-                              </>
-                            ) : (
-                              <>
-                                {accommodation.roomAllocation.breakdown.commercialMale.length > 0 && (
-                                  <div className="space-y-1">
-                                    <p className="text-xs font-medium text-muted-foreground">Male Participants ({formData.maleCount})</p>
-                                    {accommodation.roomAllocation.breakdown.commercialMale.map((b, i) => (
-                                      <p key={i} className="text-xs ml-2">
-                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                      </p>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {accommodation.roomAllocation.breakdown.commercialFemale.length > 0 && (
-                                  <div className="space-y-1">
-                                    <p className="text-xs font-medium text-muted-foreground">Female Participants ({formData.femaleCount})</p>
-                                    {accommodation.roomAllocation.breakdown.commercialFemale.map((b, i) => (
-                                      <p key={i} className="text-xs ml-2">
-                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                      </p>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {accommodation.roomAllocation.breakdown.commercialOther.length > 0 && (
-                                  <div className="space-y-1">
-                                    <p className="text-xs font-medium text-muted-foreground">Other Participants ({formData.otherCount})</p>
-                                    {accommodation.roomAllocation.breakdown.commercialOther.map((b, i) => (
-                                      <p key={i} className="text-xs ml-2">
-                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                      </p>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {/* NEW: Commercial Male VXplorers */}
-                                {accommodation.roomAllocation.breakdown.commercialMaleVXplorers && accommodation.roomAllocation.breakdown.commercialMaleVXplorers.length > 0 && (
-                                  <div className="space-y-1">
-                                    <p className="text-xs font-medium text-muted-foreground">Male VXplorers ({formData.commercialMaleVXplorers})</p>
-                                    {accommodation.roomAllocation.breakdown.commercialMaleVXplorers.map((b, i) => (
-                                      <p key={i} className="text-xs ml-2">
-                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                      </p>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {/* NEW: Commercial Female VXplorers */}
-                                {accommodation.roomAllocation.breakdown.commercialFemaleVXplorers && accommodation.roomAllocation.breakdown.commercialFemaleVXplorers.length > 0 && (
-                                  <div className="space-y-1">
-                                    <p className="text-xs font-medium text-muted-foreground">Female VXplorers ({formData.commercialFemaleVXplorers})</p>
-                                    {accommodation.roomAllocation.breakdown.commercialFemaleVXplorers.map((b, i) => (
-                                      <p key={i} className="text-xs ml-2">
-                                        • {b.numberOfRooms}x {b.roomType} ({b.capacityPerRoom} per room) = {b.peopleAccommodated} people
-                                      </p>
-                                    ))}
-                                  </div>
-                                )}
-                              </>
-                            )}
-
-                            <div className="pt-2 border-t mt-3">
-                              <p className="text-sm font-semibold">
-                                Total Rooms: {accommodation.roomAllocation.totalRooms}
-                              </p>
+                              <div className="pt-2 border-t flex items-center justify-between">
+                                <p className="text-sm font-semibold">Total Rooms</p>
+                                <p className="text-sm font-bold text-primary">{accommodation.roomAllocation.totalRooms}</p>
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                       </div>
 
                       <div className="pt-2 border-t">
