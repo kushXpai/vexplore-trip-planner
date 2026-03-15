@@ -4,6 +4,7 @@ import type {
   Trip,
   TripCategory,
   TripType,
+  PlanningMode,
   Flight,
   Bus,
   Train,
@@ -12,6 +13,7 @@ import type {
   Overhead,
   Participants,
   TripExtras,
+  TourPlannerDetails,
   CityWithDates,
   FlightClassEntry,
   FlightSeatUpgrade,
@@ -28,6 +30,7 @@ interface DbTrip {
   institution: string;
   trip_category: TripCategory;
   trip_type: TripType;
+  planning_mode: PlanningMode;
   countries: string[];
   cities: CityWithDates[];
   start_date: string;
@@ -48,6 +51,16 @@ interface DbTrip {
   grand_total_inr: number;
   cost_per_participant: number;
   created_by?: string;
+}
+
+interface DbTourPlanner {
+  trip_id: string;
+  cost_per_person: number;
+  currency: string;
+  total_cost: number;
+  total_cost_inr: number;
+  billable_participants: number;
+  notes?: string;
 }
 
 interface DbParticipants {
@@ -219,6 +232,7 @@ export async function createTrip(tripData: {
   institution: string;
   tripCategory: TripCategory;
   tripType: TripType;
+  planningMode: PlanningMode;
   countries: string[];
   cities: CityWithDates[];
   startDate: string;
@@ -235,6 +249,7 @@ export async function createTrip(tripData: {
   activities: Activity[];
   overheads: Overhead[];
   extras?: TripExtras;
+  tourPlanner?: TourPlannerDetails;
   subtotalBeforeTax: number;
   profit: number;
   gstPercentage: number;
@@ -257,6 +272,7 @@ export async function createTrip(tripData: {
       institution: tripData.institution,
       trip_category: tripData.tripCategory,
       trip_type: tripData.tripType,
+      planning_mode: tripData.planningMode,
       countries: tripData.countries,
       cities: tripData.cities,
       start_date: tripData.startDate,
@@ -515,6 +531,7 @@ export async function updateTrip(tripId: string, tripData: {
   institution: string;
   tripCategory: TripCategory;
   tripType: TripType;
+  planningMode: PlanningMode;
   countries: string[];
   cities: CityWithDates[];
   startDate: string;
@@ -531,6 +548,7 @@ export async function updateTrip(tripId: string, tripData: {
   activities: Activity[];
   overheads: Overhead[];
   extras?: TripExtras;
+  tourPlanner?: TourPlannerDetails;
   subtotalBeforeTax: number;
   profit: number;
   gstPercentage: number;
@@ -550,6 +568,7 @@ export async function updateTrip(tripId: string, tripData: {
       institution: tripData.institution,
       trip_category: tripData.tripCategory,
       trip_type: tripData.tripType,
+      planning_mode: tripData.planningMode,
       countries: tripData.countries,
       cities: tripData.cities,
       start_date: tripData.startDate,
@@ -732,6 +751,26 @@ export async function updateTrip(tripId: string, tripData: {
       if (extrasError) throw extrasError;
     }
 
+    // 7.6. Upsert tour planner details (only for tour_planner mode)
+    if (tripData.tourPlanner && tripData.planningMode === 'tour_planner') {
+      const dbTourPlanner: DbTourPlanner = {
+        trip_id: tripId,
+        cost_per_person: tripData.tourPlanner.costPerPerson,
+        currency: tripData.tourPlanner.currency,
+        total_cost: tripData.tourPlanner.totalCost,
+        total_cost_inr: tripData.tourPlanner.totalCostINR,
+        billable_participants: tripData.tourPlanner.billableParticipants,
+        notes: tripData.tourPlanner.notes,
+      };
+      const { error: tourPlannerError } = await supabase
+        .from('trip_tour_planner')
+        .upsert(dbTourPlanner, { onConflict: 'trip_id' });
+      if (tourPlannerError) throw tourPlannerError;
+    } else {
+      // Clean up if mode switched away from tour_planner
+      await supabase.from('trip_tour_planner').delete().eq('trip_id', tripId);
+    }
+
     // 8. Delete and re-insert activities
     await supabase.from('trip_activities').delete().eq('trip_id', tripId);
     if (tripData.activities.length > 0) {
@@ -804,6 +843,13 @@ export async function getTripById(tripId: string) {
       .single();
     if (extrasError && extrasError.code !== 'PGRST116') throw extrasError;
 
+    const { data: tourPlanner, error: tourPlannerError } = await supabase
+      .from('trip_tour_planner')
+      .select('*')
+      .eq('trip_id', tripId)
+      .single();
+    if (tourPlannerError && tourPlannerError.code !== 'PGRST116') throw tourPlannerError;
+
     const { data: flights, error: flightsError } = await supabase
       .from('trip_flights')
       .select('*')
@@ -853,6 +899,7 @@ export async function getTripById(tripId: string) {
         trip,
         participants,
         extras: extras || null,
+        tourPlanner: tourPlanner || null,
         flights: flights || [],
         buses: buses || [],
         trains: trains || [],

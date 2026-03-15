@@ -2,29 +2,41 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   Info, Users, Plane, Bus, Train, Hotel as HotelIcon,
-  Utensils, Ticket, IdCard, Shield, Calculator, Map, X, List
+  Utensils, Ticket, IdCard, Shield, Calculator, Map, X, List, UserCheck
 } from 'lucide-react';
+import type { PlanningMode } from '@/types/trip';
 
 interface Section {
   id: string;
   label: string;
   icon: React.ReactNode;
+  selfPlannedOnly?: boolean;
+  tourPlannerOnly?: boolean;
 }
 
-const SECTIONS: Section[] = [
-  { id: 'section-classification', label: 'Classification', icon: <Info className="w-4 h-4" /> },
-  { id: 'section-basic', label: 'Basic Info', icon: <Map className="w-4 h-4" /> },
-  { id: 'section-participants', label: 'Participants', icon: <Users className="w-4 h-4" /> },
-  { id: 'section-flights', label: 'Flights', icon: <Plane className="w-4 h-4" /> },
-  { id: 'section-buses', label: 'Buses', icon: <Bus className="w-4 h-4" /> },
-  { id: 'section-trains', label: 'Trains', icon: <Train className="w-4 h-4" /> },
-  { id: 'section-accommodation', label: 'Accommodation', icon: <HotelIcon className="w-4 h-4" /> },
-  { id: 'section-meals', label: 'Meals', icon: <Utensils className="w-4 h-4" /> },
-  { id: 'section-activities', label: 'Activities', icon: <Ticket className="w-4 h-4" /> },
-  { id: 'section-extras', label: 'Visa & Insurance', icon: <IdCard className="w-4 h-4" /> },
-  { id: 'section-overheads', label: 'Overheads', icon: <Shield className="w-4 h-4" /> },
-  { id: 'section-summary', label: 'Cost Summary', icon: <Calculator className="w-4 h-4" /> },
+const ALL_SECTIONS: Section[] = [
+  { id: 'section-classification', label: 'Classification',     icon: <Info className="w-4 h-4" /> },
+  { id: 'section-basic',          label: 'Basic Info',         icon: <Map className="w-4 h-4" /> },
+  { id: 'section-participants',   label: 'Participants',       icon: <Users className="w-4 h-4" /> },
+  { id: 'section-tour-planner',   label: 'Tour Planner Quote', icon: <UserCheck className="w-4 h-4" />, tourPlannerOnly: true },
+  { id: 'section-flights',        label: 'Flights',            icon: <Plane className="w-4 h-4" />,     selfPlannedOnly: true },
+  { id: 'section-buses',          label: 'Buses',              icon: <Bus className="w-4 h-4" />,       selfPlannedOnly: true },
+  { id: 'section-trains',         label: 'Trains',             icon: <Train className="w-4 h-4" />,     selfPlannedOnly: true },
+  { id: 'section-accommodation',  label: 'Accommodation',      icon: <HotelIcon className="w-4 h-4" />, selfPlannedOnly: true },
+  { id: 'section-meals',          label: 'Meals',              icon: <Utensils className="w-4 h-4" />,  selfPlannedOnly: true },
+  { id: 'section-activities',     label: 'Activities',         icon: <Ticket className="w-4 h-4" />,    selfPlannedOnly: true },
+  { id: 'section-extras',         label: 'Visa & Insurance',   icon: <IdCard className="w-4 h-4" />,    selfPlannedOnly: true },
+  { id: 'section-overheads',      label: 'Overheads',          icon: <Shield className="w-4 h-4" /> },
+  { id: 'section-summary',        label: 'Cost Summary',       icon: <Calculator className="w-4 h-4" /> },
 ];
+
+function getSections(planningMode: PlanningMode): Section[] {
+  return ALL_SECTIONS.filter(s => {
+    if (s.selfPlannedOnly && planningMode !== 'self_planned') return false;
+    if (s.tourPlannerOnly && planningMode !== 'tour_planner') return false;
+    return true;
+  });
+}
 
 function scrollToSection(id: string) {
   const el = document.getElementById(id);
@@ -34,8 +46,14 @@ function scrollToSection(id: string) {
 }
 
 // ─── Desktop: sticky left sidebar ────────────────────────────────────────────
-export function TripSectionNavDesktop() {
-  const [activeId, setActiveId] = useState<string>(SECTIONS[0].id);
+export function TripSectionNavDesktop({ planningMode = 'self_planned' }: { planningMode?: PlanningMode }) {
+  const sections = getSections(planningMode);
+  const [activeId, setActiveId] = useState<string>(sections[0]?.id ?? '');
+
+  useEffect(() => {
+    // Reset active to first visible section whenever mode changes
+    setActiveId(sections[0]?.id ?? '');
+  }, [planningMode]);
 
   useEffect(() => {
     const scrollEl = document.getElementById('trip-scroll-container');
@@ -43,10 +61,10 @@ export function TripSectionNavDesktop() {
 
     const handleScroll = () => {
       const containerTop = scrollEl.getBoundingClientRect().top;
-      let closestId = SECTIONS[0].id;
+      let closestId = sections[0]?.id ?? '';
       let closestDist = Infinity;
 
-      SECTIONS.forEach(({ id }) => {
+      sections.forEach(({ id }) => {
         const el = document.getElementById(id);
         if (!el) return;
         const dist = Math.abs(el.getBoundingClientRect().top - containerTop);
@@ -60,9 +78,9 @@ export function TripSectionNavDesktop() {
     };
 
     scrollEl.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll(); // set initial active
+    handleScroll();
     return () => scrollEl.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [planningMode]);
 
   return (
     <aside className="hidden lg:flex flex-col sticky top-0 self-start w-48 shrink-0 max-h-screen overflow-y-auto pt-2">
@@ -70,7 +88,7 @@ export function TripSectionNavDesktop() {
         Sections
       </p>
       <nav className="flex flex-col gap-0.5">
-        {SECTIONS.map(({ id, label, icon }) => {
+        {sections.map(({ id, label, icon }) => {
           const isActive = activeId === id;
           return (
             <button
@@ -101,10 +119,15 @@ export function TripSectionNavDesktop() {
 }
 
 // ─── Mobile: floating button + bottom drawer ─────────────────────────────────
-export function TripSectionNavMobile() {
+export function TripSectionNavMobile({ planningMode = 'self_planned' }: { planningMode?: PlanningMode }) {
+  const sections = getSections(planningMode);
   const [open, setOpen] = useState(false);
-  const [activeId, setActiveId] = useState<string>(SECTIONS[0].id);
+  const [activeId, setActiveId] = useState<string>(sections[0]?.id ?? '');
   const drawerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setActiveId(sections[0]?.id ?? '');
+  }, [planningMode]);
 
   useEffect(() => {
     const scrollEl = document.getElementById('trip-scroll-container');
@@ -112,10 +135,10 @@ export function TripSectionNavMobile() {
 
     const handleScroll = () => {
       const containerTop = scrollEl.getBoundingClientRect().top;
-      let closestId = SECTIONS[0].id;
+      let closestId = sections[0]?.id ?? '';
       let closestDist = Infinity;
 
-      SECTIONS.forEach(({ id }) => {
+      sections.forEach(({ id }) => {
         const el = document.getElementById(id);
         if (!el) return;
         const dist = Math.abs(el.getBoundingClientRect().top - containerTop);
@@ -131,7 +154,7 @@ export function TripSectionNavMobile() {
     scrollEl.addEventListener('scroll', handleScroll, { passive: true });
     handleScroll();
     return () => scrollEl.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [planningMode]);
 
   // Close on outside tap
   useEffect(() => {
@@ -145,7 +168,7 @@ export function TripSectionNavMobile() {
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  const activeSection = SECTIONS.find(s => s.id === activeId);
+  const activeSection = sections.find(s => s.id === activeId);
 
   return (
     <div className="lg:hidden">
@@ -179,7 +202,7 @@ export function TripSectionNavMobile() {
         </div>
 
         <div className="grid grid-cols-3 gap-2 p-4 pb-8 max-h-72 overflow-y-auto">
-          {SECTIONS.map(({ id, label, icon }) => {
+          {sections.map(({ id, label, icon }) => {
             const isActive = activeId === id;
             return (
               <button

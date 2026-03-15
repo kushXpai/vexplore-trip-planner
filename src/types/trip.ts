@@ -19,6 +19,7 @@ export interface User {
 
 export type TripCategory = 'domestic' | 'international';
 export type TripType = 'institute' | 'commercial' | 'fti';
+export type PlanningMode = 'self_planned' | 'tour_planner';
 
 /* =========================
    Trip & Status
@@ -39,6 +40,7 @@ export interface Trip {
   
   tripCategory: TripCategory;
   tripType: TripType;
+  planningMode: PlanningMode;
   
   countries: string[];
   
@@ -62,6 +64,8 @@ export interface Trip {
   
   extras?: TripExtras;
 
+  tourPlanner?: TourPlannerDetails;
+
   subtotalBeforeTax: number;
   profit: number;
 
@@ -80,6 +84,19 @@ export interface Trip {
   updatedAt: string;
 
   analysis?: PostTripAnalysis;
+}
+
+/* =========================
+   Tour Planner Details
+========================= */
+
+export interface TourPlannerDetails {
+  costPerPerson: number;
+  currency: string;
+  totalCost: number;
+  totalCostINR: number;
+  billableParticipants: number;
+  notes?: string;
 }
 
 /* =========================

@@ -114,6 +114,7 @@ export default function TripDetail() {
           trip_activities (*),
           trip_overheads (*),
           trip_extras (*),
+          trip_tour_planner (*),
           post_trip_analysis (*)
         `)
         .eq('id', id)
@@ -139,6 +140,7 @@ export default function TripDetail() {
           // NEW: Trip classification
           tripCategory: data.trip_category || 'domestic',
           tripType: data.trip_type || 'institute',
+          planningMode: data.planning_mode || 'self_planned',
 
           countries: data.countries || [],
 
@@ -312,6 +314,21 @@ export default function TripDetail() {
               insuranceCurrency: extrasData.insurance_currency ?? 'INR',
               insuranceTotalCost: extrasData.insurance_total_cost ?? 0,
               insuranceTotalCostINR: extrasData.insurance_total_cost_inr ?? 0,
+            } : undefined;
+          })(),
+
+          // Tour planner details (only present when planning_mode === 'tour_planner')
+          tourPlanner: (() => {
+            const tp = Array.isArray(data.trip_tour_planner)
+              ? data.trip_tour_planner[0]
+              : data.trip_tour_planner;
+            return tp ? {
+              costPerPerson: tp.cost_per_person ?? 0,
+              currency: tp.currency ?? 'INR',
+              totalCost: tp.total_cost ?? 0,
+              totalCostINR: tp.total_cost_inr ?? 0,
+              billableParticipants: tp.billable_participants ?? 0,
+              notes: tp.notes ?? undefined,
             } : undefined;
           })(),
 
