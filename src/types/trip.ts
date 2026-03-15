@@ -323,6 +323,8 @@ export interface HotelMeal {
   hotelName: string;
   city: string;
   numberOfNights: number;
+  restaurantId?: string;
+  restaurantName?: string;
   breakfastCostPerPerson: number;
   lunchCostPerPerson: number;
   dinnerCostPerPerson: number;
@@ -433,6 +435,16 @@ export interface Institution {
   name: string;
   type: 'school' | 'college';
   city: string;
+}
+
+export interface Restaurant {
+  id: string;
+  name: string;
+  city?: string;
+  countryId?: string;
+  cityId?: string;
+  starRating?: string;
+  remarks?: string;
 }
 
 /* =========================

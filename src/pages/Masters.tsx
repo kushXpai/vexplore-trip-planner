@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Country, City, Currency } from '@/types/trip';
-import { Globe, MapPin, Coins, Plus, Pencil, Trash2, BadgePercent, History, Lock, Hotel } from 'lucide-react';
+import { Globe, MapPin, Coins, Plus, Pencil, Trash2, BadgePercent, History, Lock, Hotel, UtensilsCrossed, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,6 +36,16 @@ interface HotelRecord {
   remarks: string | null;
 }
 
+interface RestaurantRecord {
+  id: string;
+  name: string;
+  city?: string | null;
+  country_id?: string | null;
+  city_id?: string | null;
+  star_rating?: string | null;
+  remarks?: string | null;
+}
+
 export default function Masters() {
   const { isAdmin } = useAuth();
   const [countriesList, setCountriesList] = useState<Country[]>([]);
@@ -56,6 +66,19 @@ export default function Masters() {
   });
   const [hotelSearch, setHotelSearch] = useState('');
   const [hotelCountryFilter, setHotelCountryFilter] = useState('');
+
+  // Restaurants state
+  const [restaurantsList, setRestaurantsList] = useState<RestaurantRecord[]>([]);
+  const [editingRestaurant, setEditingRestaurant] = useState<RestaurantRecord | null>(null);
+  const [addRestaurantOpen, setAddRestaurantOpen] = useState(false);
+  const [newRestaurant, setNewRestaurant] = useState({
+    name: '',
+    city_id: '',
+    country_id: '',
+    star_rating: '',
+    remarks: '',
+  });
+  const [restaurantSearch, setRestaurantSearch] = useState('');
 
   const [editingCountry, setEditingCountry] = useState<Country | null>(null);
   const [editingCity, setEditingCity] = useState<City | null>(null);
@@ -111,6 +134,7 @@ export default function Masters() {
       fetchCurrencies(),
       fetchTaxRates(),
       fetchHotels(),
+      fetchRestaurantsData(),
     ]);
   };
 
@@ -334,6 +358,62 @@ export default function Masters() {
     fetchHotels();
   };
 
+  // Restaurant CRUD
+  const fetchRestaurantsData = async () => {
+    const { data, error } = await supabase.from('restaurants').select('*').order('name');
+    if (error) { toast.error('Failed to load restaurants: ' + error.message); return; }
+    setRestaurantsList(data || []);
+  };
+
+  const handleAddRestaurant = async () => {
+    if (!newRestaurant.name.trim()) { toast.error('Restaurant name is required'); return; }
+    const { error } = await supabase.from('restaurants').insert({
+      name: newRestaurant.name.trim(),
+      country_id: newRestaurant.country_id || null,
+      city_id: newRestaurant.city_id || null,
+      city: newRestaurant.city_id
+        ? citiesList.find(c => c.id === newRestaurant.city_id)?.name ?? null
+        : null,
+      star_rating: newRestaurant.star_rating || null,
+      remarks: newRestaurant.remarks || null,
+    });
+    if (error) return toast.error(error.message);
+    toast.success('Restaurant added');
+    setAddRestaurantOpen(false);
+    setNewRestaurant({ name: '', city_id: '', country_id: '', star_rating: '', remarks: '' });
+    fetchRestaurantsData();
+  };
+
+  const handleSaveRestaurant = async () => {
+    if (!editingRestaurant) return;
+    const { error } = await supabase
+      .from('restaurants')
+      .update({
+        name: editingRestaurant.name,
+        country_id: editingRestaurant.country_id || null,
+        city_id: editingRestaurant.city_id || null,
+        city: editingRestaurant.city_id
+          ? citiesList.find(c => c.id === editingRestaurant.city_id)?.name ?? editingRestaurant.city
+          : editingRestaurant.city,
+        star_rating: editingRestaurant.star_rating || null,
+        remarks: editingRestaurant.remarks || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', editingRestaurant.id);
+    if (error) return toast.error(error.message);
+    toast.success('Restaurant updated');
+    setEditingRestaurant(null);
+    fetchRestaurantsData();
+  };
+
+  const handleDeleteRestaurant = async (id: string) => {
+    if (!confirm('Delete this restaurant from master data?')) return;
+    const { error } = await supabase.from('restaurants').delete().eq('id', id);
+    if (error) return toast.error(error.message);
+    toast.success('Restaurant deleted');
+    fetchRestaurantsData();
+  };
+
   /* =========================
      UPDATE
   ========================= */
@@ -489,6 +569,10 @@ export default function Masters() {
     return matchesName && matchesCountry;
   });
 
+  const filteredRestaurants = restaurantsList.filter(r =>
+    r.name.toLowerCase().includes(restaurantSearch.toLowerCase())
+  );
+
   /* =========================
      TAX RATES SECTION
   ========================= */
@@ -617,6 +701,10 @@ export default function Masters() {
           <TabsTrigger value="hotels">
             <Hotel className="h-4 w-4 mr-2" />
             Hotels
+          </TabsTrigger>
+          <TabsTrigger value="restaurants">
+            <UtensilsCrossed className="h-4 w-4 mr-2" />
+            Restaurants
           </TabsTrigger>
           <TabsTrigger value="tax-rates">
             <BadgePercent className="h-4 w-4 mr-2" />
@@ -816,6 +904,80 @@ export default function Masters() {
                     <TableRow>
                       <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                         No hotels found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* RESTAURANTS TAB */}
+        <TabsContent value="restaurants" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <UtensilsCrossed className="h-5 w-5" />
+                  <CardTitle>Restaurants Master List</CardTitle>
+                </div>
+                <Button onClick={() => setAddRestaurantOpen(true)} className="gradient-primary text-primary-foreground">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Restaurant
+                </Button>
+              </div>
+              <div className="mt-4">
+                <Input
+                  placeholder="Search restaurants..."
+                  value={restaurantSearch}
+                  onChange={(e) => setRestaurantSearch(e.target.value)}
+                  className="max-w-sm"
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Restaurant Name</TableHead>
+                    <TableHead>City</TableHead>
+                    <TableHead>Star Rating</TableHead>
+                    <TableHead>Remarks</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredRestaurants.map(restaurant => (
+                    <TableRow key={restaurant.id}>
+                      <TableCell className="font-medium">{restaurant.name}</TableCell>
+                      <TableCell>{restaurant.city || '—'}</TableCell>
+                      <TableCell>
+                        {restaurant.star_rating ? (
+                          <div className="flex items-center gap-0.5">
+                            {Array.from({ length: parseInt(restaurant.star_rating) }).map((_, i) => (
+                              <Star key={i} className="w-3.5 h-3.5 text-amber-500 fill-current" />
+                            ))}
+                          </div>
+                        ) : '—'}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{restaurant.remarks || '—'}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => setEditingRestaurant(restaurant)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteRestaurant(restaurant.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredRestaurants.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                        No restaurants found
                       </TableCell>
                     </TableRow>
                   )}
@@ -1135,6 +1297,169 @@ export default function Masters() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingHotel(null)}>Cancel</Button>
             <Button onClick={handleSaveHotel} className="gradient-primary text-primary-foreground">Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Restaurant Dialog */}
+      <Dialog open={addRestaurantOpen} onOpenChange={setAddRestaurantOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add New Restaurant</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Restaurant Name *</Label>
+              <Input
+                value={newRestaurant.name}
+                onChange={(e) => setNewRestaurant({ ...newRestaurant, name: e.target.value })}
+                placeholder="e.g., The Grand Spice"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Country</Label>
+              <Select
+                value={newRestaurant.country_id || '__none__'}
+                onValueChange={(v) => setNewRestaurant({ ...newRestaurant, country_id: v === '__none__' ? '' : v, city_id: '' })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
+                <SelectContent className="bg-popover">
+                  <SelectItem value="__none__">None</SelectItem>
+                  {countriesList.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>City</Label>
+              <Select
+                value={newRestaurant.city_id || '__none__'}
+                onValueChange={(v) => setNewRestaurant({ ...newRestaurant, city_id: v === '__none__' ? '' : v })}
+                disabled={!newRestaurant.country_id}
+              >
+                <SelectTrigger><SelectValue placeholder="Select city" /></SelectTrigger>
+                <SelectContent className="bg-popover">
+                  <SelectItem value="__none__">None</SelectItem>
+                  {getCitiesForHotelCountry(newRestaurant.country_id).map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Star Rating</Label>
+              <div className="flex items-center gap-2">
+                {['1', '2', '3', '4', '5'].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setNewRestaurant(prev => ({ ...prev, star_rating: prev.star_rating === star ? '' : star }))}
+                    className={`flex items-center justify-center w-10 h-10 rounded-lg border-2 transition-all ${
+                      newRestaurant.star_rating === star
+                        ? 'border-amber-400 bg-amber-50 text-amber-600'
+                        : 'border-border text-muted-foreground hover:border-amber-300'
+                    }`}
+                  >
+                    <span className="text-sm font-semibold">{star}★</span>
+                  </button>
+                ))}
+                {newRestaurant.star_rating && (
+                  <button type="button" onClick={() => setNewRestaurant(prev => ({ ...prev, star_rating: '' }))} className="text-xs text-muted-foreground hover:text-foreground ml-1">
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Remarks (optional)</Label>
+              <Input
+                value={newRestaurant.remarks}
+                onChange={(e) => setNewRestaurant({ ...newRestaurant, remarks: e.target.value })}
+                placeholder="e.g., Veg only, buffet style..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddRestaurantOpen(false)}>Cancel</Button>
+            <Button onClick={handleAddRestaurant} className="gradient-primary text-primary-foreground">Add Restaurant</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Restaurant Dialog */}
+      <Dialog open={!!editingRestaurant} onOpenChange={() => setEditingRestaurant(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Restaurant</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Restaurant Name</Label>
+              <Input
+                value={editingRestaurant?.name || ''}
+                onChange={(e) => editingRestaurant && setEditingRestaurant({ ...editingRestaurant, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Country</Label>
+              <Select
+                value={editingRestaurant?.country_id || '__none__'}
+                onValueChange={(v) => editingRestaurant && setEditingRestaurant({ ...editingRestaurant, country_id: v === '__none__' ? null : v, city_id: null })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
+                <SelectContent className="bg-popover">
+                  <SelectItem value="__none__">None</SelectItem>
+                  {countriesList.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>City</Label>
+              <Select
+                value={editingRestaurant?.city_id || '__none__'}
+                onValueChange={(v) => editingRestaurant && setEditingRestaurant({ ...editingRestaurant, city_id: v === '__none__' ? null : v })}
+                disabled={!editingRestaurant?.country_id}
+              >
+                <SelectTrigger><SelectValue placeholder="Select city" /></SelectTrigger>
+                <SelectContent className="bg-popover">
+                  <SelectItem value="__none__">None</SelectItem>
+                  {getCitiesForHotelCountry(editingRestaurant?.country_id || '').map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Star Rating</Label>
+              <div className="flex items-center gap-2">
+                {['1', '2', '3', '4', '5'].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => editingRestaurant && setEditingRestaurant({ ...editingRestaurant, star_rating: editingRestaurant.star_rating === star ? null : star })}
+                    className={`flex items-center justify-center w-10 h-10 rounded-lg border-2 transition-all ${
+                      editingRestaurant?.star_rating === star
+                        ? 'border-amber-400 bg-amber-50 text-amber-600'
+                        : 'border-border text-muted-foreground hover:border-amber-300'
+                    }`}
+                  >
+                    <span className="text-sm font-semibold">{star}★</span>
+                  </button>
+                ))}
+                {editingRestaurant?.star_rating && (
+                  <button type="button" onClick={() => editingRestaurant && setEditingRestaurant({ ...editingRestaurant, star_rating: null })} className="text-xs text-muted-foreground hover:text-foreground ml-1">
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Remarks</Label>
+              <Input
+                value={editingRestaurant?.remarks || ''}
+                onChange={(e) => editingRestaurant && setEditingRestaurant({ ...editingRestaurant, remarks: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingRestaurant(null)}>Cancel</Button>
+            <Button onClick={handleSaveRestaurant} className="gradient-primary text-primary-foreground">Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

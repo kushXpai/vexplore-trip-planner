@@ -401,11 +401,12 @@ export function ActualExpensesEntry({ trip, onSubmit }: ActualExpensesEntryProps
                 {expanded.meals &&
                   trip.meals.map(m => {
                     const key = m.id ?? m.accommodationId;
+                    const restaurantPart = m.restaurantName ? ` · 🍽️ ${m.restaurantName}` : '';
                     return (
                       <SubRow
                         key={key}
                         label={m.hotelName}
-                        sublabel={`${m.city} · ${m.numberOfNights} night${m.numberOfNights !== 1 ? 's' : ''} · ${m.totalParticipants} pax`}
+                        sublabel={`${m.city} · ${m.numberOfNights} night${m.numberOfNights !== 1 ? 's' : ''} · ${m.totalParticipants} pax${restaurantPart}`}
                         expected={mealExpected[key]}
                         actual={mealActuals[key] ?? 0}
                         onActualChange={v =>

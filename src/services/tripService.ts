@@ -183,6 +183,8 @@ interface DbMeals {
   hotel_name: string;
   city: string;
   number_of_nights: number;
+  restaurant_id?: string;
+  restaurant_name?: string;
   breakfast_cost_per_person: number;
   lunch_cost_per_person: number;
   dinner_cost_per_person: number;
@@ -200,6 +202,8 @@ interface HotelMealInput {
   hotel_name: string;
   city: string;
   number_of_nights: number;
+  restaurant_id?: string;
+  restaurant_name?: string;
   breakfast_cost_per_person: number;
   lunch_cost_per_person: number;
   dinner_cost_per_person: number;
@@ -431,6 +435,8 @@ export async function createTrip(tripData: {
         hotel_name: m.hotel_name,
         city: m.city,
         number_of_nights: m.number_of_nights,
+        restaurant_id: m.restaurant_id || undefined,
+        restaurant_name: m.restaurant_name || undefined,
         breakfast_cost_per_person: m.breakfast_cost_per_person,
         lunch_cost_per_person: m.lunch_cost_per_person,
         dinner_cost_per_person: m.dinner_cost_per_person,
@@ -709,6 +715,8 @@ export async function updateTrip(tripId: string, tripData: {
         hotel_name: m.hotel_name,
         city: m.city,
         number_of_nights: m.number_of_nights,
+        restaurant_id: m.restaurant_id || undefined,
+        restaurant_name: m.restaurant_name || undefined,
         breakfast_cost_per_person: m.breakfast_cost_per_person,
         lunch_cost_per_person: m.lunch_cost_per_person,
         dinner_cost_per_person: m.dinner_cost_per_person,

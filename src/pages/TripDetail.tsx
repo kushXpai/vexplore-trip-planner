@@ -258,6 +258,8 @@ export default function TripDetail() {
             hotelName: m.hotel_name ?? '',
             city: m.city ?? '',
             numberOfNights: m.number_of_nights ?? 0,
+            restaurantId: m.restaurant_id ?? undefined,
+            restaurantName: m.restaurant_name ?? undefined,
             breakfastCostPerPerson: m.breakfast_cost_per_person ?? 0,
             lunchCostPerPerson: m.lunch_cost_per_person ?? 0,
             dinnerCostPerPerson: m.dinner_cost_per_person ?? 0,
@@ -1273,9 +1275,14 @@ function MealsSection({ trip, currencies }: { trip: Trip; currencies: Currency[]
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <h4 className="font-semibold">{meal.hotelName}</h4>
-                  <div className="flex gap-2 mt-1">
+                  <div className="flex flex-wrap gap-2 mt-1">
                     <Badge variant="outline">{meal.city}</Badge>
                     <Badge variant="outline">{meal.numberOfNights} {meal.numberOfNights === 1 ? 'Night' : 'Nights'}</Badge>
+                    {meal.restaurantName && (
+                      <Badge variant="secondary" className="flex items-center gap-1">
+                        🍽️ {meal.restaurantName}
+                      </Badge>
+                    )}
                   </div>
                 </div>
                 <div className="text-right">

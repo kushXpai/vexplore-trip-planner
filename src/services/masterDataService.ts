@@ -35,6 +35,19 @@ export interface Hotel {
   updatedat: string;
 }
 
+export interface Restaurant {
+  id: string;
+  name: string;
+  city?: string | null;
+  country_id?: string | null;
+  city_id?: string | null;
+  /** '1'–'5' */
+  star_rating?: string | null;
+  remarks?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 // Fetch all currencies
 export const fetchCurrencies = async () => {
   const { data, error } = await supabase
@@ -169,6 +182,68 @@ export const addHotel = async (hotel: {
   }
 
   return { success: true, data, error: null };
+};
+
+// =====================================================
+// RESTAURANT FUNCTIONS
+// =====================================================
+
+// Fetch all restaurants
+export const fetchRestaurants = async () => {
+  const { data, error } = await supabase
+    .from('restaurants')
+    .select('*')
+    .order('name');
+
+  if (error) {
+    console.error('Error fetching restaurants:', error);
+    return { success: false, data: null, error };
+  }
+  return { success: true, data: data as Restaurant[], error: null };
+};
+
+// Fetch restaurants by city
+export const fetchRestaurantsByCity = async (cityId: string) => {
+  const { data, error } = await supabase
+    .from('restaurants')
+    .select('*')
+    .eq('city_id', cityId)
+    .order('name');
+
+  if (error) {
+    console.error('Error fetching restaurants by city:', error);
+    return { success: false, data: null, error };
+  }
+  return { success: true, data: data as Restaurant[], error: null };
+};
+
+// Add a new restaurant to master data
+export const addRestaurant = async (restaurant: {
+  name: string;
+  city?: string;
+  country_id?: string;
+  city_id?: string;
+  star_rating?: string;
+  remarks?: string;
+}) => {
+  const { data, error } = await supabase
+    .from('restaurants')
+    .insert({
+      name: restaurant.name,
+      city: restaurant.city || null,
+      country_id: restaurant.country_id || null,
+      city_id: restaurant.city_id || null,
+      star_rating: restaurant.star_rating || null,
+      remarks: restaurant.remarks || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error adding restaurant:', error);
+    return { success: false, data: null, error };
+  }
+  return { success: true, data: data as Restaurant, error: null };
 };
 
 // NEW: Fetch cities by multiple countries

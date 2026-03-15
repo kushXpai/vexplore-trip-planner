@@ -17,18 +17,21 @@ import {
   fetchCurrencies,
   fetchCitiesByCountry,
   fetchHotels,
+  fetchRestaurants,
   addHotel,
+  addRestaurant,
   getCurrencyRate as getCurrencyRateHelper,
   getCountryCurrency as getCountryCurrencyHelper,
   formatCurrency as formatCurrencyHelper,
   calculateGrandTotal,
   getCurrentTDSRate
 } from '@/services/masterDataService';
-import type { Currency, Country, City } from '@/services/masterDataService';
+import type { Currency, Country, City, Restaurant } from '@/services/masterDataService';
 import type { Hotel } from '@/services/masterDataService';
 import {
   Plane, Bus, Train, Hotel as HotelIcon, Utensils, Ticket, Calculator, Shield, Info, Plus, Trash2, Minus,
-  Loader2, Users, Calendar, MapPin, Save, Globe, Building2, IdCard, Heart, BadgePercent, ChevronDown, ChevronUp
+  Loader2, Users, Calendar, MapPin, Save, Globe, Building2, IdCard, Heart, BadgePercent, ChevronDown, ChevronUp,
+  Star, UtensilsCrossed
 } from 'lucide-react';
 import {
   Flight, Bus as BusType, Train as TrainType, Accommodation, Activity, Overhead,
@@ -96,6 +99,8 @@ export default function CreateTrip() {
   const [accommodations, setAccommodations] = useState<Accommodation[]>([]);
   // Hotel-wise meals: keyed by accommodation id
   const [hotelMeals, setHotelMeals] = useState<Record<string, {
+    restaurantId: string;
+    restaurantName: string;
     breakfastCostPerPerson: number;
     lunchCostPerPerson: number;
     dinnerCostPerPerson: number;
@@ -145,6 +150,17 @@ export default function CreateTrip() {
   const [addHotelDialogForm, setAddHotelDialogForm] = useState({ hotelname: '', breakfastincluded: false, remarks: '' });
   const [isSavingNewHotel, setIsSavingNewHotel] = useState(false);
 
+  // Restaurant state for meals
+  const [restaurantsMasterList, setRestaurantsMasterList] = useState<Restaurant[]>([]);
+  const [addRestaurantDialogOpen, setAddRestaurantDialogOpen] = useState(false);
+  const [addRestaurantDialogAccId, setAddRestaurantDialogAccId] = useState<string | null>(null);
+  const [addRestaurantDialogForm, setAddRestaurantDialogForm] = useState({
+    name: '',
+    star_rating: '',
+    remarks: '',
+  });
+  const [isSavingNewRestaurant, setIsSavingNewRestaurant] = useState(false);
+
   // NEW: Cost optimization toggle state
   const [optimizeRoomsByCost, setOptimizeRoomsByCost] = useState(false);
 
@@ -170,11 +186,12 @@ export default function CreateTrip() {
     const loadMasterData = async () => {
       setIsLoadingMasterData(true);
       try {
-        const [countriesResult, citiesResult, currenciesResult, hotelsResult] = await Promise.all([
+        const [countriesResult, citiesResult, currenciesResult, hotelsResult, restaurantsResult] = await Promise.all([
           fetchCountries(),
           fetchCities(),
           fetchCurrencies(),
-          fetchHotels()
+          fetchHotels(),
+          fetchRestaurants(),
         ]);
 
         if (countriesResult.success && countriesResult.data) {
@@ -191,6 +208,10 @@ export default function CreateTrip() {
 
         if (hotelsResult.success && hotelsResult.data) {
           setHotelsMasterList(hotelsResult.data);
+        }
+
+        if (restaurantsResult.success && restaurantsResult.data) {
+          setRestaurantsMasterList(restaurantsResult.data);
         }
       } catch (error) {
         console.error('Error loading master data:', error);
@@ -395,6 +416,8 @@ export default function CreateTrip() {
           const mealsMap: Record<string, any> = {};
           dbMeals.forEach((m: any) => {
             mealsMap[m.accommodation_id] = {
+              restaurantId: m.restaurant_id ?? '',
+              restaurantName: m.restaurant_name ?? '',
               breakfastCostPerPerson: m.breakfast_cost_per_person,
               lunchCostPerPerson: m.lunch_cost_per_person,
               dinnerCostPerPerson: m.dinner_cost_per_person,
@@ -481,6 +504,8 @@ export default function CreateTrip() {
 
   const getHotelMealDefaults = (accId: string, currency: string) => {
     return hotelMeals[accId] ?? {
+      restaurantId: '',
+      restaurantName: '',
       breakfastCostPerPerson: 0,
       lunchCostPerPerson: 0,
       dinnerCostPerPerson: 0,
@@ -1285,6 +1310,8 @@ export default function CreateTrip() {
             hotel_name: acc.hotelName,
             city: acc.city,
             number_of_nights: acc.numberOfNights,
+            restaurant_id: m.restaurantId || undefined,
+            restaurant_name: m.restaurantName || undefined,
             breakfast_cost_per_person: m.breakfastCostPerPerson,
             lunch_cost_per_person: m.lunchCostPerPerson,
             dinner_cost_per_person: m.dinnerCostPerPerson,
@@ -3212,6 +3239,7 @@ export default function CreateTrip() {
                 const totalPax = calculateTotalParticipants();
                 const m = getHotelMealDefaults(acc.id, acc.currency);
                 const costs = calculateHotelMealCost(acc.id, acc.numberOfNights, totalPax, acc.currency);
+                const selectedRestaurant = restaurantsMasterList.find(r => r.id === m.restaurantId);
 
                 return (
                   <div key={acc.id} className="border rounded-lg overflow-hidden">
@@ -3244,6 +3272,63 @@ export default function CreateTrip() {
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+
+                    {/* Restaurant picker row */}
+                    <div className="px-4 py-3 bg-muted/20 border-b flex items-center gap-3">
+                      <UtensilsCrossed className="w-4 h-4 text-primary shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <Select
+                          value={m.restaurantId || '__none__'}
+                          onValueChange={(v) => {
+                            if (v === '__add__') {
+                              setAddRestaurantDialogAccId(acc.id);
+                              setAddRestaurantDialogOpen(true);
+                              return;
+                            }
+                            const rest = restaurantsMasterList.find(r => r.id === v);
+                            updateHotelMeal(acc.id, 'restaurantId', v === '__none__' ? '' : v, acc.currency);
+                            updateHotelMeal(acc.id, 'restaurantName', rest?.name ?? '', acc.currency);
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue placeholder="Select restaurant (optional)" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-popover">
+                            <SelectItem value="__none__">No restaurant selected</SelectItem>
+                            {restaurantsMasterList.map((r) => (
+                              <SelectItem key={r.id} value={r.id}>
+                                <span className="flex items-center gap-2">
+                                  {r.name}
+                                  {r.star_rating && (
+                                    <span className="flex items-center gap-0.5 text-amber-500">
+                                      {Array.from({ length: parseInt(r.star_rating) }).map((_, i) => (
+                                        <Star key={i} className="w-3 h-3 fill-current" />
+                                      ))}
+                                    </span>
+                                  )}
+                                  {r.city && <span className="text-muted-foreground text-xs">• {r.city}</span>}
+                                </span>
+                              </SelectItem>
+                            ))}
+                            <SelectItem value="__add__" className="text-primary font-medium">
+                              <span className="flex items-center gap-1.5">
+                                <Plus className="w-3.5 h-3.5" /> Add New Restaurant
+                              </span>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {selectedRestaurant && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          {selectedRestaurant.star_rating && Array.from({ length: parseInt(selectedRestaurant.star_rating) }).map((_, i) => (
+                            <Star key={i} className="w-3.5 h-3.5 text-amber-500 fill-current" />
+                          ))}
+                          {selectedRestaurant.remarks && (
+                            <span className="text-xs text-muted-foreground ml-1">• {selectedRestaurant.remarks}</span>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Meal rows */}
@@ -4006,6 +4091,113 @@ export default function CreateTrip() {
               {isSavingNewHotel ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</>
               ) : 'Add Hotel'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Restaurant Dialog */}
+      <Dialog open={addRestaurantDialogOpen} onOpenChange={(open) => { if (!open) setAddRestaurantDialogOpen(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Restaurant to Master List</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Restaurant Name *</Label>
+              <Input
+                placeholder="e.g., The Grand Spice"
+                value={addRestaurantDialogForm.name}
+                onChange={(e) => setAddRestaurantDialogForm(prev => ({ ...prev, name: e.target.value }))}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Star Rating</Label>
+              <div className="flex items-center gap-2">
+                {['1', '2', '3', '4', '5'].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setAddRestaurantDialogForm(prev => ({
+                      ...prev,
+                      star_rating: prev.star_rating === star ? '' : star
+                    }))}
+                    className={`flex items-center justify-center w-10 h-10 rounded-lg border-2 transition-all ${
+                      addRestaurantDialogForm.star_rating === star
+                        ? 'border-amber-400 bg-amber-50 text-amber-600'
+                        : 'border-border text-muted-foreground hover:border-amber-300'
+                    }`}
+                  >
+                    <span className="text-sm font-semibold">{star}★</span>
+                  </button>
+                ))}
+                {addRestaurantDialogForm.star_rating && (
+                  <button
+                    type="button"
+                    onClick={() => setAddRestaurantDialogForm(prev => ({ ...prev, star_rating: '' }))}
+                    className="text-xs text-muted-foreground hover:text-foreground ml-1"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Remarks (optional)</Label>
+              <Input
+                placeholder="e.g., Specialises in buffets, veg only..."
+                value={addRestaurantDialogForm.remarks}
+                onChange={(e) => setAddRestaurantDialogForm(prev => ({ ...prev, remarks: e.target.value }))}
+              />
+            </div>
+            {addRestaurantDialogAccId && (() => {
+              const acc = accommodations.find(a => a.id === addRestaurantDialogAccId);
+              return acc?.city ? (
+                <p className="text-sm text-muted-foreground bg-muted px-3 py-2 rounded-md">
+                  📍 Will be linked to meals at <strong>{acc.hotelName}</strong>, {acc.city}
+                </p>
+              ) : null;
+            })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddRestaurantDialogOpen(false)} disabled={isSavingNewRestaurant}>
+              Cancel
+            </Button>
+            <Button
+              className="gradient-primary text-primary-foreground"
+              disabled={isSavingNewRestaurant || !addRestaurantDialogForm.name.trim()}
+              onClick={async () => {
+                const name = addRestaurantDialogForm.name.trim();
+                if (!name) { toast.error('Restaurant name is required'); return; }
+                setIsSavingNewRestaurant(true);
+                const acc = accommodations.find(a => a.id === addRestaurantDialogAccId);
+                const cityObj = acc ? cities.find(c => c.name === acc.city) : undefined;
+                const result = await addRestaurant({
+                  name,
+                  city: acc?.city,
+                  city_id: cityObj?.id,
+                  star_rating: addRestaurantDialogForm.star_rating || undefined,
+                  remarks: addRestaurantDialogForm.remarks || undefined,
+                });
+                setIsSavingNewRestaurant(false);
+                if (result.success && result.data) {
+                  setRestaurantsMasterList(prev => [...prev, result.data!]);
+                  if (addRestaurantDialogAccId) {
+                    updateHotelMeal(addRestaurantDialogAccId, 'restaurantId', result.data!.id, acc?.currency ?? 'INR');
+                    updateHotelMeal(addRestaurantDialogAccId, 'restaurantName', result.data!.name, acc?.currency ?? 'INR');
+                  }
+                  toast.success('Restaurant added to master list');
+                  setAddRestaurantDialogOpen(false);
+                  setAddRestaurantDialogForm({ name: '', star_rating: '', remarks: '' });
+                } else {
+                  toast.error('Failed to add restaurant');
+                }
+              }}
+            >
+              {isSavingNewRestaurant ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</>
+              ) : 'Add Restaurant'}
             </Button>
           </DialogFooter>
         </DialogContent>
