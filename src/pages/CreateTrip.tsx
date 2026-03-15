@@ -1101,10 +1101,10 @@ export default function CreateTrip() {
     let subtotal = 0;
 
     if (planningMode === 'tour_planner') {
-      // Tour planner mode: subtotal = costPerPerson × billable participants (converted to INR)
-      const billable = calculateBillableParticipants();
+      // Tour planner mode: subtotal = costPerPerson × ALL participants (converted to INR)
+      const total = calculateTotalParticipants();
       const rate = getCurrencyRate(tourPlannerCurrency);
-      subtotal = tourPlannerCostPerPerson * billable * rate;
+      subtotal = tourPlannerCostPerPerson * total * rate;
     } else {
       // Self-planned mode: sum all individual line items
       const transportTotal =
@@ -1332,15 +1332,15 @@ export default function CreateTrip() {
 
         // Tour planner details — only set in tour_planner mode
         tourPlanner: planningMode === 'tour_planner' ? (() => {
-          const billable = calculateBillableParticipants();
+          const total = calculateTotalParticipants();
           const rate = getCurrencyRate(tourPlannerCurrency);
-          const totalCost = tourPlannerCostPerPerson * billable;
+          const totalCost = tourPlannerCostPerPerson * total;
           return {
             costPerPerson: tourPlannerCostPerPerson,
             currency: tourPlannerCurrency,
             totalCost,
             totalCostINR: totalCost * rate,
-            billableParticipants: billable,
+            billableParticipants: total,
             notes: tourPlannerNotes || undefined,
           };
         })() : undefined,
@@ -2115,58 +2115,33 @@ export default function CreateTrip() {
               </div>
             </div>
 
-            {/* Billing breakdown */}
+            {/* Participant summary */}
             {tourPlannerCostPerPerson > 0 && (
               <div className="p-4 bg-muted/30 rounded-lg space-y-3">
-                <p className="text-sm font-semibold">Billing Breakdown</p>
+                <p className="text-sm font-semibold">Cost Summary</p>
                 <div className="text-sm space-y-1">
-                  {tripType === 'institute' ? (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Students (Boys + Girls) — Billable</span>
-                        <span className="font-medium">{formData.boys + formData.girls} × {formatCurrency(tourPlannerCostPerPerson, tourPlannerCurrency)} = {formatCurrency((formData.boys + formData.girls) * tourPlannerCostPerPerson, tourPlannerCurrency)}</span>
-                      </div>
-                      {calculateTotalFaculty() > 0 && (
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>Faculty — Not billed</span>
-                          <span>{calculateTotalFaculty()} × —</span>
-                        </div>
-                      )}
-                      {calculateTotalVXplorers() > 0 && (
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>VXplorers — Not billed</span>
-                          <span>{calculateTotalVXplorers()} × —</span>
-                        </div>
-                      )}
-                    </>
-                  ) : tripType === 'commercial' ? (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Participants — Billable</span>
-                        <span className="font-medium">{calculateTotalCommercial()} × {formatCurrency(tourPlannerCostPerPerson, tourPlannerCurrency)} = {formatCurrency(calculateTotalCommercial() * tourPlannerCostPerPerson, tourPlannerCurrency)}</span>
-                      </div>
-                      {(formData.commercialMaleVXplorers + formData.commercialFemaleVXplorers) > 0 && (
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>VXplorers — Not billed</span>
-                          <span>{formData.commercialMaleVXplorers + formData.commercialFemaleVXplorers} × —</span>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    // FTI
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Participants — Billable</span>
-                      <span className="font-medium">{calculateTotalCommercial()} × {formatCurrency(tourPlannerCostPerPerson, tourPlannerCurrency)} = {formatCurrency(calculateTotalCommercial() * tourPlannerCostPerPerson, tourPlannerCurrency)}</span>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Participants</span>
+                    <span className="font-medium">{calculateTotalParticipants()}</span>
+                  </div>
+                  {tripType === 'institute' && calculateTotalFaculty() > 0 && (
+                    <div className="flex justify-between text-muted-foreground text-xs">
+                      <span>incl. {calculateTotalFaculty()} faculty (not charged to client)</span>
+                    </div>
+                  )}
+                  {(tripType === 'institute' || tripType === 'commercial') && (formData.maleVXplorers + formData.femaleVXplorers + formData.commercialMaleVXplorers + formData.commercialFemaleVXplorers) > 0 && (
+                    <div className="flex justify-between text-muted-foreground text-xs">
+                      <span>incl. {formData.maleVXplorers + formData.femaleVXplorers + formData.commercialMaleVXplorers + formData.commercialFemaleVXplorers} VXplorers (not charged to client)</span>
                     </div>
                   )}
                 </div>
                 <div className="pt-2 border-t flex justify-between font-semibold">
                   <span>Total Planner Cost</span>
                   <span className="text-primary">
-                    {formatCurrency(calculateBillableParticipants() * tourPlannerCostPerPerson, tourPlannerCurrency)}
+                    {formatCurrency(calculateTotalParticipants() * tourPlannerCostPerPerson, tourPlannerCurrency)}
                     {tourPlannerCurrency !== 'INR' && (
                       <span className="text-sm font-normal text-muted-foreground ml-2">
-                        ({formatCurrency(calculateBillableParticipants() * tourPlannerCostPerPerson * getCurrencyRate(tourPlannerCurrency), 'INR')} INR)
+                        ({formatCurrency(calculateTotalParticipants() * tourPlannerCostPerPerson * getCurrencyRate(tourPlannerCurrency), 'INR')} INR)
                       </span>
                     )}
                   </span>
