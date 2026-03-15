@@ -188,9 +188,11 @@ export default function TripDetail() {
               flightNumber: f.flight_number ?? '',
               departureTime: f.departure_time ?? '',
               arrivalTime: f.arrival_time ?? '',
-              costPerPerson: f.cost_per_person ?? 0,
               currency: f.currency ?? 'INR',
               description: f.description ?? '',
+              classes: f.classes ?? [],
+              seatUpgrades: f.seat_upgrades ?? [],
+              mealUpgrades: f.meal_upgrades ?? [],
               totalCost: f.total_cost ?? 0,
               totalCostINR: f.total_cost_inr ?? 0,
             })),
@@ -248,33 +250,23 @@ export default function TripDetail() {
             },
           })),
 
-          meals: (() => {
-            const mealsData = data.trip_meals?.[0] || data.trip_meals;
-            if (mealsData) {
-              return {
-                breakfastCostPerPerson: mealsData.breakfast_cost_per_person ?? 0,
-                lunchCostPerPerson: mealsData.lunch_cost_per_person ?? 0,
-                dinnerCostPerPerson: mealsData.dinner_cost_per_person ?? 0,
-                currency: mealsData.currency ?? 'INR',
-                totalDays: mealsData.total_days ?? data.total_days ?? 0,
-                totalParticipants: mealsData.total_participants ?? data.trip_participants?.total_participants ?? 0,
-                dailyCostPerPerson: mealsData.daily_cost_per_person ?? 0,
-                totalCost: mealsData.total_cost ?? 0,
-                totalCostINR: mealsData.total_cost_inr ?? 0,
-              };
-            }
-            return {
-              breakfastCostPerPerson: 0,
-              lunchCostPerPerson: 0,
-              dinnerCostPerPerson: 0,
-              currency: 'INR',
-              totalDays: 0,
-              totalParticipants: 0,
-              dailyCostPerPerson: 0,
-              totalCost: 0,
-              totalCostINR: 0,
-            };
-          })(),
+          meals: (data.trip_meals || []).map((m: any) => ({
+            id: m.id,
+            accommodationId: m.accommodation_id ?? '',
+            hotelName: m.hotel_name ?? '',
+            city: m.city ?? '',
+            numberOfNights: m.number_of_nights ?? 0,
+            breakfastCostPerPerson: m.breakfast_cost_per_person ?? 0,
+            lunchCostPerPerson: m.lunch_cost_per_person ?? 0,
+            dinnerCostPerPerson: m.dinner_cost_per_person ?? 0,
+            freeBreakfast: m.free_breakfast ?? 0,
+            freeLunch: m.free_lunch ?? 0,
+            freeDinner: m.free_dinner ?? 0,
+            currency: m.currency ?? 'INR',
+            totalParticipants: m.total_participants ?? 0,
+            totalCost: m.total_cost ?? 0,
+            totalCostINR: m.total_cost_inr ?? 0,
+          })),
 
           activities: (data.trip_activities || []).map((a: any) => ({
             id: a.id,
@@ -292,10 +284,11 @@ export default function TripDetail() {
           overheads: (data.trip_overheads || []).map((o: any) => ({
             id: o.id,
             name: o.name ?? '',
-            amountPerParticipant: o.amount_per_participant ?? 0,  // CHANGED
+            costType: o.cost_type ?? 'per_person',
+            amountPerParticipant: o.amount_per_participant ?? 0,
             currency: o.currency ?? 'INR',
             hideFromClient: o.hide_from_client ?? false,
-            totalCost: o.total_cost ?? 0,  // NEW
+            totalCost: o.total_cost ?? 0,
             totalCostINR: o.total_cost_inr ?? 0,
           })),
 
@@ -465,7 +458,7 @@ export default function TripDetail() {
       trip.transport.buses.reduce((sum, b) => sum + b.totalCostINR, 0) +
       trip.transport.trains.reduce((sum, t) => sum + t.totalCostINR, 0);
     const accommodationExpected = trip.accommodation.reduce((sum, h) => sum + h.totalCostINR, 0);
-    const mealsExpected = trip.meals.totalCostINR;
+    const mealsExpected = trip.meals.reduce((sum, m) => sum + m.totalCostINR, 0);
     const activitiesExpected = trip.activities.reduce((sum, a) => sum + a.totalCostINR, 0);
     const extrasExpected = trip.extras
       ? (trip.extras.visaTotalCostINR + trip.extras.tipsTotalCostINR + trip.extras.insuranceTotalCostINR)
@@ -973,11 +966,19 @@ function TransportSection({ trip, currencies }: { trip: Trip; currencies: Curren
                       <span className="text-muted-foreground">Arrival:</span>
                       <span className="ml-2 font-medium">{flight.arrivalTime}</span>
                     </div>
-                    <div>
-                      <span className="text-muted-foreground">Cost/Person:</span>
-                      <span className="ml-2 font-medium">{formatCurrencyWithSymbol(flight.costPerPerson, flight.currency, currencies)}</span>
-                    </div>
                   </div>
+                  {flight.classes && flight.classes.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-muted-foreground font-semibold mb-1">Classes:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {flight.classes.map((cls, idx) => (
+                          <span key={idx} className="text-xs bg-muted/40 rounded px-2 py-1">
+                            {cls.class} × {cls.passengerCount} — {formatCurrencyWithSymbol(cls.costPerPerson, flight.currency, currencies)}/person
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {flight.description && (
                     <p className="text-sm text-muted-foreground mt-2">{flight.description}</p>
                   )}
@@ -1222,54 +1223,94 @@ function AccommodationSection({ trip, currencies }: { trip: Trip; currencies: Cu
 function MealsSection({ trip, currencies }: { trip: Trip; currencies: Currency[] }) {
   const { meals } = trip;
 
+  if (!meals || meals.length === 0) {
+    return (
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Utensils className="w-5 h-5 text-primary" />
+            Meals
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">No meals configured for this trip.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const totalMealsCostINR = meals.reduce((sum, m) => sum + m.totalCostINR, 0);
+
   return (
     <Card className="shadow-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Utensils className="w-5 h-5 text-primary" />
-          Meals
+          Meals ({meals.length} {meals.length === 1 ? 'hotel' : 'hotels'})
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-4 bg-muted/30 rounded-lg">
-            <p className="text-sm text-muted-foreground">Breakfast/Person</p>
-            <p className="text-lg font-semibold">
-              {formatCurrencyWithSymbol(meals.breakfastCostPerPerson, meals.currency, currencies)}
-            </p>
-          </div>
-          <div className="p-4 bg-muted/30 rounded-lg">
-            <p className="text-sm text-muted-foreground">Lunch/Person</p>
-            <p className="text-lg font-semibold">
-              {formatCurrencyWithSymbol(meals.lunchCostPerPerson, meals.currency, currencies)}
-            </p>
-          </div>
-          <div className="p-4 bg-muted/30 rounded-lg">
-            <p className="text-sm text-muted-foreground">Dinner/Person</p>
-            <p className="text-lg font-semibold">
-              {formatCurrencyWithSymbol(meals.dinnerCostPerPerson, meals.currency, currencies)}
-            </p>
-          </div>
-          <div className="p-4 bg-muted/30 rounded-lg">
-            <p className="text-sm text-muted-foreground">Daily Cost/Person</p>
-            <p className="text-lg font-semibold">
-              {formatCurrencyWithSymbol(meals.dailyCostPerPerson, meals.currency, currencies)}
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 p-4 bg-primary/5 rounded-lg">
-          <div className="flex justify-between items-center">
-            <div>
-              <p className="text-sm text-muted-foreground">Total Meals Cost</p>
-              <p className="text-xs text-muted-foreground">
-                {meals.totalDays} days × {meals.totalParticipants} participants
-              </p>
+        <div className="space-y-6">
+          {meals.map((meal, index) => (
+            <div key={meal.id ?? index} className="p-4 border rounded-lg">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <h4 className="font-semibold">{meal.hotelName}</h4>
+                  <div className="flex gap-2 mt-1">
+                    <Badge variant="outline">{meal.city}</Badge>
+                    <Badge variant="outline">{meal.numberOfNights} {meal.numberOfNights === 1 ? 'Night' : 'Nights'}</Badge>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold">{formatCurrencyWithSymbol(meal.totalCost, meal.currency, currencies)}</p>
+                  <p className="text-sm text-muted-foreground">{formatINR(meal.totalCostINR)}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground">Breakfast/Person</p>
+                  <p className="font-semibold">
+                    {formatCurrencyWithSymbol(meal.breakfastCostPerPerson, meal.currency, currencies)}
+                  </p>
+                  {meal.freeBreakfast > 0 && (
+                    <p className="text-xs text-success">{meal.freeBreakfast} free</p>
+                  )}
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground">Lunch/Person</p>
+                  <p className="font-semibold">
+                    {formatCurrencyWithSymbol(meal.lunchCostPerPerson, meal.currency, currencies)}
+                  </p>
+                  {meal.freeLunch > 0 && (
+                    <p className="text-xs text-success">{meal.freeLunch} free</p>
+                  )}
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground">Dinner/Person</p>
+                  <p className="font-semibold">
+                    {formatCurrencyWithSymbol(meal.dinnerCostPerPerson, meal.currency, currencies)}
+                  </p>
+                  {meal.freeDinner > 0 && (
+                    <p className="text-xs text-success">{meal.freeDinner} free</p>
+                  )}
+                </div>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground">Participants</p>
+                  <p className="font-semibold">{meal.totalParticipants}</p>
+                </div>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-xl font-bold">{formatCurrencyWithSymbol(meals.totalCost, meals.currency, currencies)}</p>
-              <p className="text-sm text-muted-foreground">{formatINR(meals.totalCostINR)}</p>
+          ))}
+
+          {/* Total across all hotels */}
+          {meals.length > 1 && (
+            <div className="p-4 bg-primary/5 rounded-lg">
+              <div className="flex justify-between items-center">
+                <p className="font-semibold">Total Meals Cost (All Hotels)</p>
+                <p className="text-xl font-bold">{formatINR(totalMealsCostINR)}</p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -1498,6 +1539,7 @@ function CostSummarySection({ trip }: { trip: Trip }) {
     ? (trip.extras.visaTotalCostINR + trip.extras.tipsTotalCostINR + trip.extras.insuranceTotalCostINR)
     : 0;
   const overheadsTotal = trip.overheads.reduce((sum, o) => sum + o.totalCostINR, 0);
+  const mealsTotal = trip.meals.reduce((sum, m) => sum + m.totalCostINR, 0);
   const visibleOverheadsTotal = trip.overheads.filter(o => !o.hideFromClient).reduce((sum, o) => sum + o.totalCostINR, 0);
 
   return (
@@ -1513,7 +1555,7 @@ function CostSummarySection({ trip }: { trip: Trip }) {
           {/* Cost Components */}
           <CostRow label="Transport" sublabel="Flights, Buses, Trains" amount={transportTotal} />
           <CostRow label="Accommodation" sublabel="Hotels & Stay" amount={accommodationTotal} />
-          <CostRow label="Meals" sublabel="Breakfast, Lunch & Dinner" amount={trip.meals.totalCostINR} />
+          <CostRow label="Meals" sublabel="Breakfast, Lunch & Dinner" amount={mealsTotal} />
           <CostRow label="Activities" sublabel="Entry, Transport, Guides" amount={activitiesTotal} />
           {extrasTotal > 0 && (
             <CostRow label="Extras" sublabel="Visa, Tips, Insurance" amount={extrasTotal} />
