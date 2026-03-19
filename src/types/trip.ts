@@ -37,22 +37,22 @@ export interface Trip {
   id: string;
   name: string;
   institution: string;
-  
+
   tripCategory: TripCategory;
   tripType: TripType;
   planningMode: PlanningMode;
-  
+
   countries: string[];
-  
+
   cities: CityWithDates[];
-  
+
   startDate: string;
   endDate: string;
   totalDays: number;
   totalNights: number;
-  
+
   defaultCurrency: string;
-  
+
   status: TripStatus;
 
   participants: Participants;
@@ -61,10 +61,8 @@ export interface Trip {
   meals: HotelMeal[];
   activities: Activity[];
   overheads: Overhead[];
-  
-  extras?: TripExtras;
 
-  tourPlanner?: TourPlannerDetails;
+  extras?: TripExtras;
 
   subtotalBeforeTax: number;
   profit: number;
@@ -75,7 +73,7 @@ export interface Trip {
   tcsAmount: number;
   tdsPercentage: number;
   tdsAmount: number;
-  
+
   grandTotal: number;
   grandTotalINR: number;
   costPerParticipant: number;
@@ -87,19 +85,6 @@ export interface Trip {
 }
 
 /* =========================
-   Tour Planner Details
-========================= */
-
-export interface TourPlannerDetails {
-  costPerPerson: number;
-  currency: string;
-  totalCost: number;
-  totalCostINR: number;
-  billableParticipants: number;
-  notes?: string;
-}
-
-/* =========================
    Trip Extras (Visa, Tips, Insurance)
 ========================= */
 
@@ -108,7 +93,7 @@ export interface TripExtras {
   visaCurrency: string;
   visaTotalCost: number;
   visaTotalCostINR: number;
-  
+
   tipsCostPerPerson: number;
   tipsCurrency: string;
   tipsTotalCost: number;
@@ -131,7 +116,7 @@ export interface Participants {
   femaleFaculty: number;
   maleVXplorers: number;
   femaleVXplorers: number;
-  
+
   maleCount: number;
   femaleCount: number;
   otherCount: number;
@@ -168,26 +153,23 @@ export const FLIGHT_CLASS_LABELS: Record<FlightClass, string> = {
   first: 'First Class',
 };
 
-// Each class row: which class, how many passengers, what cost per person
 export interface FlightClassEntry {
-  id: string;          // local UI id e.g. "cls-1234"
+  id: string;
   class: FlightClass;
   passengerCount: number;
   costPerPerson: number;
 }
 
-// A single seat upgrade type e.g. "Window Seat – ₹1,000 × 10 seats"
 export interface FlightSeatUpgrade {
-  id: string;          // local UI id
-  label: string;       // e.g. "Window Seat"
+  id: string;
+  label: string;
   costPerSeat: number;
   seatCount: number;
 }
 
-// A single meal upgrade type e.g. "Veg Meal – ₹500 × 8"
 export interface FlightMealUpgrade {
-  id: string;          // local UI id
-  label: string;       // e.g. "Veg Meal"
+  id: string;
+  label: string;
   costPerMeal: number;
   mealCount: number;
 }
@@ -203,7 +185,6 @@ export interface Flight {
   currency: string;
   description: string;
 
-  // New structured fields
   classes: FlightClassEntry[];
   seatUpgrades: FlightSeatUpgrade[];
   mealUpgrades: FlightMealUpgrade[];
@@ -262,9 +243,9 @@ export interface Accommodation {
   city: string;
   numberOfNights: number;
   roomTypes: RoomTypeConfig[];
-  
+
   roomPreferences: RoomPreferences;
-  
+
   currency: string;
   breakfastIncluded: boolean;
   roomAllocation: RoomAllocation;
@@ -287,7 +268,7 @@ export interface RoomAllocation {
   commercialOtherRooms: number;
   commercialMaleVXplorerRooms: number;
   commercialFemaleVXplorerRooms: number;
-  
+
   totalRooms: number;
   breakdown?: {
     boys: RoomTypeBreakdown[];
@@ -296,7 +277,7 @@ export interface RoomAllocation {
     femaleFaculty: RoomTypeBreakdown[];
     maleVXplorers: RoomTypeBreakdown[];
     femaleVXplorers: RoomTypeBreakdown[];
-    
+
     commercialMale: RoomTypeBreakdown[];
     commercialFemale: RoomTypeBreakdown[];
     commercialOther: RoomTypeBreakdown[];

@@ -13,7 +13,6 @@ import type {
   Overhead,
   Participants,
   TripExtras,
-  TourPlannerDetails,
   CityWithDates,
   FlightClassEntry,
   FlightSeatUpgrade,
@@ -53,16 +52,6 @@ interface DbTrip {
   created_by?: string;
 }
 
-interface DbTourPlanner {
-  trip_id: string;
-  cost_per_person: number;
-  currency: string;
-  total_cost: number;
-  total_cost_inr: number;
-  billable_participants: number;
-  notes?: string;
-}
-
 interface DbParticipants {
   trip_id: string;
   boys: number;
@@ -99,7 +88,6 @@ interface DbTripExtras {
   insurance_total_cost_inr: number;
 }
 
-// Updated: no more cost_per_person — uses classes/seat_upgrades/meal_upgrades JSONB
 interface DbFlight {
   id?: string;
   trip_id: string;
@@ -253,7 +241,6 @@ export async function createTrip(tripData: {
   activities: Activity[];
   overheads: Overhead[];
   extras?: TripExtras;
-  tourPlanner?: TourPlannerDetails;
   subtotalBeforeTax: number;
   profit: number;
   gstPercentage: number;
@@ -336,7 +323,7 @@ export async function createTrip(tripData: {
       .insert(dbParticipants);
     if (participantsError) throw participantsError;
 
-    // 3. Flights — now stores classes, seat_upgrades, meal_upgrades as JSONB
+    // 3. Flights
     if (tripData.flights.length > 0) {
       const dbFlights: DbFlight[] = tripData.flights.map(flight => ({
         trip_id: tripId,
@@ -554,7 +541,6 @@ export async function updateTrip(tripId: string, tripData: {
   activities: Activity[];
   overheads: Overhead[];
   extras?: TripExtras;
-  tourPlanner?: TourPlannerDetails;
   subtotalBeforeTax: number;
   profit: number;
   gstPercentage: number;
@@ -759,26 +745,6 @@ export async function updateTrip(tripId: string, tripData: {
       if (extrasError) throw extrasError;
     }
 
-    // 7.6. Upsert tour planner details (only for tour_planner mode)
-    if (tripData.tourPlanner && tripData.planningMode === 'tour_planner') {
-      const dbTourPlanner: DbTourPlanner = {
-        trip_id: tripId,
-        cost_per_person: tripData.tourPlanner.costPerPerson,
-        currency: tripData.tourPlanner.currency,
-        total_cost: tripData.tourPlanner.totalCost,
-        total_cost_inr: tripData.tourPlanner.totalCostINR,
-        billable_participants: tripData.tourPlanner.billableParticipants,
-        notes: tripData.tourPlanner.notes,
-      };
-      const { error: tourPlannerError } = await supabase
-        .from('trip_tour_planner')
-        .upsert(dbTourPlanner, { onConflict: 'trip_id' });
-      if (tourPlannerError) throw tourPlannerError;
-    } else {
-      // Clean up if mode switched away from tour_planner
-      await supabase.from('trip_tour_planner').delete().eq('trip_id', tripId);
-    }
-
     // 8. Delete and re-insert activities
     await supabase.from('trip_activities').delete().eq('trip_id', tripId);
     if (tripData.activities.length > 0) {
@@ -851,13 +817,6 @@ export async function getTripById(tripId: string) {
       .single();
     if (extrasError && extrasError.code !== 'PGRST116') throw extrasError;
 
-    const { data: tourPlanner, error: tourPlannerError } = await supabase
-      .from('trip_tour_planner')
-      .select('*')
-      .eq('trip_id', tripId)
-      .single();
-    if (tourPlannerError && tourPlannerError.code !== 'PGRST116') throw tourPlannerError;
-
     const { data: flights, error: flightsError } = await supabase
       .from('trip_flights')
       .select('*')
@@ -907,7 +866,6 @@ export async function getTripById(tripId: string) {
         trip,
         participants,
         extras: extras || null,
-        tourPlanner: tourPlanner || null,
         flights: flights || [],
         buses: buses || [],
         trains: trains || [],

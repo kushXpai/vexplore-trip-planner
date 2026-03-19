@@ -23,8 +23,7 @@ import {
   getCurrencyRate as getCurrencyRateHelper,
   getCountryCurrency as getCountryCurrencyHelper,
   formatCurrency as formatCurrencyHelper,
-  calculateGrandTotal,
-  getCurrentTDSRate
+  calculateGrandTotal
 } from '@/services/masterDataService';
 import type { Currency, Country, City, Restaurant } from '@/services/masterDataService';
 import type { Hotel } from '@/services/masterDataService';
@@ -36,7 +35,7 @@ import {
 import {
   Flight, Bus as BusType, Train as TrainType, Accommodation, Activity, Overhead,
   TripCategory, TripType, PlanningMode, TripExtras, RoomPreferences, CityWithDates,
-  FlightClassEntry, FlightSeatUpgrade, FlightMealUpgrade, FlightClass, FLIGHT_CLASS_LABELS
+  FlightClassEntry, FlightSeatUpgrade, FlightMealUpgrade, FlightClass, FLIGHT_CLASS_LABELS,
 } from '@/types/trip';
 import { toast } from 'sonner';
 import { createTrip, updateTrip, getTripById } from '@/services/tripService';
@@ -63,11 +62,6 @@ export default function CreateTrip() {
   const [tripCategory, setTripCategory] = useState<TripCategory>('domestic');
   const [tripType, setTripType] = useState<TripType>('institute');
   const [planningMode, setPlanningMode] = useState<PlanningMode>('self_planned');
-
-  // Tour planner mode fields
-  const [tourPlannerCostPerPerson, setTourPlannerCostPerPerson] = useState(0);
-  const [tourPlannerCurrency, setTourPlannerCurrency] = useState('INR');
-  const [tourPlannerNotes, setTourPlannerNotes] = useState('');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -261,20 +255,12 @@ export default function CreateTrip() {
           overheads: dbOverheads,
           meals: dbMeals,
           extras: dbExtras,
-          tourPlanner: dbTourPlanner,
         } = result.data;
 
         // NEW: Set trip category, type, and planning mode
         setTripCategory(trip.trip_category);
         setTripType(trip.trip_type);
         setPlanningMode(trip.planning_mode || 'self_planned');
-
-        // Load tour planner data if present
-        if (dbTourPlanner) {
-          setTourPlannerCostPerPerson(dbTourPlanner.cost_per_person ?? 0);
-          setTourPlannerCurrency(dbTourPlanner.currency ?? 'INR');
-          setTourPlannerNotes(dbTourPlanner.notes ?? '');
-        }
 
         const tripCountries = Array.isArray(trip.countries) ? trip.countries : (trip.country ? [trip.country] : []);
 
@@ -1096,30 +1082,19 @@ export default function CreateTrip() {
     setOverheads(overheads.filter((_, i) => i !== index));
   };
 
-  // Calculate totals with GST and TCS - UPDATED: Now async
   const calculateTotals = async () => {
-    let subtotal = 0;
+    const transportTotal =
+      flights.reduce((sum, f) => sum + f.totalCostINR, 0) +
+      buses.reduce((sum, b) => sum + b.totalCostINR, 0) +
+      trains.reduce((sum, t) => sum + t.totalCostINR, 0);
 
-    if (planningMode === 'tour_planner') {
-      // Tour planner mode: subtotal = costPerPerson × ALL participants (converted to INR)
-      const total = calculateTotalParticipants();
-      const rate = getCurrencyRate(tourPlannerCurrency);
-      subtotal = tourPlannerCostPerPerson * total * rate;
-    } else {
-      // Self-planned mode: sum all individual line items
-      const transportTotal =
-        flights.reduce((sum, f) => sum + f.totalCostINR, 0) +
-        buses.reduce((sum, b) => sum + b.totalCostINR, 0) +
-        trains.reduce((sum, t) => sum + t.totalCostINR, 0);
+    const accommodationTotal = accommodations.reduce((sum, a) => sum + a.totalCostINR, 0);
+    const mealsTotal = calculateAllMealsCost();
+    const activitiesTotal = activities.reduce((sum, a) => sum + a.totalCostINR, 0);
+    const overheadsTotal = overheads.reduce((sum, o) => sum + o.totalCostINR, 0);
+    const extrasTotal = extras.visaTotalCostINR + extras.tipsTotalCostINR + extras.insuranceTotalCostINR;
 
-      const accommodationTotal = accommodations.reduce((sum, a) => sum + a.totalCostINR, 0);
-      const mealsTotal = calculateAllMealsCost();
-      const activitiesTotal = activities.reduce((sum, a) => sum + a.totalCostINR, 0);
-      const overheadsTotal = overheads.reduce((sum, o) => sum + o.totalCostINR, 0);
-      const extrasTotal = extras.visaTotalCostINR + extras.tipsTotalCostINR + extras.insuranceTotalCostINR;
-
-      subtotal = transportTotal + accommodationTotal + mealsTotal + activitiesTotal + overheadsTotal + extrasTotal;
-    }
+    const subtotal = transportTotal + accommodationTotal + mealsTotal + activitiesTotal + overheadsTotal + extrasTotal;
 
     const taxCalc = await calculateGrandTotal(
       subtotal,
@@ -1129,15 +1104,12 @@ export default function CreateTrip() {
     );
 
     return {
-      transport: planningMode === 'tour_planner' ? 0 :
-        flights.reduce((sum, f) => sum + f.totalCostINR, 0) +
-        buses.reduce((sum, b) => sum + b.totalCostINR, 0) +
-        trains.reduce((sum, t) => sum + t.totalCostINR, 0),
-      accommodation: planningMode === 'tour_planner' ? 0 : accommodations.reduce((sum, a) => sum + a.totalCostINR, 0),
-      meals: planningMode === 'tour_planner' ? 0 : calculateAllMealsCost(),
-      activities: planningMode === 'tour_planner' ? 0 : activities.reduce((sum, a) => sum + a.totalCostINR, 0),
-      overheads: planningMode === 'tour_planner' ? 0 : overheads.reduce((sum, o) => sum + o.totalCostINR, 0),
-      extras: planningMode === 'tour_planner' ? 0 : extras.visaTotalCostINR + extras.tipsTotalCostINR + extras.insuranceTotalCostINR,
+      transport: transportTotal,
+      accommodation: accommodationTotal,
+      meals: mealsTotal,
+      activities: activitiesTotal,
+      overheads: overheadsTotal,
+      extras: extrasTotal,
       subtotalBeforeTax: taxCalc.subtotal,
       profit: taxCalc.profit,
       adminSubtotal: taxCalc.adminSubtotal,
@@ -1201,8 +1173,6 @@ export default function CreateTrip() {
     tripCategory,
     tripType,
     planningMode,
-    tourPlannerCostPerPerson,
-    tourPlannerCurrency,
     formData.boys,
     formData.girls,
     formData.maleCount,
@@ -1232,15 +1202,10 @@ export default function CreateTrip() {
     if (calculateTotalParticipants() === 0)
       validationErrors.push('At least one participant is required');
 
-    if (planningMode === 'tour_planner') {
-      if (!tourPlannerCostPerPerson || tourPlannerCostPerPerson <= 0)
-        validationErrors.push('Tour planner cost per person is required');
-    } else {
-      if (!extras.insuranceCostPerPerson || extras.insuranceCostPerPerson <= 0)
-        validationErrors.push('Insurance cost per person is required');
-      if (tripCategory === 'international' && (!extras.visaCostPerPerson || extras.visaCostPerPerson <= 0))
-        validationErrors.push('Visa cost per person is required for international trips');
-    }
+    if (!extras.insuranceCostPerPerson || extras.insuranceCostPerPerson <= 0)
+      validationErrors.push('Insurance cost per person is required');
+    if (tripCategory === 'international' && (!extras.visaCostPerPerson || extras.visaCostPerPerson <= 0))
+      validationErrors.push('Visa cost per person is required for international trips');
 
     if (validationErrors.length > 0) {
       validationErrors.forEach(err => toast.error(err));
@@ -1295,13 +1260,12 @@ export default function CreateTrip() {
           totalParticipants,
         },
 
-        // In tour_planner mode these are all empty — the cost is in tourPlanner
-        flights: planningMode === 'tour_planner' ? [] : flights,
-        buses: planningMode === 'tour_planner' ? [] : buses,
-        trains: planningMode === 'tour_planner' ? [] : trains,
-        accommodations: planningMode === 'tour_planner' ? [] : accommodations,
+        flights,
+        buses,
+        trains,
+        accommodations,
 
-        meals: planningMode === 'tour_planner' ? [] : accommodations.map(acc => {
+        meals: accommodations.map(acc => {
           const m = getHotelMealDefaults(acc.id, acc.currency);
           const totalPax = calculateTotalParticipants();
           const { totalCost, totalCostINR } = calculateHotelMealCost(acc.id, acc.numberOfNights, totalPax, acc.currency);
@@ -1325,25 +1289,10 @@ export default function CreateTrip() {
           };
         }),
 
-        activities: planningMode === 'tour_planner' ? [] : activities,
-        overheads,  // admin overheads always apply
+        activities,
+        overheads,
 
-        extras: planningMode === 'tour_planner' ? undefined : extras,
-
-        // Tour planner details — only set in tour_planner mode
-        tourPlanner: planningMode === 'tour_planner' ? (() => {
-          const total = calculateTotalParticipants();
-          const rate = getCurrencyRate(tourPlannerCurrency);
-          const totalCost = tourPlannerCostPerPerson * total;
-          return {
-            costPerPerson: tourPlannerCostPerPerson,
-            currency: tourPlannerCurrency,
-            totalCost,
-            totalCostINR: totalCost * rate,
-            billableParticipants: total,
-            notes: tourPlannerNotes || undefined,
-          };
-        })() : undefined,
+        extras,
 
         subtotalBeforeTax: totals.subtotalBeforeTax,
         profit: profit,
@@ -1404,7 +1353,7 @@ export default function CreateTrip() {
       {/* Scrollable body */}
       <div id="trip-scroll-container" className="flex-1 overflow-y-auto px-6 pb-6">
         <div className="max-w-7xl mx-auto flex gap-8 items-start">
-          <TripSectionNavDesktop planningMode={planningMode} />
+          <TripSectionNavDesktop />
 
           <div className="flex-1 min-w-0 space-y-6">
 
@@ -1571,7 +1520,7 @@ export default function CreateTrip() {
                     <Calculator className="w-5 h-5 text-primary" />
                     <span className="font-semibold">Self-Planned</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">Enter all flights, hotels, activities individually</p>
+                  <p className="text-xs text-muted-foreground mt-1">Trip planned in-house</p>
                 </div>
               </Label>
 
@@ -1585,7 +1534,7 @@ export default function CreateTrip() {
                     <Users className="w-5 h-5 text-primary" />
                     <span className="font-semibold">Tour Planner</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">External planner handles everything — enter quoted cost per person</p>
+                  <p className="text-xs text-muted-foreground mt-1">Trip handled by an external planner</p>
                 </div>
               </Label>
             </RadioGroup>
@@ -2072,101 +2021,6 @@ export default function CreateTrip() {
           </div>
         </CardContent>
       </Card>
-
-      {/* ── TOUR PLANNER MODE: simple cost-per-person card ── */}
-      {planningMode === 'tour_planner' && (
-        <Card id="section-tour-planner" className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-primary" />
-              Tour Planner Quote
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Enter the per-person cost quoted by your tour planner.
-              Faculty and VXplorers are excluded from billing as per normal rules.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-6">
-
-            {/* Cost per person + currency */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Cost Per Person (Quoted by Planner) *</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  placeholder="0"
-                  value={tourPlannerCostPerPerson || ''}
-                  onChange={(e) => setTourPlannerCostPerPerson(parseFloat(e.target.value) || 0)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Currency</Label>
-                <Select value={tourPlannerCurrency} onValueChange={setTourPlannerCurrency}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select currency" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {currencies.map(c => (
-                      <SelectItem key={c.code} value={c.code}>{c.code} – {c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Participant summary */}
-            {tourPlannerCostPerPerson > 0 && (
-              <div className="p-4 bg-muted/30 rounded-lg space-y-3">
-                <p className="text-sm font-semibold">Cost Summary</p>
-                <div className="text-sm space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total Participants</span>
-                    <span className="font-medium">{calculateTotalParticipants()}</span>
-                  </div>
-                  {tripType === 'institute' && calculateTotalFaculty() > 0 && (
-                    <div className="flex justify-between text-muted-foreground text-xs">
-                      <span>incl. {calculateTotalFaculty()} faculty (not charged to client)</span>
-                    </div>
-                  )}
-                  {(tripType === 'institute' || tripType === 'commercial') && (formData.maleVXplorers + formData.femaleVXplorers + formData.commercialMaleVXplorers + formData.commercialFemaleVXplorers) > 0 && (
-                    <div className="flex justify-between text-muted-foreground text-xs">
-                      <span>incl. {formData.maleVXplorers + formData.femaleVXplorers + formData.commercialMaleVXplorers + formData.commercialFemaleVXplorers} VXplorers (not charged to client)</span>
-                    </div>
-                  )}
-                </div>
-                <div className="pt-2 border-t flex justify-between font-semibold">
-                  <span>Total Planner Cost</span>
-                  <span className="text-primary">
-                    {formatCurrency(calculateTotalParticipants() * tourPlannerCostPerPerson, tourPlannerCurrency)}
-                    {tourPlannerCurrency !== 'INR' && (
-                      <span className="text-sm font-normal text-muted-foreground ml-2">
-                        ({formatCurrency(calculateTotalParticipants() * tourPlannerCostPerPerson * getCurrencyRate(tourPlannerCurrency), 'INR')} INR)
-                      </span>
-                    )}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Optional notes */}
-            <div className="space-y-2">
-              <Label>Notes (Optional)</Label>
-              <Textarea
-                placeholder="e.g., Thomas Cook quote ref #TC2026-041, includes breakfast daily..."
-                value={tourPlannerNotes}
-                onChange={(e) => setTourPlannerNotes(e.target.value)}
-                rows={2}
-              />
-            </div>
-
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── SELF-PLANNED MODE: all detailed sections ── */}
-      {planningMode === 'self_planned' && (
-        <>
 
       {/* Transport - Flights */}
       <Card id="section-flights" className="shadow-card">
@@ -3718,20 +3572,7 @@ export default function CreateTrip() {
         </CardContent>
       </Card>
 
-      {/* Visa, Tips & Insurance Section Total */}
-      {(extras.visaTotalCostINR + extras.tipsTotalCostINR + extras.insuranceTotalCostINR) > 0 && (
-        <div className="flex items-center justify-between px-5 py-3 rounded-lg bg-primary/5 border border-primary/20">
-          <span className="text-sm font-medium text-muted-foreground">Visa, Tips & Insurance Total</span>
-          <span className="text-sm font-semibold text-primary">
-            {formatCurrency(extras.visaTotalCostINR + extras.tipsTotalCostINR + extras.insuranceTotalCostINR, 'INR')}
-          </span>
-        </div>
-      )}
-
-        </>
-      )}
-      
-      {/* Overheads — always visible in both modes (admin charges always apply) */}
+      {/* Overheads — always visible */}
       <Card id="section-overheads" className="shadow-card">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
@@ -4206,7 +4047,7 @@ export default function CreateTrip() {
         </div>{/* end max-w-7xl flex row */}
       </div>{/* end scrollable body */}
 
-      <TripSectionNavMobile planningMode={planningMode} />
+      <TripSectionNavMobile />
     </div>
   );
 }
