@@ -57,7 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Unable to verify user role' });
     }
 
-    if (userData.role !== 'admin') {
+    if (!['admin', 'superadmin'].includes(userData.role)) {
       return res.status(403).json({ error: 'Insufficient permissions. Admin access required.' });
     }
 
@@ -128,16 +128,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw dbError;
     }
 
-    return res.status(200).json({ 
-      success: true, 
+    return res.status(200).json({
+      success: true,
       user: dbData,
-      message: 'User created successfully' 
+      message: 'User created successfully'
     });
 
   } catch (error: any) {
     console.error('User creation error:', error);
-    return res.status(500).json({ 
-      error: error.message || 'Failed to create user' 
+    return res.status(500).json({
+      error: error.message || 'Failed to create user'
     });
   }
 }
