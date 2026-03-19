@@ -69,8 +69,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Validate role
-    if (!['admin', 'manager'].includes(role)) {
-      return res.status(400).json({ error: 'Invalid role. Must be either "admin" or "manager"' });
+    if (!['superadmin', 'admin', 'manager'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be superadmin, admin, or manager' });
     }
 
     // Validate password strength
