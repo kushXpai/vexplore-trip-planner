@@ -1092,35 +1092,45 @@ function TransportSection({ trip, currencies }: { trip: Trip; currencies: Curren
           <CardContent>
             <div className="space-y-4">
               {buses.map((bus, index) => (
-                <div key={bus.id} className="p-4 border rounded-lg">
-                  <div className="flex justify-between items-start mb-3">
+                <div key={bus.id} className="p-4 border rounded-lg space-y-4">
+                  <div className="flex justify-between items-start">
                     <div>
-                      <h4 className="font-semibold">{bus.name}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Capacity: {bus.seatingCapacity} seats
-                      </p>
+                      <h4 className="font-semibold text-base">{bus.name}</h4>
+                      <p className="text-sm text-muted-foreground">{bus.seatingCapacity} seats per bus</p>
                     </div>
                     <div className="text-right">
                       <p className="font-semibold">{formatCurrencyWithSymbol(bus.totalCost, bus.currency, currencies)}</p>
-                      <p className="text-sm text-muted-foreground">{formatINR(bus.totalCostINR)}</p>
+                      <p className="text-xs text-muted-foreground">{formatINR(bus.totalCostINR)}</p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Quantity:</span>
-                      <span className="ml-2 font-medium">{bus.quantity}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Days:</span>
-                      <span className="ml-2 font-medium">{bus.numberOfDays}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Cost/Bus:</span>
-                      <span className="ml-2 font-medium">{formatCurrencyWithSymbol(bus.costPerBus, bus.currency, currencies)}</span>
+
+                  {/* Cost breakdown table */}
+                  <div className="border border-border/50 rounded-md overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-muted/40 text-left">
+                          <th className="px-3 py-2 font-semibold">Buses</th>
+                          <th className="px-3 py-2 font-semibold text-right">Days</th>
+                          <th className="px-3 py-2 font-semibold text-right">Cost / Bus / Day</th>
+                          <th className="px-3 py-2 font-semibold text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td className="px-3 py-2 font-medium">{bus.quantity} bus{bus.quantity !== 1 ? 'es' : ''}</td>
+                          <td className="px-3 py-2 text-right">{bus.numberOfDays}</td>
+                          <td className="px-3 py-2 text-right">{formatCurrencyWithSymbol(bus.costPerBus, bus.currency, currencies)}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{formatCurrencyWithSymbol(bus.totalCost, bus.currency, currencies)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div className="px-3 py-1.5 bg-muted/20 text-xs text-muted-foreground">
+                      Formula: {bus.quantity} bus{bus.quantity !== 1 ? 'es' : ''} × {bus.numberOfDays} day{bus.numberOfDays !== 1 ? 's' : ''} × {formatCurrencyWithSymbol(bus.costPerBus, bus.currency, currencies)}/bus
                     </div>
                   </div>
+
                   {bus.description && (
-                    <p className="text-sm text-muted-foreground mt-2">{bus.description}</p>
+                    <p className="text-sm text-muted-foreground italic">{bus.description}</p>
                   )}
                 </div>
               ))}
@@ -1141,31 +1151,46 @@ function TransportSection({ trip, currencies }: { trip: Trip; currencies: Curren
           <CardContent>
             <div className="space-y-4">
               {trains.map((train, index) => (
-                <div key={train.id} className="p-4 border rounded-lg">
-                  <div className="flex justify-between items-start mb-3">
+                <div key={train.id} className="p-4 border rounded-lg space-y-4">
+                  <div className="flex justify-between items-start">
                     <div>
-                      <h4 className="font-semibold">{train.name} - {train.trainNumber}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Class: {train.class}
-                      </p>
+                      <h4 className="font-semibold text-base">{train.name}{train.trainNumber ? ` · ${train.trainNumber}` : ''}</h4>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {train.class && <Badge variant="outline">{train.class}</Badge>}
+                        {train.timing && <Badge variant="outline">{train.timing}</Badge>}
+                      </div>
                     </div>
                     <div className="text-right">
                       <p className="font-semibold">{formatCurrencyWithSymbol(train.totalCost, train.currency, currencies)}</p>
-                      <p className="text-sm text-muted-foreground">{formatINR(train.totalCostINR)}</p>
+                      <p className="text-xs text-muted-foreground">{formatINR(train.totalCostINR)}</p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Timing:</span>
-                      <span className="ml-2 font-medium">{train.timing}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Cost/Person:</span>
-                      <span className="ml-2 font-medium">{formatCurrencyWithSymbol(train.costPerPerson, train.currency, currencies)}</span>
+
+                  {/* Cost breakdown */}
+                  <div className="border border-border/50 rounded-md overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-muted/40 text-left">
+                          <th className="px-3 py-2 font-semibold">Participants</th>
+                          <th className="px-3 py-2 font-semibold text-right">Cost / Person</th>
+                          <th className="px-3 py-2 font-semibold text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td className="px-3 py-2 font-medium">{trip.participants.totalParticipants}</td>
+                          <td className="px-3 py-2 text-right">{formatCurrencyWithSymbol(train.costPerPerson, train.currency, currencies)}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{formatCurrencyWithSymbol(train.totalCost, train.currency, currencies)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div className="px-3 py-1.5 bg-muted/20 text-xs text-muted-foreground">
+                      Formula: {trip.participants.totalParticipants} participants × {formatCurrencyWithSymbol(train.costPerPerson, train.currency, currencies)}/person
                     </div>
                   </div>
+
                   {train.description && (
-                    <p className="text-sm text-muted-foreground mt-2">{train.description}</p>
+                    <p className="text-sm text-muted-foreground italic">{train.description}</p>
                   )}
                 </div>
               ))}
@@ -1348,38 +1373,74 @@ function MealsSection({ trip, currencies }: { trip: Trip; currencies: Currency[]
                   <p className="text-sm text-muted-foreground">{formatINR(meal.totalCostINR)}</p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div className="p-3 bg-muted/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground">Breakfast/Person</p>
-                  <p className="font-semibold">
-                    {formatCurrencyWithSymbol(meal.breakfastCostPerPerson, meal.currency, currencies)}
-                  </p>
-                  {meal.freeBreakfast > 0 && (
-                    <p className="text-xs text-success">{meal.freeBreakfast} free</p>
-                  )}
-                </div>
-                <div className="p-3 bg-muted/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground">Lunch/Person</p>
-                  <p className="font-semibold">
-                    {formatCurrencyWithSymbol(meal.lunchCostPerPerson, meal.currency, currencies)}
-                  </p>
-                  {meal.freeLunch > 0 && (
-                    <p className="text-xs text-success">{meal.freeLunch} free</p>
-                  )}
-                </div>
-                <div className="p-3 bg-muted/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground">Dinner/Person</p>
-                  <p className="font-semibold">
-                    {formatCurrencyWithSymbol(meal.dinnerCostPerPerson, meal.currency, currencies)}
-                  </p>
-                  {meal.freeDinner > 0 && (
-                    <p className="text-xs text-success">{meal.freeDinner} free</p>
-                  )}
-                </div>
-                <div className="p-3 bg-muted/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground">Participants</p>
-                  <p className="font-semibold">{meal.totalParticipants}</p>
-                </div>
+              {/* Detailed meal cost table */}
+              <div className="border border-border/50 rounded-md overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-muted/40 text-left">
+                      <th className="px-3 py-2 font-semibold">Meal</th>
+                      <th className="px-3 py-2 font-semibold text-right">Cost / Person</th>
+                      <th className="px-3 py-2 font-semibold text-right">Nights</th>
+                      <th className="px-3 py-2 font-semibold text-right">Participants</th>
+                      <th className="px-3 py-2 font-semibold text-right">Free</th>
+                      <th className="px-3 py-2 font-semibold text-right">Billable Nights</th>
+                      <th className="px-3 py-2 font-semibold text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/30">
+                    {meal.breakfastCostPerPerson > 0 && (() => {
+                      const billable = Math.max(0, meal.numberOfNights - meal.freeBreakfast);
+                      const total = meal.breakfastCostPerPerson * billable * meal.totalParticipants;
+                      return (
+                        <tr key="breakfast">
+                          <td className="px-3 py-2 font-medium">Breakfast</td>
+                          <td className="px-3 py-2 text-right">{formatCurrencyWithSymbol(meal.breakfastCostPerPerson, meal.currency, currencies)}</td>
+                          <td className="px-3 py-2 text-right">{meal.numberOfNights}</td>
+                          <td className="px-3 py-2 text-right">{meal.totalParticipants}</td>
+                          <td className="px-3 py-2 text-right text-success">{meal.freeBreakfast > 0 ? meal.freeBreakfast : '—'}</td>
+                          <td className="px-3 py-2 text-right">{billable}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{formatCurrencyWithSymbol(total, meal.currency, currencies)}</td>
+                        </tr>
+                      );
+                    })()}
+                    {meal.lunchCostPerPerson > 0 && (() => {
+                      const billable = Math.max(0, meal.numberOfNights - meal.freeLunch);
+                      const total = meal.lunchCostPerPerson * billable * meal.totalParticipants;
+                      return (
+                        <tr key="lunch">
+                          <td className="px-3 py-2 font-medium">Lunch</td>
+                          <td className="px-3 py-2 text-right">{formatCurrencyWithSymbol(meal.lunchCostPerPerson, meal.currency, currencies)}</td>
+                          <td className="px-3 py-2 text-right">{meal.numberOfNights}</td>
+                          <td className="px-3 py-2 text-right">{meal.totalParticipants}</td>
+                          <td className="px-3 py-2 text-right text-success">{meal.freeLunch > 0 ? meal.freeLunch : '—'}</td>
+                          <td className="px-3 py-2 text-right">{billable}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{formatCurrencyWithSymbol(total, meal.currency, currencies)}</td>
+                        </tr>
+                      );
+                    })()}
+                    {meal.dinnerCostPerPerson > 0 && (() => {
+                      const billable = Math.max(0, meal.numberOfNights - meal.freeDinner);
+                      const total = meal.dinnerCostPerPerson * billable * meal.totalParticipants;
+                      return (
+                        <tr key="dinner">
+                          <td className="px-3 py-2 font-medium">Dinner</td>
+                          <td className="px-3 py-2 text-right">{formatCurrencyWithSymbol(meal.dinnerCostPerPerson, meal.currency, currencies)}</td>
+                          <td className="px-3 py-2 text-right">{meal.numberOfNights}</td>
+                          <td className="px-3 py-2 text-right">{meal.totalParticipants}</td>
+                          <td className="px-3 py-2 text-right text-success">{meal.freeDinner > 0 ? meal.freeDinner : '—'}</td>
+                          <td className="px-3 py-2 text-right">{billable}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{formatCurrencyWithSymbol(total, meal.currency, currencies)}</td>
+                        </tr>
+                      );
+                    })()}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-muted/30 border-t-2 border-border">
+                      <td colSpan={6} className="px-3 py-2 font-semibold text-right">Hotel Total</td>
+                      <td className="px-3 py-2 text-right font-bold text-primary">{formatCurrencyWithSymbol(meal.totalCost, meal.currency, currencies)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             </div>
           ))}
@@ -1539,17 +1600,50 @@ function ActivitiesSection({ trip, currencies }: { trip: Trip; currencies: Curre
                   <p className="text-sm text-muted-foreground">{formatINR(activity.totalCostINR)}</p>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-4 text-sm">
-                <span>Entry: {formatCurrencyWithSymbol(activity.entryCost, activity.currency, currencies)}</span>
-                {activity.transportCost > 0 && (
-                  <span>Transport: {formatCurrencyWithSymbol(activity.transportCost, activity.currency, currencies)}</span>
-                )}
-                {activity.guideCost > 0 && (
-                  <span>Guide: {formatCurrencyWithSymbol(activity.guideCost, activity.currency, currencies)}</span>
-                )}
+              {/* Cost breakdown table */}
+              <div className="border border-border/50 rounded-md overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-muted/40 text-left">
+                      <th className="px-3 py-2 font-semibold">Cost Type</th>
+                      <th className="px-3 py-2 font-semibold text-right">Amount</th>
+                      <th className="px-3 py-2 font-semibold text-right">In INR</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/30">
+                    {activity.entryCost > 0 && (
+                      <tr>
+                        <td className="px-3 py-2 font-medium">Entry / Ticket</td>
+                        <td className="px-3 py-2 text-right">{formatCurrencyWithSymbol(activity.entryCost, activity.currency, currencies)}</td>
+                        <td className="px-3 py-2 text-right text-muted-foreground">—</td>
+                      </tr>
+                    )}
+                    {activity.transportCost > 0 && (
+                      <tr>
+                        <td className="px-3 py-2 font-medium">Local Transport</td>
+                        <td className="px-3 py-2 text-right">{formatCurrencyWithSymbol(activity.transportCost, activity.currency, currencies)}</td>
+                        <td className="px-3 py-2 text-right text-muted-foreground">—</td>
+                      </tr>
+                    )}
+                    {activity.guideCost > 0 && (
+                      <tr>
+                        <td className="px-3 py-2 font-medium">Guide</td>
+                        <td className="px-3 py-2 text-right">{formatCurrencyWithSymbol(activity.guideCost, activity.currency, currencies)}</td>
+                        <td className="px-3 py-2 text-right text-muted-foreground">—</td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-muted/30 border-t-2 border-border">
+                      <td className="px-3 py-2 font-semibold">Total</td>
+                      <td className="px-3 py-2 text-right font-bold text-primary">{formatCurrencyWithSymbol(activity.totalCost, activity.currency, currencies)}</td>
+                      <td className="px-3 py-2 text-right font-semibold">{formatINR(activity.totalCostINR)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
               {activity.description && (
-                <p className="text-sm text-muted-foreground mt-2">{activity.description}</p>
+                <p className="text-sm text-muted-foreground italic mt-1">{activity.description}</p>
               )}
             </div>
           ))}
@@ -1577,11 +1671,19 @@ function OverheadsSection({ trip, currencies }: { trip: Trip; currencies: Curren
             <p className="text-sm font-semibold mb-3">Client-Visible Overheads:</p>
             <div className="space-y-2">
               {visibleOverheads.map((overhead) => (
-                <div key={overhead.id} className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                  <span className="font-medium">{overhead.name}</span>
-                  <div className="text-right">
-                    <p className="font-semibold">{formatCurrencyWithSymbol(overhead.totalCost, overhead.currency, currencies)}</p>
-                    <p className="text-xs text-muted-foreground">{formatINR(overhead.totalCostINR)}</p>
+                <div key={overhead.id} className="border border-border/50 rounded-md overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 bg-muted/40">
+                    <span className="text-sm font-semibold">{overhead.name}</span>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-primary">{formatCurrencyWithSymbol(overhead.totalCost, overhead.currency, currencies)}</p>
+                      <p className="text-xs text-muted-foreground">{formatINR(overhead.totalCostINR)}</p>
+                    </div>
+                  </div>
+                  <div className="px-3 py-1.5 text-xs text-muted-foreground bg-muted/10">
+                    {overhead.costType === 'per_person'
+                      ? <>Formula: {trip.participants.totalParticipants} participants × {formatCurrencyWithSymbol(overhead.amountPerParticipant, overhead.currency, currencies)}/person</>
+                      : <>Lump sum: {formatCurrencyWithSymbol(overhead.amountPerParticipant, overhead.currency, currencies)}</>
+                    }
                   </div>
                 </div>
               ))}
@@ -1594,11 +1696,19 @@ function OverheadsSection({ trip, currencies }: { trip: Trip; currencies: Curren
             <p className="text-sm font-semibold mb-3 text-warning">Hidden Overheads (Admin Only):</p>
             <div className="space-y-2">
               {hiddenOverheads.map((overhead) => (
-                <div key={overhead.id} className="flex justify-between items-center p-3 bg-warning/5 border border-warning/20 rounded-lg">
-                  <span className="font-medium">{overhead.name}</span>
-                  <div className="text-right">
-                    <p className="font-semibold">{formatCurrencyWithSymbol(overhead.totalCost, overhead.currency, currencies)}</p>
-                    <p className="text-xs text-muted-foreground">{formatINR(overhead.totalCostINR)}</p>
+                <div key={overhead.id} className="border border-warning/30 rounded-md overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 bg-warning/10">
+                    <span className="text-sm font-semibold">{overhead.name}</span>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-primary">{formatCurrencyWithSymbol(overhead.totalCost, overhead.currency, currencies)}</p>
+                      <p className="text-xs text-muted-foreground">{formatINR(overhead.totalCostINR)}</p>
+                    </div>
+                  </div>
+                  <div className="px-3 py-1.5 text-xs text-muted-foreground bg-warning/5">
+                    {overhead.costType === 'per_person'
+                      ? <>Formula: {trip.participants.totalParticipants} participants × {formatCurrencyWithSymbol(overhead.amountPerParticipant, overhead.currency, currencies)}/person</>
+                      : <>Lump sum: {formatCurrencyWithSymbol(overhead.amountPerParticipant, overhead.currency, currencies)}</>
+                    }
                   </div>
                 </div>
               ))}
