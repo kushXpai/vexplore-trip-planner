@@ -114,7 +114,6 @@ export default function TripDetail() {
           trip_activities (*),
           trip_overheads (*),
           trip_extras (*),
-          trip_tour_planner (*),
           post_trip_analysis (*)
         `)
         .eq('id', id)
@@ -236,6 +235,7 @@ export default function TripDetail() {
             totalRooms: a.total_rooms ?? 0,
             totalCost: a.total_cost ?? 0,
             totalCostINR: a.total_cost_inr ?? 0,
+            driverRoom: a.driver_room ?? false,
             roomAllocation: a.room_allocation ?? {
               boysRooms: 0,
               girlsRooms: 0,
@@ -316,21 +316,6 @@ export default function TripDetail() {
               insuranceCurrency: extrasData.insurance_currency ?? 'INR',
               insuranceTotalCost: extrasData.insurance_total_cost ?? 0,
               insuranceTotalCostINR: extrasData.insurance_total_cost_inr ?? 0,
-            } : undefined;
-          })(),
-
-          // Tour planner details (only present when planning_mode === 'tour_planner')
-          tourPlanner: (() => {
-            const tp = Array.isArray(data.trip_tour_planner)
-              ? data.trip_tour_planner[0]
-              : data.trip_tour_planner;
-            return tp ? {
-              costPerPerson: tp.cost_per_person ?? 0,
-              currency: tp.currency ?? 'INR',
-              totalCost: tp.total_cost ?? 0,
-              totalCostINR: tp.total_cost_inr ?? 0,
-              billableParticipants: tp.billable_participants ?? 0,
-              notes: tp.notes ?? undefined,
             } : undefined;
           })(),
 
@@ -963,43 +948,130 @@ function TransportSection({ trip, currencies }: { trip: Trip; currencies: Curren
           <CardContent>
             <div className="space-y-4">
               {flights.map((flight, index) => (
-                <div key={flight.id} className="p-4 border rounded-lg">
-                  <div className="flex justify-between items-start mb-3">
+                <div key={flight.id} className="p-4 border rounded-lg space-y-4">
+
+                  {/* Header — airline, route, total cost */}
+                  <div className="flex justify-between items-start">
                     <div>
-                      <h4 className="font-semibold">{flight.airline} - {flight.flightNumber}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {flight.from} → {flight.to}
-                      </p>
+                      <h4 className="font-semibold text-base">{flight.airline}{flight.flightNumber ? ` · ${flight.flightNumber}` : ''}</h4>
+                      <p className="text-sm text-muted-foreground font-medium">{flight.from} → {flight.to}</p>
                     </div>
                     <div className="text-right">
                       <p className="font-semibold">{formatCurrencyWithSymbol(flight.totalCost, flight.currency, currencies)}</p>
-                      <p className="text-sm text-muted-foreground">{formatINR(flight.totalCostINR)}</p>
+                      <p className="text-xs text-muted-foreground">{formatINR(flight.totalCostINR)}</p>
                     </div>
                   </div>
+
+                  {/* Departure / Arrival */}
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <span className="text-muted-foreground">Departure:</span>
-                      <span className="ml-2 font-medium">{flight.departureTime}</span>
+                      <span className="ml-2 font-medium">{flight.departureTime || '—'}</span>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Arrival:</span>
-                      <span className="ml-2 font-medium">{flight.arrivalTime}</span>
+                      <span className="ml-2 font-medium">{flight.arrivalTime || '—'}</span>
                     </div>
                   </div>
+
+                  {/* Classes breakdown */}
                   {flight.classes && flight.classes.length > 0 && (
-                    <div className="mt-2">
-                      <p className="text-xs text-muted-foreground font-semibold mb-1">Classes:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {flight.classes.map((cls, idx) => (
-                          <span key={idx} className="text-xs bg-muted/40 rounded px-2 py-1">
-                            {cls.class} × {cls.passengerCount} — {formatCurrencyWithSymbol(cls.costPerPerson, flight.currency, currencies)}/person
-                          </span>
-                        ))}
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Seat Classes</p>
+                      <div className="border border-border/50 rounded-md overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-muted/40 text-left">
+                              <th className="px-3 py-2 font-semibold">Class</th>
+                              <th className="px-3 py-2 font-semibold text-right">Seats</th>
+                              <th className="px-3 py-2 font-semibold text-right">Cost / Seat</th>
+                              <th className="px-3 py-2 font-semibold text-right">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/30">
+                            {flight.classes.map((cls, idx) => {
+                              const classTotal = cls.passengerCount * cls.costPerPerson;
+                              return (
+                                <tr key={idx}>
+                                  <td className="px-3 py-2 font-medium capitalize">{cls.class.replace('_', ' ')}</td>
+                                  <td className="px-3 py-2 text-right">{cls.passengerCount}</td>
+                                  <td className="px-3 py-2 text-right">{formatCurrencyWithSymbol(cls.costPerPerson, flight.currency, currencies)}</td>
+                                  <td className="px-3 py-2 text-right font-semibold">{formatCurrencyWithSymbol(classTotal, flight.currency, currencies)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   )}
+
+                  {/* Seat Upgrades */}
+                  {flight.seatUpgrades && flight.seatUpgrades.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Seat Upgrades</p>
+                      <div className="border border-border/50 rounded-md overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-muted/40 text-left">
+                              <th className="px-3 py-2 font-semibold">Upgrade</th>
+                              <th className="px-3 py-2 font-semibold text-right">Seats</th>
+                              <th className="px-3 py-2 font-semibold text-right">Cost / Seat</th>
+                              <th className="px-3 py-2 font-semibold text-right">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/30">
+                            {flight.seatUpgrades.map((su, idx) => {
+                              const upgradeTotal = su.seatCount * su.costPerSeat;
+                              return (
+                                <tr key={idx}>
+                                  <td className="px-3 py-2 font-medium">{su.label}</td>
+                                  <td className="px-3 py-2 text-right">{su.seatCount}</td>
+                                  <td className="px-3 py-2 text-right">{formatCurrencyWithSymbol(su.costPerSeat, flight.currency, currencies)}</td>
+                                  <td className="px-3 py-2 text-right font-semibold">{formatCurrencyWithSymbol(upgradeTotal, flight.currency, currencies)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Meal Upgrades */}
+                  {flight.mealUpgrades && flight.mealUpgrades.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Meal Upgrades</p>
+                      <div className="border border-border/50 rounded-md overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-muted/40 text-left">
+                              <th className="px-3 py-2 font-semibold">Meal</th>
+                              <th className="px-3 py-2 font-semibold text-right">Count</th>
+                              <th className="px-3 py-2 font-semibold text-right">Cost / Meal</th>
+                              <th className="px-3 py-2 font-semibold text-right">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/30">
+                            {flight.mealUpgrades.map((mu, idx) => {
+                              const mealTotal = mu.mealCount * mu.costPerMeal;
+                              return (
+                                <tr key={idx}>
+                                  <td className="px-3 py-2 font-medium">{mu.label}</td>
+                                  <td className="px-3 py-2 text-right">{mu.mealCount}</td>
+                                  <td className="px-3 py-2 text-right">{formatCurrencyWithSymbol(mu.costPerMeal, flight.currency, currencies)}</td>
+                                  <td className="px-3 py-2 text-right font-semibold">{formatCurrencyWithSymbol(mealTotal, flight.currency, currencies)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
                   {flight.description && (
-                    <p className="text-sm text-muted-foreground mt-2">{flight.description}</p>
+                    <p className="text-sm text-muted-foreground italic">{flight.description}</p>
                   )}
                 </div>
               ))}
@@ -1125,6 +1197,7 @@ function AccommodationSection({ trip, currencies }: { trip: Trip; currencies: Cu
                     <Badge variant="outline">{hotel.city}</Badge>
                     <Badge variant="outline">{hotel.numberOfNights} {hotel.numberOfNights === 1 ? 'Night' : 'Nights'}</Badge>
                     {hotel.breakfastIncluded && <Badge variant="outline">Breakfast Included</Badge>}
+                    {hotel.driverRoom && <Badge variant="outline">Driver Room</Badge>}
                   </div>
                 </div>
                 <div className="text-right">
@@ -1148,88 +1221,73 @@ function AccommodationSection({ trip, currencies }: { trip: Trip; currencies: Cu
                 </div>
               </div>
 
-              {/* Room Allocation Summary */}
+              {/* Room Allocation — detailed per-member room type breakdown */}
               <div className="p-3 bg-muted/20 rounded-lg">
-                <p className="text-sm font-semibold mb-2">Room Allocation:</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                  {trip.tripType === 'institute' ? (
-                    <>
-                      {hotel.roomAllocation.boysRooms > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Boys:</span>
-                          <span className="ml-2 font-medium">{hotel.roomAllocation.boysRooms} rooms</span>
+                <p className="text-sm font-semibold mb-3">Room Allocation:</p>
+                {(() => {
+                  const alloc = hotel.roomAllocation;
+                  const breakdown = alloc.breakdown;
+                  const groups = trip.tripType === 'institute'
+                    ? [
+                        { label: 'Boys',             rooms: alloc.boysRooms,                       bd: breakdown?.boys },
+                        { label: 'Girls',            rooms: alloc.girlsRooms,                      bd: breakdown?.girls },
+                        { label: 'Male Faculty',     rooms: alloc.maleFacultyRooms,                bd: breakdown?.maleFaculty },
+                        { label: 'Female Faculty',   rooms: alloc.femaleFacultyRooms,              bd: breakdown?.femaleFaculty },
+                        { label: 'Male VXplorers',   rooms: alloc.maleVXplorerRooms,               bd: breakdown?.maleVXplorers },
+                        { label: 'Female VXplorers', rooms: alloc.femaleVXplorerRooms,             bd: breakdown?.femaleVXplorers },
+                      ]
+                    : [
+                        { label: 'Male',             rooms: alloc.commercialMaleRooms,             bd: breakdown?.commercialMale },
+                        { label: 'Female',           rooms: alloc.commercialFemaleRooms,           bd: breakdown?.commercialFemale },
+                        { label: 'Other',            rooms: alloc.commercialOtherRooms,            bd: breakdown?.commercialOther },
+                        { label: 'Male VXplorers',   rooms: alloc.commercialMaleVXplorerRooms,     bd: breakdown?.commercialMaleVXplorers },
+                        { label: 'Female VXplorers', rooms: alloc.commercialFemaleVXplorerRooms,   bd: breakdown?.commercialFemaleVXplorers },
+                      ];
+                  const activeGroups = groups.filter(g => g.rooms > 0);
+                  return (
+                    <div className="space-y-2">
+                      {activeGroups.map((group, gi) => (
+                        <div key={gi} className="border border-border/50 rounded-md overflow-hidden">
+                          <div className="flex items-center justify-between px-3 py-2 bg-muted/40">
+                            <span className="text-sm font-semibold">{group.label}</span>
+                            <span className="text-xs font-medium text-primary">{group.rooms} room{group.rooms !== 1 ? 's' : ''}</span>
+                          </div>
+                          {group.bd && group.bd.length > 0 ? (
+                            <div className="divide-y divide-border/30">
+                              {group.bd.map((rt, ri) => (
+                                <div key={ri} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium">{rt.roomType}</span>
+                                    <span className="text-muted-foreground">({rt.capacityPerRoom} per room)</span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-muted-foreground">{rt.numberOfRooms} room{rt.numberOfRooms !== 1 ? 's' : ''}</span>
+                                    <span className="text-muted-foreground">· {rt.peopleAccommodated} pax</span>
+                                    <span className="font-medium">{formatCurrencyWithSymbol(rt.costPerRoom * rt.numberOfRooms, hotel.currency, currencies)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="px-3 py-1.5 text-xs text-muted-foreground italic">No room-type breakdown available</p>
+                          )}
+                        </div>
+                      ))}
+                      {hotel.driverRoom && (
+                        <div className="border border-border/50 rounded-md overflow-hidden">
+                          <div className="flex items-center justify-between px-3 py-2 bg-muted/40">
+                            <span className="text-sm font-semibold">Driver</span>
+                            <span className="text-xs font-medium text-primary">1 room</span>
+                          </div>
                         </div>
                       )}
-                      {hotel.roomAllocation.girlsRooms > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Girls:</span>
-                          <span className="ml-2 font-medium">{hotel.roomAllocation.girlsRooms} rooms</span>
-                        </div>
-                      )}
-                      {hotel.roomAllocation.maleFacultyRooms > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Male Faculty:</span>
-                          <span className="ml-2 font-medium">{hotel.roomAllocation.maleFacultyRooms} rooms</span>
-                        </div>
-                      )}
-                      {hotel.roomAllocation.femaleFacultyRooms > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Female Faculty:</span>
-                          <span className="ml-2 font-medium">{hotel.roomAllocation.femaleFacultyRooms} rooms</span>
-                        </div>
-                      )}
-                      {hotel.roomAllocation.maleVXplorerRooms > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Male VXplorers:</span>
-                          <span className="ml-2 font-medium">{hotel.roomAllocation.maleVXplorerRooms} rooms</span>
-                        </div>
-                      )}
-                      {hotel.roomAllocation.femaleVXplorerRooms > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Female VXplorers:</span>
-                          <span className="ml-2 font-medium">{hotel.roomAllocation.femaleVXplorerRooms} rooms</span>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {hotel.roomAllocation.commercialMaleRooms > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Male:</span>
-                          <span className="ml-2 font-medium">{hotel.roomAllocation.commercialMaleRooms} rooms</span>
-                        </div>
-                      )}
-                      {hotel.roomAllocation.commercialFemaleRooms > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Female:</span>
-                          <span className="ml-2 font-medium">{hotel.roomAllocation.commercialFemaleRooms} rooms</span>
-                        </div>
-                      )}
-                      {hotel.roomAllocation.commercialOtherRooms > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Other:</span>
-                          <span className="ml-2 font-medium">{hotel.roomAllocation.commercialOtherRooms} rooms</span>
-                        </div>
-                      )}
-                      {hotel.roomAllocation.commercialMaleVXplorerRooms > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Male VXplorers:</span>
-                          <span className="ml-2 font-medium">{hotel.roomAllocation.commercialMaleVXplorerRooms} rooms</span>
-                        </div>
-                      )}
-                      {hotel.roomAllocation.commercialFemaleVXplorerRooms > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Female VXplorers:</span>
-                          <span className="ml-2 font-medium">{hotel.roomAllocation.commercialFemaleVXplorerRooms} rooms</span>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  <div className="col-span-2 md:col-span-1">
-                    <span className="text-muted-foreground">Total:</span>
-                    <span className="ml-2 font-bold text-primary">{hotel.roomAllocation.totalRooms} rooms</span>
-                  </div>
-                </div>
+                      <div className="flex justify-between items-center pt-2 border-t border-border/50 text-sm">
+                        <span className="text-muted-foreground">Total Rooms</span>
+                        <span className="font-bold text-primary">{alloc.totalRooms + (hotel.driverRoom ? 1 : 0)} rooms</span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           ))}
