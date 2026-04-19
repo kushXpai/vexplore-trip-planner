@@ -176,6 +176,19 @@ export default function CreateTrip() {
 
   const [packageOccupancies, setPackageOccupancies] = useState<PackageOccupancyRow[]>([]);
 
+  useEffect(() => {
+  if (tripCategory === 'domestic') {
+    const india = countries.find(c => c.code === 'IN');
+    if (india) {
+      setSelectedCountryForAdd(india.id);
+      setSelectedCityForAdd('');
+    }
+  } else {
+    setSelectedCountryForAdd('');
+    setSelectedCityForAdd('');
+  }
+}, [tripCategory, countries]);
+
   // Load trip data when editing
   useEffect(() => {
     if (editId && countries.length > 0 && cities.length > 0) {
