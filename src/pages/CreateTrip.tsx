@@ -1646,7 +1646,19 @@ export default function CreateTrip() {
                       type="button"
                       variant="outline"
                       className="w-full h-10"
-                      onClick={() => setShowAddCityForm(true)}
+                      onClick={() => {
+                        // Auto-set fromDate to the day after the last city's toDate
+                        const lastCity = formData.cities[formData.cities.length - 1];
+                        if (lastCity?.toDate) {
+                          const nextDay = new Date(lastCity.toDate);
+                          nextDay.setDate(nextDay.getDate() + 1);
+                          setPendingCityFromDate(nextDay.toISOString().split('T')[0]);
+                        } else {
+                          setPendingCityFromDate('');
+                        }
+                        setPendingCityToDate('');
+                        setShowAddCityForm(true);
+                      }}
                     >
                       <Plus className="w-4 h-4 mr-2" /> Add City
                     </Button>
@@ -1723,6 +1735,15 @@ export default function CreateTrip() {
                               type="date"
                               className="h-9 text-sm"
                               value={pendingCityFromDate}
+                              min={(() => {
+                                const lastCity = formData.cities[formData.cities.length - 1];
+                                if (lastCity?.toDate) {
+                                  const nextDay = new Date(lastCity.toDate);
+                                  nextDay.setDate(nextDay.getDate() + 1);
+                                  return nextDay.toISOString().split('T')[0];
+                                }
+                                return undefined;
+                              })()}
                               max={pendingCityToDate || undefined}
                               onChange={(e) => setPendingCityFromDate(e.target.value)}
                             />
@@ -3974,6 +3995,22 @@ export default function CreateTrip() {
                     <span className="text-lg font-bold">Grand Total</span>
                     <span className="text-2xl font-bold text-primary">{formatCurrency(totals.grandTotal, 'INR')}</span>
                   </div>
+                  <div className="flex justify-between items-center">
+              <span className="font-semibold text-muted-foreground">
+                Cost per {tripType === 'institute' ? 'Student' : 'Participant'} (before tax)
+              </span>
+              <span className="text-xl font-semibold text-muted-foreground">
+                {formatCurrency(
+                  (() => {
+                    const denominator = tripType === 'institute'
+                      ? (formData.boys + formData.girls)
+                      : calculateTotalParticipants();
+                    return denominator > 0 ? totals.adminSubtotal / denominator : 0;
+                  })(),
+                  'INR'
+                )}
+              </span>
+            </div>
                   <div className="flex justify-between items-center">
               <span className="font-semibold text-muted-foreground">
                 Cost per {tripType === 'institute' ? 'Student' : 'Participant'}
