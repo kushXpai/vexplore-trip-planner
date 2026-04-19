@@ -1,6 +1,6 @@
 // src/services/masterDataService.ts
 import { supabase } from '@/supabase/client';
-import type { TaxRate } from '@/types/trip';
+import type { TaxRate, PackageOccupancyRow, TripPackageCost } from '@/types/trip';
 
 export interface Currency {
   id: string;
@@ -48,7 +48,10 @@ export interface Restaurant {
   updated_at?: string;
 }
 
-// Fetch all currencies
+// =====================================================
+// CURRENCIES
+// =====================================================
+
 export const fetchCurrencies = async () => {
   const { data, error } = await supabase
     .from('currencies')
@@ -63,7 +66,10 @@ export const fetchCurrencies = async () => {
   return { success: true, data, error: null };
 };
 
-// Fetch all countries
+// =====================================================
+// COUNTRIES
+// =====================================================
+
 export const fetchCountries = async () => {
   const { data, error } = await supabase
     .from('countries')
@@ -78,7 +84,10 @@ export const fetchCountries = async () => {
   return { success: true, data, error: null };
 };
 
-// Fetch all cities
+// =====================================================
+// CITIES
+// =====================================================
+
 export const fetchCities = async () => {
   const { data, error } = await supabase
     .from('cities')
@@ -93,7 +102,6 @@ export const fetchCities = async () => {
   return { success: true, data, error: null };
 };
 
-// Fetch cities by country
 export const fetchCitiesByCountry = async (countryId: string) => {
   const { data, error } = await supabase
     .from('cities')
@@ -109,7 +117,29 @@ export const fetchCitiesByCountry = async (countryId: string) => {
   return { success: true, data, error: null };
 };
 
-// Fetch all hotels
+export const fetchCitiesByCountries = async (countryIds: string[]) => {
+  if (!countryIds || countryIds.length === 0) {
+    return { success: true, data: [], error: null };
+  }
+
+  const { data, error } = await supabase
+    .from('cities')
+    .select('*')
+    .in('country_id', countryIds)
+    .order('name');
+
+  if (error) {
+    console.error('Error fetching cities by countries:', error);
+    return { success: false, data: null, error };
+  }
+
+  return { success: true, data, error: null };
+};
+
+// =====================================================
+// HOTELS
+// =====================================================
+
 export const fetchHotels = async () => {
   const { data, error } = await supabase
     .from('hotel')
@@ -124,7 +154,6 @@ export const fetchHotels = async () => {
   return { success: true, data, error: null };
 };
 
-// Fetch hotels by city
 export const fetchHotelsByCity = async (cityId: string) => {
   const { data, error } = await supabase
     .from('hotel')
@@ -140,7 +169,6 @@ export const fetchHotelsByCity = async (cityId: string) => {
   return { success: true, data, error: null };
 };
 
-// Fetch hotels by country
 export const fetchHotelsByCountry = async (countryId: string) => {
   const { data, error } = await supabase
     .from('hotel')
@@ -156,7 +184,6 @@ export const fetchHotelsByCountry = async (countryId: string) => {
   return { success: true, data, error: null };
 };
 
-// Add a new hotel to master data
 export const addHotel = async (hotel: {
   hotelname: string;
   countryid?: string;
@@ -185,10 +212,9 @@ export const addHotel = async (hotel: {
 };
 
 // =====================================================
-// RESTAURANT FUNCTIONS
+// RESTAURANTS
 // =====================================================
 
-// Fetch all restaurants
 export const fetchRestaurants = async () => {
   const { data, error } = await supabase
     .from('restaurants')
@@ -202,7 +228,6 @@ export const fetchRestaurants = async () => {
   return { success: true, data: data as Restaurant[], error: null };
 };
 
-// Fetch restaurants by city
 export const fetchRestaurantsByCity = async (cityId: string) => {
   const { data, error } = await supabase
     .from('restaurants')
@@ -217,7 +242,6 @@ export const fetchRestaurantsByCity = async (cityId: string) => {
   return { success: true, data: data as Restaurant[], error: null };
 };
 
-// Add a new restaurant to master data
 export const addRestaurant = async (restaurant: {
   name: string;
   city?: string;
@@ -246,28 +270,8 @@ export const addRestaurant = async (restaurant: {
   return { success: true, data: data as Restaurant, error: null };
 };
 
-// NEW: Fetch cities by multiple countries
-export const fetchCitiesByCountries = async (countryIds: string[]) => {
-  if (!countryIds || countryIds.length === 0) {
-    return { success: true, data: [], error: null };
-  }
-
-  const { data, error } = await supabase
-    .from('cities')
-    .select('*')
-    .in('country_id', countryIds)
-    .order('name');
-
-  if (error) {
-    console.error('Error fetching cities by countries:', error);
-    return { success: false, data: null, error };
-  }
-
-  return { success: true, data, error: null };
-};
-
 // =====================================================
-// TAX RATES FUNCTIONS - Using TaxRate type from trip.ts
+// TAX RATES
 // =====================================================
 
 /**
@@ -327,7 +331,10 @@ export const getCurrentTDSRate = async (): Promise<number> => {
   return data?.rate_percentage ?? 2;
 };
 
-// Helper functions
+// =====================================================
+// CURRENCY HELPERS
+// =====================================================
+
 export const getCurrencyRate = (currencies: Currency[], code: string): number => {
   const currency = currencies.find(c => c.code === code);
   return currency?.rate_to_inr ?? 1;
@@ -343,31 +350,38 @@ export const formatCurrency = (currencies: Currency[], amount: number, currencyC
   return `${symbol}${amount.toLocaleString('en-IN')}`;
 };
 
-// UPDATED: Now accepts multiple countries and returns the first country's currency or INR
+// =====================================================
+// COUNTRY / CURRENCY HELPERS
+// =====================================================
+
+/**
+ * Returns the default currency for the first country in the list, or INR.
+ */
 export const getCountryCurrency = (countries: Country[], countryIds: string[]): string => {
-  if (!countryIds || countryIds.length === 0) {
-    return 'INR';
-  }
-  
+  if (!countryIds || countryIds.length === 0) return 'INR';
   const country = countries.find(c => c.id === countryIds[0]);
   return country?.default_currency ?? 'INR';
 };
 
-// NEW: Get currencies for multiple countries
+/**
+ * Returns an array of default currencies for the given country IDs.
+ */
 export const getCountriesCurrencies = (countries: Country[], countryIds: string[]): string[] => {
-  if (!countryIds || countryIds.length === 0) {
-    return ['INR'];
-  }
-  
+  if (!countryIds || countryIds.length === 0) return ['INR'];
+
   const currencies = countryIds
     .map(countryId => {
       const country = countries.find(c => c.id === countryId);
       return country?.default_currency ?? null;
     })
     .filter((currency): currency is string => currency !== null);
-  
+
   return currencies.length > 0 ? currencies : ['INR'];
 };
+
+// =====================================================
+// TAX CALCULATION HELPERS
+// =====================================================
 
 /**
  * Calculate GST amount
@@ -377,21 +391,24 @@ export const calculateGST = (subtotal: number, gstPercentage: number): number =>
 };
 
 /**
- * Calculate TCS amount - Only for international trips
+ * Calculate TCS amount — only for international trips
  */
 export const calculateTCS = (subtotalPlusGST: number, tcsPercentage: number): number => {
   return (subtotalPlusGST * tcsPercentage) / 100;
 };
 
 /**
- * Calculate grand total with GST and TCS
- * UPDATED: Now fetches current rates from database if not provided
- * @param subtotal - Total cost before taxes
- * @param profit - Profit amount
- * @param isInternational - Whether the trip is international
- * @param gstPercentage - GST percentage (optional, fetches from DB if not provided)
- * @param tcsPercentage - TCS percentage (optional, fetches from DB if not provided)
- * @returns Object with breakdown of costs
+ * Calculate the full grand total with GST, TCS, and optional TDS.
+ *
+ * Fetches current tax rates from the database when not explicitly provided.
+ *
+ * @param subtotal         - Total cost before profit
+ * @param profit           - Profit amount
+ * @param isInternational  - Whether the trip is international (TCS applies)
+ * @param isFTI            - Whether this is an FTI trip (TDS applies)
+ * @param gstPercentage    - Override GST %; fetched from DB if omitted
+ * @param tcsPercentage    - Override TCS %; fetched from DB if omitted
+ * @param tdsPercentage    - Override TDS %; fetched from DB if omitted
  */
 export const calculateGrandTotal = async (
   subtotal: number,
@@ -413,27 +430,27 @@ export const calculateGrandTotal = async (
   tcsPercentage: number;
   tdsPercentage: number;
 }> => {
-  // Fetch current rates from database if not provided
-  const actualGstPercentage = gstPercentage ?? await getCurrentGSTRate();
-  const actualTcsPercentage = tcsPercentage ?? await getCurrentTCSRate();
+  const actualGstPercentage = gstPercentage ?? (await getCurrentGSTRate());
+  const actualTcsPercentage = tcsPercentage ?? (await getCurrentTCSRate());
   const actualTdsPercentage = tdsPercentage ?? (isFTI ? await getCurrentTDSRate() : 0);
 
   // Admin subtotal = base subtotal + profit
   const adminSubtotal = subtotal + profit;
 
-  // Calculate GST on admin subtotal
+  // GST on admin subtotal
   const gstAmount = calculateGST(adminSubtotal, actualGstPercentage);
   const subtotalPlusGST = adminSubtotal + gstAmount;
 
-  // TCS only applies to international trips
+  // TCS only on international trips
   const tcsAmount = isInternational ? calculateTCS(subtotalPlusGST, actualTcsPercentage) : 0;
   const subtotalPlusGSTPlusTCS = subtotalPlusGST + tcsAmount;
 
-  // TDS only applies to FTI trips (deducted at end)
+  // TDS only on FTI trips — deducted at the end
   // Domestic FTI: TDS on (subtotal + GST)
   // International FTI: TDS on (subtotal + GST + TCS)
-  const tdsBaseAmount = isFTI ? subtotalPlusGSTPlusTCS : 0;
-  const tdsAmount = isFTI ? (tdsBaseAmount * actualTdsPercentage) / 100 : 0;
+  const tdsAmount = isFTI
+    ? (subtotalPlusGSTPlusTCS * actualTdsPercentage) / 100
+    : 0;
 
   const grandTotal = subtotalPlusGSTPlusTCS - tdsAmount;
 
@@ -450,3 +467,74 @@ export const calculateGrandTotal = async (
     tdsPercentage: actualTdsPercentage,
   };
 };
+
+// =====================================================
+// PACKAGE COST UTILITIES  (Tour Planner mode)
+// =====================================================
+
+/**
+ * Recalculate the derived fields for a single occupancy row.
+ * Call this every time occupancySize, costPerRoom, or roomCount changes.
+ */
+export const calcOccupancyRow = (
+  row: Omit<PackageOccupancyRow, 'peopleCovered' | 'rowCost'>
+): PackageOccupancyRow => ({
+  ...row,
+  peopleCovered: row.occupancySize * row.roomCount,
+  rowCost: row.costPerRoom * row.roomCount,
+});
+
+/**
+ * Aggregate all occupancy rows into a TripPackageCost summary.
+ *
+ * @param rows         - Array of fully-calculated PackageOccupancyRows
+ * @param currencyCode - The trip's default currency code
+ * @param currencies   - Full currency list (from fetchCurrencies)
+ */
+export const calcPackageCost = (
+  rows: PackageOccupancyRow[],
+  currencyCode: string,
+  currencies: Currency[]
+): TripPackageCost => {
+  const totalPeople  = rows.reduce((sum, r) => sum + r.peopleCovered, 0);
+  const totalCost    = rows.reduce((sum, r) => sum + r.rowCost, 0);
+  const totalCostINR = convertToINR(currencies, totalCost, currencyCode);
+  const costPerPerson = totalPeople > 0 ? totalCost / totalPeople : 0;
+
+  return { rows, totalPeople, totalCost, totalCostINR, costPerPerson };
+};
+
+/**
+ * Validate that the total people covered by all occupancy rows
+ * equals the trip's total participants.
+ *
+ * @returns { valid: true } on success, or { valid: false, message: string } on failure.
+ */
+export const validateOccupancyTotal = (
+  rows: PackageOccupancyRow[],
+  totalParticipants: number
+): { valid: boolean; message?: string } => {
+  const covered = rows.reduce((sum, r) => sum + r.peopleCovered, 0);
+
+  if (covered !== totalParticipants) {
+    return {
+      valid: false,
+      message: `People covered by occupancy rows (${covered}) must equal total participants (${totalParticipants}).`,
+    };
+  }
+
+  return { valid: true };
+};
+
+/**
+ * Build a blank occupancy row with sensible defaults.
+ * Pass a client-generated id (e.g. crypto.randomUUID()).
+ */
+export const createBlankOccupancyRow = (id: string): PackageOccupancyRow => ({
+  id,
+  occupancySize: 2,
+  costPerRoom: 0,
+  roomCount: 1,
+  peopleCovered: 2,   // 2 × 1
+  rowCost: 0,         // 0 × 1
+});

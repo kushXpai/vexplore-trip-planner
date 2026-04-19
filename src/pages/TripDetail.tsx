@@ -205,6 +205,7 @@ export default function TripDetail() {
               currency: b.currency ?? 'INR',
               numberOfDays: b.number_of_days ?? 0,
               quantity: b.quantity ?? 0,
+              costingMode: (b.costing_mode as 'per_day' | 'lump_sum') ?? 'per_day',
               description: b.description ?? '',
               totalCost: b.total_cost ?? 0,
               totalCostINR: b.total_cost_inr ?? 0,
@@ -1110,22 +1111,31 @@ function TransportSection({ trip, currencies }: { trip: Trip; currencies: Curren
                       <thead>
                         <tr className="bg-muted/40 text-left">
                           <th className="px-3 py-2 font-semibold">Buses</th>
-                          <th className="px-3 py-2 font-semibold text-right">Days</th>
-                          <th className="px-3 py-2 font-semibold text-right">Cost / Bus / Day</th>
+                          {(bus.costingMode ?? 'per_day') === 'per_day' && (
+                            <th className="px-3 py-2 font-semibold text-right">Days</th>
+                          )}
+                          <th className="px-3 py-2 font-semibold text-right">
+                            {(bus.costingMode ?? 'per_day') === 'lump_sum' ? 'Cost / Bus (Lump Sum)' : 'Cost / Bus / Day'}
+                          </th>
                           <th className="px-3 py-2 font-semibold text-right">Total</th>
                         </tr>
                       </thead>
                       <tbody>
                         <tr>
                           <td className="px-3 py-2 font-medium">{bus.quantity} bus{bus.quantity !== 1 ? 'es' : ''}</td>
-                          <td className="px-3 py-2 text-right">{bus.numberOfDays}</td>
+                          {(bus.costingMode ?? 'per_day') === 'per_day' && (
+                            <td className="px-3 py-2 text-right">{bus.numberOfDays}</td>
+                          )}
                           <td className="px-3 py-2 text-right">{formatCurrencyWithSymbol(bus.costPerBus, bus.currency, currencies)}</td>
                           <td className="px-3 py-2 text-right font-semibold">{formatCurrencyWithSymbol(bus.totalCost, bus.currency, currencies)}</td>
                         </tr>
                       </tbody>
                     </table>
                     <div className="px-3 py-1.5 bg-muted/20 text-xs text-muted-foreground">
-                      Formula: {bus.quantity} bus{bus.quantity !== 1 ? 'es' : ''} × {bus.numberOfDays} day{bus.numberOfDays !== 1 ? 's' : ''} × {formatCurrencyWithSymbol(bus.costPerBus, bus.currency, currencies)}/bus
+                      {(bus.costingMode ?? 'per_day') === 'lump_sum'
+                        ? `Formula: ${bus.quantity} bus${bus.quantity !== 1 ? 'es' : ''} × ${formatCurrencyWithSymbol(bus.costPerBus, bus.currency, currencies)} (lump sum)`
+                        : `Formula: ${bus.quantity} bus${bus.quantity !== 1 ? 'es' : ''} × ${bus.numberOfDays} day${bus.numberOfDays !== 1 ? 's' : ''} × ${formatCurrencyWithSymbol(bus.costPerBus, bus.currency, currencies)}/bus`
+                      }
                     </div>
                   </div>
 
@@ -1845,6 +1855,51 @@ function CostSummarySection({ trip }: { trip: Trip }) {
               </span>
               <span className="text-lg font-bold">{formatINR(trip.costPerParticipant)}</span>
             </div>
+
+            {/* Per Student / Participant Breakdown */}
+            {(() => {
+              const denominator = trip.tripType === 'institute'
+                ? trip.participants.totalStudents
+                : trip.participants.totalParticipants;
+              if (denominator === 0) return null;
+              const adminSubtotal = trip.subtotalBeforeTax + trip.profit;
+              const beforeTax = adminSubtotal / denominator;
+              const gstPer   = trip.gstAmount / denominator;
+              const tcsPer   = trip.tcsAmount / denominator;
+              const totalPer = trip.grandTotalINR / denominator;
+              return (
+                <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-3">
+                  <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                    Per {trip.tripType === 'institute' ? 'Student' : 'Participant'} Breakdown
+                    <span className="font-normal text-blue-700 dark:text-blue-300 ml-2 text-xs">
+                      ({denominator} {trip.tripType === 'institute' ? 'students' : 'participants'})
+                    </span>
+                  </p>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-blue-800 dark:text-blue-200">Cost before tax</span>
+                      <span className="font-semibold">{formatINR(beforeTax)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-800 dark:text-blue-200">GST ({trip.gstPercentage}%)</span>
+                      <span className="font-semibold">{formatINR(gstPer)}</span>
+                    </div>
+                    {trip.tripCategory === 'international' && (
+                      <div className="flex justify-between">
+                        <span className="text-blue-800 dark:text-blue-200">TCS ({trip.tcsPercentage}%)</span>
+                        <span className="font-semibold">{formatINR(tcsPer)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between pt-2 border-t border-blue-200 dark:border-blue-700">
+                      <span className="font-bold text-blue-900 dark:text-blue-100">
+                        Total per {trip.tripType === 'institute' ? 'student' : 'participant'}
+                      </span>
+                      <span className="font-bold text-blue-900 dark:text-blue-100">{formatINR(totalPer)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </CardContent>

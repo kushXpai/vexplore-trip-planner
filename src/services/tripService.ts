@@ -17,6 +17,7 @@ import type {
   FlightClassEntry,
   FlightSeatUpgrade,
   FlightMealUpgrade,
+  PackageOccupancyRow,
 } from '@/types/trip';
 
 /**
@@ -115,6 +116,7 @@ interface DbBus {
   currency: string;
   number_of_days: number;
   quantity: number;
+  costing_mode: 'per_day' | 'lump_sum';
   description: string;
   total_cost: number;
   total_cost_inr: number;
@@ -132,6 +134,15 @@ interface DbTrain {
   description: string;
   total_cost: number;
   total_cost_inr: number;
+}
+
+interface DbPackageOccupancy {
+  id?: string;
+  trip_id: string;
+  occupancy_size: number;
+  cost_per_room: number;
+  room_count: number;
+  row_cost: number;
 }
 
 interface DbAccommodation {
@@ -217,9 +228,9 @@ interface DbOverhead {
 }
 
 /**
- * Create a new trip with all related data
+ * Shared input shape for both createTrip and updateTrip
  */
-export async function createTrip(tripData: {
+interface TripInput {
   name: string;
   institution: string;
   tripCategory: TripCategory;
@@ -241,6 +252,12 @@ export async function createTrip(tripData: {
   activities: Activity[];
   overheads: Overhead[];
   extras?: TripExtras;
+  // Package cost (tour_planner mode only)
+  packageOccupancies?: PackageOccupancyRow[];
+  packageTotalCost?: number;
+  packageTotalCostINR?: number;
+  packageCostPerPerson?: number;
+  // Financials
   subtotalBeforeTax: number;
   profit: number;
   gstPercentage: number;
@@ -252,7 +269,148 @@ export async function createTrip(tripData: {
   grandTotal: number;
   grandTotalINR: number;
   costPerParticipant: number;
-}) {
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildDbBuses(buses: Bus[], tripId: string): DbBus[] {
+  return buses.map(bus => ({
+    trip_id: tripId,
+    name: bus.name,
+    seating_capacity: bus.seatingCapacity,
+    cost_per_bus: bus.costPerBus,
+    currency: bus.currency,
+    number_of_days: bus.numberOfDays,
+    quantity: bus.quantity,
+    costing_mode: bus.costingMode ?? 'per_day',
+    description: bus.description || '',
+    total_cost: bus.totalCost,
+    total_cost_inr: bus.totalCostINR,
+  }));
+}
+
+function buildDbFlights(flights: Flight[], tripId: string): DbFlight[] {
+  return flights.map(flight => ({
+    trip_id: tripId,
+    from_city: flight.from,
+    to_city: flight.to,
+    airline: flight.airline,
+    flight_number: flight.flightNumber,
+    departure_time: flight.departureTime,
+    arrival_time: flight.arrivalTime,
+    currency: flight.currency,
+    description: flight.description || '',
+    classes: flight.classes,
+    seat_upgrades: flight.seatUpgrades,
+    meal_upgrades: flight.mealUpgrades,
+    total_cost: flight.totalCost,
+    total_cost_inr: flight.totalCostINR,
+  }));
+}
+
+function buildDbTrains(trains: Train[], tripId: string): DbTrain[] {
+  return trains.map(train => ({
+    trip_id: tripId,
+    name: train.name,
+    train_number: train.trainNumber,
+    class: train.class,
+    timing: train.timing,
+    cost_per_person: train.costPerPerson,
+    currency: train.currency,
+    description: train.description || '',
+    total_cost: train.totalCost,
+    total_cost_inr: train.totalCostINR,
+  }));
+}
+
+function buildDbAccommodations(accommodations: Accommodation[], tripId: string): DbAccommodation[] {
+  return accommodations.map(acc => ({
+    trip_id: tripId,
+    hotel_name: acc.hotelName,
+    city: acc.city,
+    number_of_nights: acc.numberOfNights,
+    currency: acc.currency,
+    breakfast_included: acc.breakfastIncluded,
+    total_rooms: acc.totalRooms,
+    total_cost: acc.totalCost,
+    total_cost_inr: acc.totalCostINR,
+    room_allocation: acc.roomAllocation,
+    room_types: acc.roomTypes,
+    room_preferences: acc.roomPreferences,
+    driver_room: (acc as any).driverRoom ?? false,
+  }));
+}
+
+function buildDbMeals(meals: HotelMealInput[], tripId: string): DbMeals[] {
+  return meals.map(m => ({
+    trip_id: tripId,
+    accommodation_id: m.accommodation_id,
+    hotel_name: m.hotel_name,
+    city: m.city,
+    number_of_nights: m.number_of_nights,
+    restaurant_id: m.restaurant_id || undefined,
+    restaurant_name: m.restaurant_name || undefined,
+    breakfast_cost_per_person: m.breakfast_cost_per_person,
+    lunch_cost_per_person: m.lunch_cost_per_person,
+    dinner_cost_per_person: m.dinner_cost_per_person,
+    free_breakfast: m.free_breakfast,
+    free_lunch: m.free_lunch,
+    free_dinner: m.free_dinner,
+    currency: m.currency,
+    total_participants: m.total_participants,
+    total_cost: m.total_cost,
+    total_cost_inr: m.total_cost_inr,
+  }));
+}
+
+function buildDbActivities(activities: Activity[], tripId: string): DbActivity[] {
+  return activities.map(activity => ({
+    trip_id: tripId,
+    name: activity.name,
+    city: activity.city,
+    entry_cost: activity.entryCost,
+    transport_cost: activity.transportCost,
+    guide_cost: activity.guideCost,
+    currency: activity.currency,
+    description: activity.description || '',
+    total_cost: activity.totalCost,
+    total_cost_inr: activity.totalCostINR,
+  }));
+}
+
+function buildDbOverheads(overheads: Overhead[], tripId: string): DbOverhead[] {
+  return overheads.map(overhead => ({
+    trip_id: tripId,
+    name: overhead.name,
+    cost_type: overhead.costType,
+    amount_per_participant: overhead.amountPerParticipant,
+    currency: overhead.currency,
+    hide_from_client: overhead.hideFromClient,
+    total_cost: overhead.totalCost,
+    total_cost_inr: overhead.totalCostINR,
+  }));
+}
+
+function buildDbOccupancies(rows: PackageOccupancyRow[], tripId: string): DbPackageOccupancy[] {
+  return rows.map(row => ({
+    trip_id: tripId,
+    occupancy_size: row.occupancySize,
+    cost_per_room: row.costPerRoom,
+    room_count: row.roomCount,
+    row_cost: row.rowCost,
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// createTrip
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Create a new trip with all related data
+ */
+export async function createTrip(tripData: TripInput) {
   try {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) throw new Error('User not authenticated');
@@ -325,120 +483,41 @@ export async function createTrip(tripData: {
 
     // 3. Flights
     if (tripData.flights.length > 0) {
-      const dbFlights: DbFlight[] = tripData.flights.map(flight => ({
-        trip_id: tripId,
-        from_city: flight.from,
-        to_city: flight.to,
-        airline: flight.airline,
-        flight_number: flight.flightNumber,
-        departure_time: flight.departureTime,
-        arrival_time: flight.arrivalTime,
-        currency: flight.currency,
-        description: flight.description || '',
-        classes: flight.classes,
-        seat_upgrades: flight.seatUpgrades,
-        meal_upgrades: flight.mealUpgrades,
-        total_cost: flight.totalCost,
-        total_cost_inr: flight.totalCostINR,
-      }));
-
       const { error: flightsError } = await supabase
         .from('trip_flights')
-        .insert(dbFlights);
+        .insert(buildDbFlights(tripData.flights, tripId));
       if (flightsError) throw flightsError;
     }
 
     // 4. Buses
     if (tripData.buses.length > 0) {
-      const dbBuses: DbBus[] = tripData.buses.map(bus => ({
-        trip_id: tripId,
-        name: bus.name,
-        seating_capacity: bus.seatingCapacity,
-        cost_per_bus: bus.costPerBus,
-        currency: bus.currency,
-        number_of_days: bus.numberOfDays,
-        quantity: bus.quantity,
-        description: bus.description || '',
-        total_cost: bus.totalCost,
-        total_cost_inr: bus.totalCostINR,
-      }));
-
       const { error: busesError } = await supabase
         .from('trip_buses')
-        .insert(dbBuses);
+        .insert(buildDbBuses(tripData.buses, tripId));
       if (busesError) throw busesError;
     }
 
     // 5. Trains
     if (tripData.trains.length > 0) {
-      const dbTrains: DbTrain[] = tripData.trains.map(train => ({
-        trip_id: tripId,
-        name: train.name,
-        train_number: train.trainNumber,
-        class: train.class,
-        timing: train.timing,
-        cost_per_person: train.costPerPerson,
-        currency: train.currency,
-        description: train.description || '',
-        total_cost: train.totalCost,
-        total_cost_inr: train.totalCostINR,
-      }));
-
       const { error: trainsError } = await supabase
         .from('trip_trains')
-        .insert(dbTrains);
+        .insert(buildDbTrains(tripData.trains, tripId));
       if (trainsError) throw trainsError;
     }
 
     // 6. Accommodations
     if (tripData.accommodations.length > 0) {
-      const dbAccommodations: DbAccommodation[] = tripData.accommodations.map(acc => ({
-        trip_id: tripId,
-        hotel_name: acc.hotelName,
-        city: acc.city,
-        number_of_nights: acc.numberOfNights,
-        currency: acc.currency,
-        breakfast_included: acc.breakfastIncluded,
-        total_rooms: acc.totalRooms,
-        total_cost: acc.totalCost,
-        total_cost_inr: acc.totalCostINR,
-        room_allocation: acc.roomAllocation,
-        room_types: acc.roomTypes,
-        room_preferences: acc.roomPreferences,
-        driver_room: (acc as any).driverRoom ?? false,
-      }));
-
       const { error: accommodationsError } = await supabase
         .from('trip_accommodations')
-        .insert(dbAccommodations);
+        .insert(buildDbAccommodations(tripData.accommodations, tripId));
       if (accommodationsError) throw accommodationsError;
     }
 
     // 7. Meals
     if (tripData.meals && tripData.meals.length > 0) {
-      const dbMealsRows: DbMeals[] = tripData.meals.map(m => ({
-        trip_id: tripId,
-        accommodation_id: m.accommodation_id,
-        hotel_name: m.hotel_name,
-        city: m.city,
-        number_of_nights: m.number_of_nights,
-        restaurant_id: m.restaurant_id || undefined,
-        restaurant_name: m.restaurant_name || undefined,
-        breakfast_cost_per_person: m.breakfast_cost_per_person,
-        lunch_cost_per_person: m.lunch_cost_per_person,
-        dinner_cost_per_person: m.dinner_cost_per_person,
-        free_breakfast: m.free_breakfast,
-        free_lunch: m.free_lunch,
-        free_dinner: m.free_dinner,
-        currency: m.currency,
-        total_participants: m.total_participants,
-        total_cost: m.total_cost,
-        total_cost_inr: m.total_cost_inr,
-      }));
-
       const { error: mealsError } = await supabase
         .from('trip_meals')
-        .insert(dbMealsRows);
+        .insert(buildDbMeals(tripData.meals, tripId));
       if (mealsError) throw mealsError;
     }
 
@@ -459,7 +538,6 @@ export async function createTrip(tripData: {
         insurance_total_cost: tripData.extras.insuranceTotalCost,
         insurance_total_cost_inr: tripData.extras.insuranceTotalCostINR,
       };
-
       const { error: extrasError } = await supabase
         .from('trip_extras')
         .insert(dbExtras);
@@ -468,42 +546,39 @@ export async function createTrip(tripData: {
 
     // 8. Activities
     if (tripData.activities.length > 0) {
-      const dbActivities: DbActivity[] = tripData.activities.map(activity => ({
-        trip_id: tripId,
-        name: activity.name,
-        city: activity.city,
-        entry_cost: activity.entryCost,
-        transport_cost: activity.transportCost,
-        guide_cost: activity.guideCost,
-        currency: activity.currency,
-        description: activity.description || '',
-        total_cost: activity.totalCost,
-        total_cost_inr: activity.totalCostINR,
-      }));
-
       const { error: activitiesError } = await supabase
         .from('trip_activities')
-        .insert(dbActivities);
+        .insert(buildDbActivities(tripData.activities, tripId));
       if (activitiesError) throw activitiesError;
     }
 
     // 9. Overheads
     if (tripData.overheads.length > 0) {
-      const dbOverheads: DbOverhead[] = tripData.overheads.map(overhead => ({
-        trip_id: tripId,
-        name: overhead.name,
-        cost_type: overhead.costType,
-        amount_per_participant: overhead.amountPerParticipant,
-        currency: overhead.currency,
-        hide_from_client: overhead.hideFromClient,
-        total_cost: overhead.totalCost,
-        total_cost_inr: overhead.totalCostINR,
-      }));
-
       const { error: overheadsError } = await supabase
         .from('trip_overheads')
-        .insert(dbOverheads);
+        .insert(buildDbOverheads(tripData.overheads, tripId));
       if (overheadsError) throw overheadsError;
+    }
+
+    // 10. Package occupancies (tour_planner mode only)
+    if (tripData.packageOccupancies && tripData.packageOccupancies.length > 0) {
+      const { error: occError } = await supabase
+        .from('trip_package_occupancies')
+        .insert(buildDbOccupancies(tripData.packageOccupancies, tripId));
+      if (occError) throw occError;
+    }
+
+    // 10.5. Update denormalised package cost columns on trips row
+    if (tripData.packageTotalCost !== undefined) {
+      const { error: pkgUpdateError } = await supabase
+        .from('trips')
+        .update({
+          package_total_cost: tripData.packageTotalCost ?? 0,
+          package_total_cost_inr: tripData.packageTotalCostINR ?? 0,
+          package_cost_per_person: tripData.packageCostPerPerson ?? 0,
+        })
+        .eq('id', tripId);
+      if (pkgUpdateError) throw pkgUpdateError;
     }
 
     return { success: true, tripId };
@@ -511,50 +586,21 @@ export async function createTrip(tripData: {
     console.error('Error creating trip:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
     };
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// updateTrip
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Update an existing trip with all related data
  */
-export async function updateTrip(tripId: string, tripData: {
-  name: string;
-  institution: string;
-  tripCategory: TripCategory;
-  tripType: TripType;
-  planningMode: PlanningMode;
-  countries: string[];
-  cities: CityWithDates[];
-  startDate: string;
-  endDate: string;
-  totalDays: number;
-  totalNights: number;
-  defaultCurrency: string;
-  participants: Participants;
-  flights: Flight[];
-  buses: Bus[];
-  trains: Train[];
-  accommodations: Accommodation[];
-  meals: HotelMealInput[];
-  activities: Activity[];
-  overheads: Overhead[];
-  extras?: TripExtras;
-  subtotalBeforeTax: number;
-  profit: number;
-  gstPercentage: number;
-  gstAmount: number;
-  tcsPercentage: number;
-  tcsAmount: number;
-  tdsPercentage: number;
-  tdsAmount: number;
-  grandTotal: number;
-  grandTotalINR: number;
-  costPerParticipant: number;
-}) {
+export async function updateTrip(tripId: string, tripData: TripInput) {
   try {
-    // 1. Update main trip
+    // 1. Update main trip record
     const dbTrip: Partial<DbTrip> = {
       name: tripData.name,
       institution: tripData.institution,
@@ -616,108 +662,45 @@ export async function updateTrip(tripId: string, tripData: {
     // 3. Delete and re-insert flights
     await supabase.from('trip_flights').delete().eq('trip_id', tripId);
     if (tripData.flights.length > 0) {
-      const dbFlights: DbFlight[] = tripData.flights.map(flight => ({
-        trip_id: tripId,
-        from_city: flight.from,
-        to_city: flight.to,
-        airline: flight.airline,
-        flight_number: flight.flightNumber,
-        departure_time: flight.departureTime,
-        arrival_time: flight.arrivalTime,
-        currency: flight.currency,
-        description: flight.description || '',
-        classes: flight.classes,
-        seat_upgrades: flight.seatUpgrades,
-        meal_upgrades: flight.mealUpgrades,
-        total_cost: flight.totalCost,
-        total_cost_inr: flight.totalCostINR,
-      }));
-      await supabase.from('trip_flights').insert(dbFlights);
+      const { error: flightsError } = await supabase
+        .from('trip_flights')
+        .insert(buildDbFlights(tripData.flights, tripId));
+      if (flightsError) throw flightsError;
     }
 
     // 4. Delete and re-insert buses
     await supabase.from('trip_buses').delete().eq('trip_id', tripId);
     if (tripData.buses.length > 0) {
-      const dbBuses: DbBus[] = tripData.buses.map(bus => ({
-        trip_id: tripId,
-        name: bus.name,
-        seating_capacity: bus.seatingCapacity,
-        cost_per_bus: bus.costPerBus,
-        currency: bus.currency,
-        number_of_days: bus.numberOfDays,
-        quantity: bus.quantity,
-        description: bus.description || '',
-        total_cost: bus.totalCost,
-        total_cost_inr: bus.totalCostINR,
-      }));
-      await supabase.from('trip_buses').insert(dbBuses);
+      const { error: busesError } = await supabase
+        .from('trip_buses')
+        .insert(buildDbBuses(tripData.buses, tripId));
+      if (busesError) throw busesError;
     }
 
     // 5. Delete and re-insert trains
     await supabase.from('trip_trains').delete().eq('trip_id', tripId);
     if (tripData.trains.length > 0) {
-      const dbTrains: DbTrain[] = tripData.trains.map(train => ({
-        trip_id: tripId,
-        name: train.name,
-        train_number: train.trainNumber,
-        class: train.class,
-        timing: train.timing,
-        cost_per_person: train.costPerPerson,
-        currency: train.currency,
-        description: train.description || '',
-        total_cost: train.totalCost,
-        total_cost_inr: train.totalCostINR,
-      }));
-      await supabase.from('trip_trains').insert(dbTrains);
+      const { error: trainsError } = await supabase
+        .from('trip_trains')
+        .insert(buildDbTrains(tripData.trains, tripId));
+      if (trainsError) throw trainsError;
     }
 
     // 6. Delete and re-insert accommodations
     await supabase.from('trip_accommodations').delete().eq('trip_id', tripId);
     if (tripData.accommodations.length > 0) {
-      const dbAccommodations: DbAccommodation[] = tripData.accommodations.map(acc => ({
-        trip_id: tripId,
-        hotel_name: acc.hotelName,
-        city: acc.city,
-        number_of_nights: acc.numberOfNights,
-        currency: acc.currency,
-        breakfast_included: acc.breakfastIncluded,
-        total_rooms: acc.totalRooms,
-        total_cost: acc.totalCost,
-        total_cost_inr: acc.totalCostINR,
-        room_allocation: acc.roomAllocation,
-        room_types: acc.roomTypes,
-        room_preferences: acc.roomPreferences,
-        driver_room: (acc as any).driverRoom ?? false,
-      }));
-      await supabase.from('trip_accommodations').insert(dbAccommodations);
+      const { error: accommodationsError } = await supabase
+        .from('trip_accommodations')
+        .insert(buildDbAccommodations(tripData.accommodations, tripId));
+      if (accommodationsError) throw accommodationsError;
     }
 
     // 7. Delete and re-insert meals
     await supabase.from('trip_meals').delete().eq('trip_id', tripId);
     if (tripData.meals && tripData.meals.length > 0) {
-      const dbMealsRows: DbMeals[] = tripData.meals.map(m => ({
-        trip_id: tripId,
-        accommodation_id: m.accommodation_id,
-        hotel_name: m.hotel_name,
-        city: m.city,
-        number_of_nights: m.number_of_nights,
-        restaurant_id: m.restaurant_id || undefined,
-        restaurant_name: m.restaurant_name || undefined,
-        breakfast_cost_per_person: m.breakfast_cost_per_person,
-        lunch_cost_per_person: m.lunch_cost_per_person,
-        dinner_cost_per_person: m.dinner_cost_per_person,
-        free_breakfast: m.free_breakfast,
-        free_lunch: m.free_lunch,
-        free_dinner: m.free_dinner,
-        currency: m.currency,
-        total_participants: m.total_participants,
-        total_cost: m.total_cost,
-        total_cost_inr: m.total_cost_inr,
-      }));
-
       const { error: mealsError } = await supabase
         .from('trip_meals')
-        .insert(dbMealsRows);
+        .insert(buildDbMeals(tripData.meals, tripId));
       if (mealsError) throw mealsError;
     }
 
@@ -738,7 +721,6 @@ export async function updateTrip(tripId: string, tripData: {
         insurance_total_cost: tripData.extras.insuranceTotalCost,
         insurance_total_cost_inr: tripData.extras.insuranceTotalCostINR,
       };
-
       const { error: extrasError } = await supabase
         .from('trip_extras')
         .upsert(dbExtras, { onConflict: 'trip_id' });
@@ -748,35 +730,41 @@ export async function updateTrip(tripId: string, tripData: {
     // 8. Delete and re-insert activities
     await supabase.from('trip_activities').delete().eq('trip_id', tripId);
     if (tripData.activities.length > 0) {
-      const dbActivities: DbActivity[] = tripData.activities.map(activity => ({
-        trip_id: tripId,
-        name: activity.name,
-        city: activity.city,
-        entry_cost: activity.entryCost,
-        transport_cost: activity.transportCost,
-        guide_cost: activity.guideCost,
-        currency: activity.currency,
-        description: activity.description || '',
-        total_cost: activity.totalCost,
-        total_cost_inr: activity.totalCostINR,
-      }));
-      await supabase.from('trip_activities').insert(dbActivities);
+      const { error: activitiesError } = await supabase
+        .from('trip_activities')
+        .insert(buildDbActivities(tripData.activities, tripId));
+      if (activitiesError) throw activitiesError;
     }
 
     // 9. Delete and re-insert overheads
     await supabase.from('trip_overheads').delete().eq('trip_id', tripId);
     if (tripData.overheads.length > 0) {
-      const dbOverheads: DbOverhead[] = tripData.overheads.map(overhead => ({
-        trip_id: tripId,
-        name: overhead.name,
-        cost_type: overhead.costType,
-        amount_per_participant: overhead.amountPerParticipant,
-        currency: overhead.currency,
-        hide_from_client: overhead.hideFromClient,
-        total_cost: overhead.totalCost,
-        total_cost_inr: overhead.totalCostINR,
-      }));
-      await supabase.from('trip_overheads').insert(dbOverheads);
+      const { error: overheadsError } = await supabase
+        .from('trip_overheads')
+        .insert(buildDbOverheads(tripData.overheads, tripId));
+      if (overheadsError) throw overheadsError;
+    }
+
+    // 10. Delete and re-insert package occupancies
+    await supabase.from('trip_package_occupancies').delete().eq('trip_id', tripId);
+    if (tripData.packageOccupancies && tripData.packageOccupancies.length > 0) {
+      const { error: occError } = await supabase
+        .from('trip_package_occupancies')
+        .insert(buildDbOccupancies(tripData.packageOccupancies, tripId));
+      if (occError) throw occError;
+    }
+
+    // 10.5. Update denormalised package cost columns
+    if (tripData.packageTotalCost !== undefined) {
+      const { error: pkgUpdateError } = await supabase
+        .from('trips')
+        .update({
+          package_total_cost: tripData.packageTotalCost ?? 0,
+          package_total_cost_inr: tripData.packageTotalCostINR ?? 0,
+          package_cost_per_person: tripData.packageCostPerPerson ?? 0,
+        })
+        .eq('id', tripId);
+      if (pkgUpdateError) throw pkgUpdateError;
     }
 
     return { success: true, tripId };
@@ -784,10 +772,14 @@ export async function updateTrip(tripId: string, tripData: {
     console.error('Error updating trip:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
     };
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// getTripById
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Fetch a trip by ID with all related data
@@ -860,6 +852,14 @@ export async function getTripById(tripId: string) {
       .eq('trip_id', tripId);
     if (overheadsError) throw overheadsError;
 
+    // Fetch package occupancies (tour_planner mode)
+    const { data: packageOccupancies, error: occError } = await supabase
+      .from('trip_package_occupancies')
+      .select('*')
+      .eq('trip_id', tripId)
+      .order('created_at');
+    if (occError && occError.code !== 'PGRST116') throw occError;
+
     return {
       success: true,
       data: {
@@ -870,19 +870,24 @@ export async function getTripById(tripId: string) {
         buses: buses || [],
         trains: trains || [],
         accommodations: accommodations || [],
-        meals: meals || null,
+        meals: meals || [],
         activities: activities || [],
         overheads: overheads || [],
-      }
+        packageOccupancies: packageOccupancies || [],
+      },
     };
   } catch (error) {
     console.error('Error fetching trip:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
     };
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// deleteTrip
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Delete a trip and all related data
@@ -900,10 +905,14 @@ export async function deleteTrip(tripId: string) {
     console.error('Error deleting trip:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
     };
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// getUserTrips
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Fetch all trips for the current user
@@ -925,10 +934,14 @@ export async function getUserTrips() {
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred',
-      data: []
+      data: [],
     };
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Trip status helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Update trip status
@@ -949,13 +962,13 @@ export async function updateTripStatus(
     console.error('Error updating trip status:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
     };
   }
 }
 
 export const sendTripForApproval = (tripId: string) => updateTripStatus(tripId, 'sent');
-export const approveTrip = (tripId: string) => updateTripStatus(tripId, 'approved');
-export const rejectTrip = (tripId: string) => updateTripStatus(tripId, 'rejected');
-export const completeTrip = (tripId: string) => updateTripStatus(tripId, 'completed');
-export const lockTrip = (tripId: string) => updateTripStatus(tripId, 'locked');
+export const approveTrip        = (tripId: string) => updateTripStatus(tripId, 'approved');
+export const rejectTrip         = (tripId: string) => updateTripStatus(tripId, 'rejected');
+export const completeTrip       = (tripId: string) => updateTripStatus(tripId, 'completed');
+export const lockTrip           = (tripId: string) => updateTripStatus(tripId, 'locked');

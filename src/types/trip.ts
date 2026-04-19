@@ -193,6 +193,8 @@ export interface Flight {
   totalCostINR: number;
 }
 
+export type BusCostingMode = 'per_day' | 'lump_sum';
+
 export interface Bus {
   id: string;
   name: string;
@@ -201,6 +203,7 @@ export interface Bus {
   currency: string;
   numberOfDays: number;
   quantity: number;
+  costingMode: BusCostingMode;
   description: string;
   totalCost: number;
   totalCostINR: number;
@@ -448,6 +451,23 @@ export interface TaxRate {
 ========================= */
 export interface CityWithDates {
   name: string;
-  fromDate: string; // ISO date string e.g. "2026-04-01"
-  toDate: string;   // ISO date string e.g. "2026-04-04"
+  fromDate: string;
+  toDate: string;
+}
+
+export interface PackageOccupancyRow {
+  id: string;
+  occupancySize: number;
+  costPerRoom: number;
+  roomCount: number;
+  peopleCovered: number;
+  rowCost: number;
+}
+
+export interface TripPackageCost {
+  rows: PackageOccupancyRow[];
+  totalPeople: number;
+  totalCost: number;
+  totalCostINR: number;
+  costPerPerson: number;
 }
