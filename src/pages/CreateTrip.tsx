@@ -2059,8 +2059,8 @@ export default function CreateTrip() {
                     <thead>
                       <tr className="bg-muted/40 border-b">
                         <th className="text-left px-3 py-2 font-medium">Occupancy Size</th>
-                        <th className="text-left px-3 py-2 font-medium">Cost per Room (₹)</th>
-                        <th className="text-left px-3 py-2 font-medium">Number of Rooms</th>
+                        <th className="text-left px-3 py-2 font-medium">Cost per Group</th>
+                        <th className="text-left px-3 py-2 font-medium">Number of Groups</th>
                         <th className="text-left px-3 py-2 font-medium text-muted-foreground">People Covered</th>
                         <th className="text-left px-3 py-2 font-medium text-muted-foreground">Row Cost</th>
                         <th className="px-3 py-2 w-10"></th>
