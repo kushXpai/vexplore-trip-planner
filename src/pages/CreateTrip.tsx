@@ -744,7 +744,7 @@ export default function CreateTrip() {
     if (['costPerBus', 'numberOfDays', 'quantity', 'currency'].includes(field)) {
       const cost = field === 'costPerBus' ? value : updated[index].costPerBus;
       const days = field === 'numberOfDays' ? value : updated[index].numberOfDays;
-      const qty = field === 'quantity' ? value : updated[index].quantity;
+      const qty = field === 'quantity' ? value : (updated[index].quantity || 1);
       const currency = field === 'currency' ? value : updated[index].currency;
 
       updated[index].totalCost = cost * days * qty;
@@ -800,14 +800,21 @@ export default function CreateTrip() {
   // Accommodation functions
   const addAccommodation = () => {
     const defaultCurrency = getCountryCurrency(formData.countries.length > 0 ? formData.countries[0] : '') || 'INR';
-    const firstCity = formData.cities[0]?.name || '';
+    const firstCity = formData.cities[0];
+    const defaultNights = (() => {
+      if (firstCity?.fromDate && firstCity?.toDate) {
+        const diff = Math.ceil((new Date(firstCity.toDate).getTime() - new Date(firstCity.fromDate).getTime()) / (1000 * 60 * 60 * 24));
+        return Math.max(1, diff);
+      }
+      return calculateTripDuration().nights || 1;
+    })();
 
     setCollapsedAccommodations(prev => [...prev, false]);
     setAccommodations([...accommodations, {
       id: `acc-${Date.now()}`,
       hotelName: '',
-      city: firstCity,
-      numberOfNights: 1,
+      city: firstCity?.name || '',
+      numberOfNights: defaultNights,
       roomTypes: [],
       roomPreferences: getDefaultRoomPreferences(tripType),
       currency: defaultCurrency,
@@ -836,6 +843,15 @@ export default function CreateTrip() {
   const updateAccommodation = (index: number, field: keyof Accommodation, value: any) => {
     const updated = [...accommodations];
     updated[index] = { ...updated[index], [field]: value };
+
+    // Auto-update nights when city changes
+    if (field === 'city') {
+      const cityEntry = formData.cities.find(c => c.name === value);
+      if (cityEntry?.fromDate && cityEntry?.toDate) {
+        const diff = Math.ceil((new Date(cityEntry.toDate).getTime() - new Date(cityEntry.fromDate).getTime()) / (1000 * 60 * 60 * 24));
+        updated[index].numberOfNights = Math.max(1, diff);
+      }
+    }
 
     // Auto-allocate rooms when room types or preferences change
     if (field === 'roomTypes' || field === 'roomPreferences') {
@@ -2461,7 +2477,7 @@ export default function CreateTrip() {
                                 <div className="space-y-2"><Label>Number of Days</Label><Input type="number" placeholder="0" value={bus.numberOfDays || ''} onChange={(e) => updateBus(index, 'numberOfDays', parseInt(e.target.value) || 0)} /></div>
                               )}
                             </div>
-                            <div className="space-y-2"><Label>Quantity (Number of Buses)</Label><Input type="number" placeholder="1" value={bus.quantity || ''} onChange={(e) => updateBus(index, 'quantity', parseInt(e.target.value) || 1)} /></div>
+                            <div className="space-y-2"><Label>Quantity (Number of Buses)</Label><Input type="number" placeholder="1" min="1" value={bus.quantity === 0 ? '' : bus.quantity} onChange={(e) => updateBus(index, 'quantity', parseInt(e.target.value) || 0)} onBlur={(e) => { if (!e.target.value || parseInt(e.target.value) < 1) updateBus(index, 'quantity', 1); }} /></div>
                             <div className="space-y-2"><Label>Description</Label><Textarea placeholder="Route, timings, etc." value={bus.description} onChange={(e) => updateBus(index, 'description', e.target.value)} rows={2} /></div>
                             <div className="pt-2 border-t"><p className="text-sm font-semibold text-primary">Total: {formatCurrency(bus.totalCostINR, 'INR')}</p></div>
                           </div>

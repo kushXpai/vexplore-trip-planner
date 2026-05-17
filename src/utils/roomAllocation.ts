@@ -380,16 +380,22 @@ export function autoAllocateRooms(
     // Faculty allocation with preferences (same as students/vxplorers)
     const facultyPrefs = preferences?.faculty || [];
 
+    // Faculty: use preferences if set; otherwise default to twin/double, then triple, then any available type
+    const effectiveFacultyPrefs = facultyPrefs.length > 0
+      ? facultyPrefs
+      : (() => {
+          const twin = roomTypes.find(rt => rt.capacityPerRoom === 2);
+          const triple = roomTypes.find(rt => rt.capacityPerRoom === 3);
+          const fallback = roomTypes[0];
+          return [twin, triple, fallback].filter(Boolean).map(rt => rt!.roomType.toLowerCase());
+        })();
+
     maleFacultyBreakdown = participants.maleFaculty > 0
-      ? (facultyPrefs.length > 0
-        ? allocationFunction(participants.maleFaculty, roomTypes, facultyPrefs)
-        : allocateRoomsForGroup(participants.maleFaculty, roomTypes))
+      ? allocationFunction(participants.maleFaculty, roomTypes, effectiveFacultyPrefs)
       : [];
 
     femaleFacultyBreakdown = participants.femaleFaculty > 0
-      ? (facultyPrefs.length > 0
-        ? allocationFunction(participants.femaleFaculty, roomTypes, facultyPrefs)
-        : allocateRoomsForGroup(participants.femaleFaculty, roomTypes))
+      ? allocationFunction(participants.femaleFaculty, roomTypes, effectiveFacultyPrefs)
       : [];
 
     // VXplorers allocation with preferences
