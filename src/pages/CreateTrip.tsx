@@ -488,6 +488,11 @@ export default function CreateTrip() {
     }
   };
 
+  // Selects all text on focus so typing replaces the value instead of appending
+  const handleNumberFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    e.target.select();
+  };
+
   const getCurrencyRate = (code: string): number => {
     return getCurrencyRateHelper(currencies, code);
   };
@@ -1861,74 +1866,53 @@ export default function CreateTrip() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {tripType === 'fti' ? (
-                  // FTI Trip Participants (same fields as commercial)
                   <>
                     <div className="grid grid-cols-4 gap-4">
                       <div className="space-y-2">
                         <Label>Male Participants</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
+                        <Input type="number" min="0" placeholder="0"
                           value={formData.maleCount || ''}
-                          onChange={(e) => setFormData({ ...formData, maleCount: parseInt(e.target.value) || 0 })}
-                        />
+                          onFocus={handleNumberFocus}
+                          onChange={(e) => setFormData({ ...formData, maleCount: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="space-y-2">
                         <Label>Female Participants</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
+                        <Input type="number" min="0" placeholder="0"
                           value={formData.femaleCount || ''}
-                          onChange={(e) => setFormData({ ...formData, femaleCount: parseInt(e.target.value) || 0 })}
-                        />
+                          onFocus={handleNumberFocus}
+                          onChange={(e) => setFormData({ ...formData, femaleCount: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="space-y-2">
                         <Label>Kids</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
+                        <Input type="number" min="0" placeholder="0"
                           value={formData.otherCount || ''}
-                          onChange={(e) => setFormData({ ...formData, otherCount: parseInt(e.target.value) || 0 })}
-                        />
+                          onFocus={handleNumberFocus}
+                          onChange={(e) => setFormData({ ...formData, otherCount: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="space-y-2 flex flex-col justify-end">
                         <div className="p-3 bg-muted rounded-lg">
                           <p className="text-xs text-muted-foreground">Total Participants</p>
                           <p className="text-lg font-bold">{calculateTotalCommercial()}</p>
                         </div>
-                        {/* <div className="p-4 bg-primary/5 rounded-lg">
-                    <p className="text-sm text-muted-foreground">Total Billable</p>
-                    <p className="text-2xl font-bold text-primary">{calculateBillableParticipants()}</p>
-                  </div> */}
                       </div>
                     </div>
                   </>
                 ) : tripType === 'institute' ? (
-                  // Institute Trip Participants
                   <>
                     <div className="grid grid-cols-3 gap-4">
                       <div className="space-y-2">
                         <Label>Boys</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
+                        <Input type="number" min="0" placeholder="0"
                           value={formData.boys || ''}
-                          onChange={(e) => setFormData({ ...formData, boys: parseInt(e.target.value) || 0 })}
-                        />
+                          onFocus={handleNumberFocus}
+                          onChange={(e) => setFormData({ ...formData, boys: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="space-y-2">
                         <Label>Girls</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
+                        <Input type="number" min="0" placeholder="0"
                           value={formData.girls || ''}
-                          onChange={(e) => setFormData({ ...formData, girls: parseInt(e.target.value) || 0 })}
-                        />
+                          onFocus={handleNumberFocus}
+                          onChange={(e) => setFormData({ ...formData, girls: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="space-y-2 flex flex-col justify-end">
                         <div className="p-3 bg-muted rounded-lg">
@@ -1937,27 +1921,20 @@ export default function CreateTrip() {
                         </div>
                       </div>
                     </div>
-
                     <div className="grid grid-cols-3 gap-4">
                       <div className="space-y-2">
                         <Label>Male Faculty</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
+                        <Input type="number" min="0" placeholder="0"
                           value={formData.maleFaculty || ''}
-                          onChange={(e) => setFormData({ ...formData, maleFaculty: parseInt(e.target.value) || 0 })}
-                        />
+                          onFocus={handleNumberFocus}
+                          onChange={(e) => setFormData({ ...formData, maleFaculty: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="space-y-2">
                         <Label>Female Faculty</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
+                        <Input type="number" min="0" placeholder="0"
                           value={formData.femaleFaculty || ''}
-                          onChange={(e) => setFormData({ ...formData, femaleFaculty: parseInt(e.target.value) || 0 })}
-                        />
+                          onFocus={handleNumberFocus}
+                          onChange={(e) => setFormData({ ...formData, femaleFaculty: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="space-y-2 flex flex-col justify-end">
                         <div className="p-3 bg-muted rounded-lg">
@@ -1966,27 +1943,20 @@ export default function CreateTrip() {
                         </div>
                       </div>
                     </div>
-
                     <div className="grid grid-cols-3 gap-4">
                       <div className="space-y-2">
                         <Label>Male VXplorers</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
+                        <Input type="number" min="0" placeholder="0"
                           value={formData.maleVXplorers || ''}
-                          onChange={(e) => setFormData({ ...formData, maleVXplorers: parseInt(e.target.value) || 0 })}
-                        />
+                          onFocus={handleNumberFocus}
+                          onChange={(e) => setFormData({ ...formData, maleVXplorers: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="space-y-2">
                         <Label>Female VXplorers</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
+                        <Input type="number" min="0" placeholder="0"
                           value={formData.femaleVXplorers || ''}
-                          onChange={(e) => setFormData({ ...formData, femaleVXplorers: parseInt(e.target.value) || 0 })}
-                        />
+                          onFocus={handleNumberFocus}
+                          onChange={(e) => setFormData({ ...formData, femaleVXplorers: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="space-y-2 flex flex-col justify-end">
                         <div className="p-3 bg-muted rounded-lg">
@@ -1997,70 +1967,47 @@ export default function CreateTrip() {
                     </div>
                   </>
                 ) : (
-                  // Commercial Trip Participants
                   <>
                     <div className="grid grid-cols-3 gap-4">
                       <div className="space-y-2">
                         <Label>Male Participants</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
+                        <Input type="number" min="0" placeholder="0"
                           value={formData.maleCount || ''}
-                          onChange={(e) => setFormData({ ...formData, maleCount: parseInt(e.target.value) || 0 })}
-                        />
+                          onFocus={handleNumberFocus}
+                          onChange={(e) => setFormData({ ...formData, maleCount: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="space-y-2">
                         <Label>Female Participants</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0"
+                        <Input type="number" min="0" placeholder="0"
                           value={formData.femaleCount || ''}
-                          onChange={(e) => setFormData({ ...formData, femaleCount: parseInt(e.target.value) || 0 })}
-                        />
+                          onFocus={handleNumberFocus}
+                          onChange={(e) => setFormData({ ...formData, femaleCount: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="space-y-2 flex flex-col justify-end">
                         <div className="p-3 bg-muted rounded-lg">
                           <p className="text-xs text-muted-foreground">Total Participants</p>
                           <p className="text-lg font-bold">{calculateTotalCommercial()}</p>
                         </div>
-                        {/* <div className="p-4 bg-primary/5 rounded-lg">
-                    <p className="text-sm text-muted-foreground">Total Billable</p>
-                    <p className="text-2xl font-bold text-primary">{calculateBillableParticipants()}</p>
-                  </div> */}
                       </div>
                     </div>
-
-                    {/* NEW: VXplorers for Commercial Trips */}
                     <div className="grid grid-cols-3 gap-4 pt-4 border-t">
                       <div className="space-y-2">
                         <Label htmlFor="commercialMaleVXplorers" className="flex items-center gap-2">
-                          <Heart className="w-4 h-4 text-primary" />
-                          Male VXplorers
+                          <Heart className="w-4 h-4 text-primary" /> Male VXplorers
                         </Label>
-                        <Input
-                          id="commercialMaleVXplorers"
-                          type="number"
-                          min="0"
-                          placeholder="0"
+                        <Input id="commercialMaleVXplorers" type="number" min="0" placeholder="0"
                           value={formData.commercialMaleVXplorers || ''}
-                          onChange={(e) => setFormData({ ...formData, commercialMaleVXplorers: parseInt(e.target.value) || 0 })}
-                        />
+                          onFocus={handleNumberFocus}
+                          onChange={(e) => setFormData({ ...formData, commercialMaleVXplorers: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="commercialFemaleVXplorers" className="flex items-center gap-2">
-                          <Heart className="w-4 h-4 text-primary" />
-                          Female VXplorers
+                          <Heart className="w-4 h-4 text-primary" /> Female VXplorers
                         </Label>
-                        <Input
-                          id="commercialFemaleVXplorers"
-                          type="number"
-                          min="0"
-                          placeholder="0"
+                        <Input id="commercialFemaleVXplorers" type="number" min="0" placeholder="0"
                           value={formData.commercialFemaleVXplorers || ''}
-                          onChange={(e) => setFormData({ ...formData, commercialFemaleVXplorers: parseInt(e.target.value) || 0 })}
-                        />
+                          onFocus={handleNumberFocus}
+                          onChange={(e) => setFormData({ ...formData, commercialFemaleVXplorers: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="space-y-2 flex flex-col justify-end">
                         <div className="p-3 bg-muted rounded-lg">
@@ -2119,7 +2066,7 @@ export default function CreateTrip() {
                             {packageOccupancies.map((row, i) => (
                               <tr key={row.id} className="border-b last:border-0 hover:bg-muted/10">
                                 <td className="px-3 py-2">
-                                  <Input type="number" min={1} className="h-8 w-24 text-sm"
+                                  <Input type="number" onFocus={handleNumberFocus} min={1} className="h-8 w-24 text-sm"
                                     value={row.occupancySize || ''}
                                     onChange={e => {
                                       const updated = [...packageOccupancies];
@@ -2128,7 +2075,7 @@ export default function CreateTrip() {
                                     }} />
                                 </td>
                                 <td className="px-3 py-2">
-                                  <Input type="number" min={0} className="h-8 w-32 text-sm"
+                                  <Input type="number" onFocus={handleNumberFocus} min={0} className="h-8 w-32 text-sm"
                                     value={row.costPerRoom || ''}
                                     onChange={e => {
                                       const updated = [...packageOccupancies];
@@ -2137,7 +2084,7 @@ export default function CreateTrip() {
                                     }} />
                                 </td>
                                 <td className="px-3 py-2">
-                                  <Input type="number" min={1} className="h-8 w-24 text-sm"
+                                  <Input type="number" onFocus={handleNumberFocus} min={1} className="h-8 w-24 text-sm"
                                     value={row.roomCount || ''}
                                     onChange={e => {
                                       const updated = [...packageOccupancies];
@@ -2285,11 +2232,11 @@ export default function CreateTrip() {
                                   </div>
                                   <div className="space-y-1">
                                     <Label className="text-xs">Passengers</Label>
-                                    <Input className="h-8 text-sm" type="number" placeholder="0" value={cls.passengerCount || ''} onChange={(e) => updateFlightClass(index, ci, 'passengerCount', parseInt(e.target.value) || 0)} />
+                                    <Input className="h-8 text-sm" type="number" onFocus={handleNumberFocus} placeholder="0" value={cls.passengerCount || ''} onChange={(e) => updateFlightClass(index, ci, 'passengerCount', parseInt(e.target.value) || 0)} />
                                   </div>
                                   <div className="space-y-1">
                                     <Label className="text-xs">Cost / Person ({flight.currency})</Label>
-                                    <Input className="h-8 text-sm" type="number" placeholder="0" value={cls.costPerPerson || ''} onChange={(e) => updateFlightClass(index, ci, 'costPerPerson', parseFloat(e.target.value) || 0)} />
+                                    <Input className="h-8 text-sm" type="number" onFocus={handleNumberFocus} placeholder="0" value={cls.costPerPerson || ''} onChange={(e) => updateFlightClass(index, ci, 'costPerPerson', parseFloat(e.target.value) || 0)} />
                                   </div>
                                   <Button type="button" size="sm" variant="ghost" onClick={() => removeFlightClass(index, ci)} className="text-destructive hover:text-destructive h-8 w-8 p-0">
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -2323,11 +2270,11 @@ export default function CreateTrip() {
                                   </div>
                                   <div className="space-y-1">
                                     <Label className="text-xs">Seats Selected</Label>
-                                    <Input className="h-8 text-sm" type="number" placeholder="0" value={su.seatCount || ''} onChange={(e) => updateFlightSeatUpgrade(index, si, 'seatCount', parseInt(e.target.value) || 0)} />
+                                    <Input className="h-8 text-sm" type="number" onFocus={handleNumberFocus} placeholder="0" value={su.seatCount || ''} onChange={(e) => updateFlightSeatUpgrade(index, si, 'seatCount', parseInt(e.target.value) || 0)} />
                                   </div>
                                   <div className="space-y-1">
                                     <Label className="text-xs">Cost / Seat ({flight.currency})</Label>
-                                    <Input className="h-8 text-sm" type="number" placeholder="0" value={su.costPerSeat || ''} onChange={(e) => updateFlightSeatUpgrade(index, si, 'costPerSeat', parseFloat(e.target.value) || 0)} />
+                                    <Input className="h-8 text-sm" type="number" onFocus={handleNumberFocus} placeholder="0" value={su.costPerSeat || ''} onChange={(e) => updateFlightSeatUpgrade(index, si, 'costPerSeat', parseFloat(e.target.value) || 0)} />
                                   </div>
                                   <Button type="button" size="sm" variant="ghost" onClick={() => removeFlightSeatUpgrade(index, si)} className="text-destructive hover:text-destructive h-8 w-8 p-0">
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -2361,11 +2308,11 @@ export default function CreateTrip() {
                                   </div>
                                   <div className="space-y-1">
                                     <Label className="text-xs">Meals Ordered</Label>
-                                    <Input className="h-8 text-sm" type="number" placeholder="0" value={mu.mealCount || ''} onChange={(e) => updateFlightMealUpgrade(index, mi, 'mealCount', parseInt(e.target.value) || 0)} />
+                                    <Input className="h-8 text-sm" type="number" onFocus={handleNumberFocus} placeholder="0" value={mu.mealCount || ''} onChange={(e) => updateFlightMealUpgrade(index, mi, 'mealCount', parseInt(e.target.value) || 0)} />
                                   </div>
                                   <div className="space-y-1">
                                     <Label className="text-xs">Cost / Meal ({flight.currency})</Label>
-                                    <Input className="h-8 text-sm" type="number" placeholder="0" value={mu.costPerMeal || ''} onChange={(e) => updateFlightMealUpgrade(index, mi, 'costPerMeal', parseFloat(e.target.value) || 0)} />
+                                    <Input className="h-8 text-sm" type="number" onFocus={handleNumberFocus} placeholder="0" value={mu.costPerMeal || ''} onChange={(e) => updateFlightMealUpgrade(index, mi, 'costPerMeal', parseFloat(e.target.value) || 0)} />
                                   </div>
                                   <Button type="button" size="sm" variant="ghost" onClick={() => removeFlightMealUpgrade(index, mi)} className="text-destructive hover:text-destructive h-8 w-8 p-0">
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -2445,7 +2392,7 @@ export default function CreateTrip() {
                           <div className="p-4 space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-2"><Label>Bus Name/Type</Label><Input placeholder="e.g., Volvo AC Sleeper" value={bus.name} onChange={(e) => updateBus(index, 'name', e.target.value)} /></div>
-                              <div className="space-y-2"><Label>Seating Capacity</Label><Input type="number" placeholder="e.g., 45" value={bus.seatingCapacity || ''} onChange={(e) => updateBus(index, 'seatingCapacity', parseInt(e.target.value) || 0)} /></div>
+                              <div className="space-y-2"><Label>Seating Capacity</Label><Input type="number" onFocus={handleNumberFocus} placeholder="e.g., 45" value={bus.seatingCapacity || ''} onChange={(e) => updateBus(index, 'seatingCapacity', parseInt(e.target.value) || 0)} /></div>
                             </div>
                             {/* Costing Mode */}
                             <div className="space-y-2">
@@ -2464,7 +2411,7 @@ export default function CreateTrip() {
                               </div>
                             </div>
                             <div className="grid grid-cols-3 gap-4">
-                              <div className="space-y-2"><Label>Cost Per Bus</Label><Input type="number" placeholder="0" value={bus.costPerBus || ''} onChange={(e) => updateBus(index, 'costPerBus', parseFloat(e.target.value) || 0)} /></div>
+                              <div className="space-y-2"><Label>Cost Per Bus</Label><Input type="number" onFocus={handleNumberFocus} placeholder="0" value={bus.costPerBus || ''} onChange={(e) => updateBus(index, 'costPerBus', parseFloat(e.target.value) || 0)} /></div>
                               <div className="space-y-2">
                                 <Label>Currency</Label>
                                 <Select value={bus.currency} onValueChange={(v) => updateBus(index, 'currency', v)} disabled={isLoadingMasterData}>
@@ -2473,10 +2420,10 @@ export default function CreateTrip() {
                                 </Select>
                               </div>
                               {(bus.costingMode ?? 'per_day') === 'per_day' && (
-                                <div className="space-y-2"><Label>Number of Days</Label><Input type="number" placeholder="0" value={bus.numberOfDays || ''} onChange={(e) => updateBus(index, 'numberOfDays', parseInt(e.target.value) || 0)} /></div>
+                                <div className="space-y-2"><Label>Number of Days</Label><Input type="number" onFocus={handleNumberFocus} placeholder="0" value={bus.numberOfDays || ''} onChange={(e) => updateBus(index, 'numberOfDays', parseInt(e.target.value) || 0)} /></div>
                               )}
                             </div>
-                            <div className="space-y-2"><Label>Quantity (Number of Buses)</Label><Input type="number" placeholder="1" min="1" value={bus.quantity === 0 ? '' : bus.quantity} onChange={(e) => updateBus(index, 'quantity', parseInt(e.target.value) || 0)} onBlur={(e) => { if (!e.target.value || parseInt(e.target.value) < 1) updateBus(index, 'quantity', 1); }} /></div>
+                            <div className="space-y-2"><Label>Quantity (Number of Buses)</Label><Input type="number" onFocus={handleNumberFocus} placeholder="1" min="1" value={bus.quantity === 0 ? '' : bus.quantity} onChange={(e) => updateBus(index, 'quantity', parseInt(e.target.value) || 0)} onBlur={(e) => { if (!e.target.value || parseInt(e.target.value) < 1) updateBus(index, 'quantity', 1); }} /></div>
                             <div className="space-y-2"><Label>Description</Label><Textarea placeholder="Route, timings, etc." value={bus.description} onChange={(e) => updateBus(index, 'description', e.target.value)} rows={2} /></div>
                             <div className="pt-2 border-t"><p className="text-sm font-semibold text-primary">Total: {formatCurrency(bus.totalCostINR, 'INR')}</p></div>
                           </div>
@@ -2545,7 +2492,7 @@ export default function CreateTrip() {
                               <div className="space-y-2"><Label>Timing</Label><Input placeholder="e.g., 08:00 - 14:00" value={train.timing} onChange={(e) => updateTrain(index, 'timing', e.target.value)} /></div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-2"><Label>Cost Per Person</Label><Input type="number" placeholder="0" value={train.costPerPerson || ''} onChange={(e) => updateTrain(index, 'costPerPerson', parseFloat(e.target.value) || 0)} /></div>
+                              <div className="space-y-2"><Label>Cost Per Person</Label><Input type="number" onFocus={handleNumberFocus} placeholder="0" value={train.costPerPerson || ''} onChange={(e) => updateTrain(index, 'costPerPerson', parseFloat(e.target.value) || 0)} /></div>
                               <div className="space-y-2">
                                 <Label>Currency</Label>
                                 <Select value={train.currency} onValueChange={(v) => updateTrain(index, 'currency', v)} disabled={isLoadingMasterData}>
@@ -2704,7 +2651,7 @@ export default function CreateTrip() {
                               <div className="space-y-2">
                                 <Label>Number of Nights</Label>
                                 <Input
-                                  type="number"
+                                  type="number" onFocus={handleNumberFocus}
                                   placeholder="0"
                                   value={accommodation.numberOfNights || ''}
                                   onChange={(e) => updateAccommodation(index, 'numberOfNights', parseInt(e.target.value) || 0)}
@@ -2794,7 +2741,7 @@ export default function CreateTrip() {
                                   <div className="space-y-2">
                                     <Label>Capacity</Label>
                                     <Input
-                                      type="number"
+                                      type="number" onFocus={handleNumberFocus}
                                       placeholder="2"
                                       value={roomType.capacityPerRoom || ''}
                                       onChange={(e) => {
@@ -2807,7 +2754,7 @@ export default function CreateTrip() {
                                   <div className="space-y-2">
                                     <Label>Cost Per Room ({accommodation.currency})</Label>
                                     <Input
-                                      type="number"
+                                      type="number" onFocus={handleNumberFocus}
                                       placeholder="0"
                                       value={roomType.costPerRoom || ''}
                                       onChange={(e) => {
@@ -3373,14 +3320,14 @@ export default function CreateTrip() {
                             <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-3 items-center px-4 py-3">
                               <span className="text-sm font-medium flex items-center gap-1.5">🌅 Breakfast</span>
                               <Input
-                                type="number"
+                                type="number" onFocus={handleNumberFocus}
                                 placeholder="0"
                                 className="h-8 text-sm"
                                 value={m.breakfastCostPerPerson || ''}
                                 onChange={(e) => updateHotelMeal(acc.id, 'breakfastCostPerPerson', parseFloat(e.target.value) || 0, acc.currency)}
                               />
                               <Input
-                                type="number"
+                                type="number" onFocus={handleNumberFocus}
                                 placeholder="0"
                                 className="h-8 text-sm"
                                 value={m.freeBreakfast || ''}
@@ -3395,14 +3342,14 @@ export default function CreateTrip() {
                             <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-3 items-center px-4 py-3">
                               <span className="text-sm font-medium flex items-center gap-1.5">☀️ Lunch</span>
                               <Input
-                                type="number"
+                                type="number" onFocus={handleNumberFocus}
                                 placeholder="0"
                                 className="h-8 text-sm"
                                 value={m.lunchCostPerPerson || ''}
                                 onChange={(e) => updateHotelMeal(acc.id, 'lunchCostPerPerson', parseFloat(e.target.value) || 0, acc.currency)}
                               />
                               <Input
-                                type="number"
+                                type="number" onFocus={handleNumberFocus}
                                 placeholder="0"
                                 className="h-8 text-sm"
                                 value={m.freeLunch || ''}
@@ -3417,14 +3364,14 @@ export default function CreateTrip() {
                             <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-3 items-center px-4 py-3">
                               <span className="text-sm font-medium flex items-center gap-1.5">🌙 Dinner</span>
                               <Input
-                                type="number"
+                                type="number" onFocus={handleNumberFocus}
                                 placeholder="0"
                                 className="h-8 text-sm"
                                 value={m.dinnerCostPerPerson || ''}
                                 onChange={(e) => updateHotelMeal(acc.id, 'dinnerCostPerPerson', parseFloat(e.target.value) || 0, acc.currency)}
                               />
                               <Input
-                                type="number"
+                                type="number" onFocus={handleNumberFocus}
                                 placeholder="0"
                                 className="h-8 text-sm"
                                 value={m.freeDinner || ''}
@@ -3561,7 +3508,7 @@ export default function CreateTrip() {
                               <div className="space-y-2">
                                 <Label>Entry Cost ({activity.currency})</Label>
                                 <Input
-                                  type="number"
+                                  type="number" onFocus={handleNumberFocus}
                                   placeholder="0"
                                   value={activity.entryCost || ''}
                                   onChange={(e) => updateActivity(index, 'entryCost', parseFloat(e.target.value) || 0)}
@@ -3570,7 +3517,7 @@ export default function CreateTrip() {
                               <div className="space-y-2">
                                 <Label>Transport ({activity.currency})</Label>
                                 <Input
-                                  type="number"
+                                  type="number" onFocus={handleNumberFocus}
                                   placeholder="0"
                                   value={activity.transportCost || ''}
                                   onChange={(e) => updateActivity(index, 'transportCost', parseFloat(e.target.value) || 0)}
@@ -3579,7 +3526,7 @@ export default function CreateTrip() {
                               <div className="space-y-2">
                                 <Label>Guide ({activity.currency})</Label>
                                 <Input
-                                  type="number"
+                                  type="number" onFocus={handleNumberFocus}
                                   placeholder="0"
                                   value={activity.guideCost || ''}
                                   onChange={(e) => updateActivity(index, 'guideCost', parseFloat(e.target.value) || 0)}
@@ -3645,7 +3592,7 @@ export default function CreateTrip() {
                         <div className="space-y-2">
                           <Label>Cost Per Person</Label>
                           <Input
-                            type="number"
+                            type="number" onFocus={handleNumberFocus}
                             placeholder="0"
                             value={extras.visaCostPerPerson}
                             onChange={(e) => setExtras({ ...extras, visaCostPerPerson: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
@@ -3689,7 +3636,7 @@ export default function CreateTrip() {
                         <div className="space-y-2">
                           <Label>Cost Per Person</Label>
                           <Input
-                            type="number"
+                            type="number" onFocus={handleNumberFocus}
                             placeholder="0"
                             value={extras.tipsCostPerPerson}
                             onChange={(e) => setExtras({ ...extras, tipsCostPerPerson: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
@@ -3735,7 +3682,7 @@ export default function CreateTrip() {
                     <div className="space-y-2">
                       <Label>Cost Per Person</Label>
                       <Input
-                        type="number"
+                        type="number" onFocus={handleNumberFocus}
                         placeholder="0"
                         value={extras.insuranceCostPerPerson}
                         onChange={(e) => setExtras({ ...extras, insuranceCostPerPerson: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
@@ -3832,7 +3779,7 @@ export default function CreateTrip() {
                               <div className="space-y-2">
                                 <Label>{overhead.costType === 'lump_sum' ? 'Total Amount' : 'Amount Per Participant'}</Label>
                                 <Input
-                                  type="number"
+                                  type="number" onFocus={handleNumberFocus}
                                   placeholder="0"
                                   value={overhead.amountPerParticipant || ''}
                                   onChange={(e) => updateOverhead(index, 'amountPerParticipant', parseFloat(e.target.value) || 0)}
@@ -3914,7 +3861,7 @@ export default function CreateTrip() {
                   <Label className="text-sm font-semibold">Admin Charges</Label>
                   <div className="flex items-center gap-2">
                     <Input
-                      type="number"
+                      type="number" onFocus={handleNumberFocus}
                       placeholder="0"
                       value={profit || ''}
                       onChange={(e) => setProfit(parseFloat(e.target.value) || 0)}
