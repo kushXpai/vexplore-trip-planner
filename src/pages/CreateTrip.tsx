@@ -177,17 +177,17 @@ export default function CreateTrip() {
   const [packageOccupancies, setPackageOccupancies] = useState<PackageOccupancyRow[]>([]);
 
   useEffect(() => {
-  if (tripCategory === 'domestic') {
-    const india = countries.find(c => c.code === 'IN');
-    if (india) {
-      setSelectedCountryForAdd(india.id);
+    if (tripCategory === 'domestic') {
+      const india = countries.find(c => c.code === 'IN');
+      if (india) {
+        setSelectedCountryForAdd(india.id);
+        setSelectedCityForAdd('');
+      }
+    } else {
+      setSelectedCountryForAdd('');
       setSelectedCityForAdd('');
     }
-  } else {
-    setSelectedCountryForAdd('');
-    setSelectedCityForAdd('');
-  }
-}, [tripCategory, countries]);
+  }, [tripCategory, countries]);
 
   // Load trip data when editing
   useEffect(() => {
@@ -264,6 +264,12 @@ export default function CreateTrip() {
     setIsLoading(true);
     try {
       const result = await getTripById(tripId);
+      if (!result.success || !result.data) {
+        console.error('loadTripData failed:', result);
+        toast.error('Failed to load trip data: ' + result.error);
+        setIsLoading(false);
+        return;
+      }
       if (result.success && result.data) {
         const {
           trip,
@@ -1663,12 +1669,10 @@ export default function CreateTrip() {
                       variant="outline"
                       className="w-full h-10"
                       onClick={() => {
-                        // Auto-set fromDate to the day after the last city's toDate
+                        // Auto-set fromDate to the same date as the last city's toDate
                         const lastCity = formData.cities[formData.cities.length - 1];
                         if (lastCity?.toDate) {
-                          const nextDay = new Date(lastCity.toDate);
-                          nextDay.setDate(nextDay.getDate() + 1);
-                          setPendingCityFromDate(nextDay.toISOString().split('T')[0]);
+                          setPendingCityFromDate(lastCity.toDate);
                         } else {
                           setPendingCityFromDate('');
                         }
@@ -1753,12 +1757,7 @@ export default function CreateTrip() {
                               value={pendingCityFromDate}
                               min={(() => {
                                 const lastCity = formData.cities[formData.cities.length - 1];
-                                if (lastCity?.toDate) {
-                                  const nextDay = new Date(lastCity.toDate);
-                                  nextDay.setDate(nextDay.getDate() + 1);
-                                  return nextDay.toISOString().split('T')[0];
-                                }
-                                return undefined;
+                                return lastCity?.toDate || undefined;
                               })()}
                               max={pendingCityToDate || undefined}
                               onChange={(e) => setPendingCityFromDate(e.target.value)}
@@ -2089,120 +2088,120 @@ export default function CreateTrip() {
             </Card>
 
             {/* Package Cost — Tour Planner mode only */}
-      {planningMode === 'tour_planner' && (
-        <Card id="section-package-cost" className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calculator className="w-5 h-5 text-primary" />
-              Package Cost
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {packageOccupancies.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No occupancy rows yet. Add rows to define the package pricing structure.
-              </p>
-            ) : (
-              <>
-                <div className="overflow-x-auto rounded-lg border">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-muted/40 border-b">
-                        <th className="text-left px-3 py-2 font-medium">Occupancy Size</th>
-                        <th className="text-left px-3 py-2 font-medium">Cost per Group</th>
-                        <th className="text-left px-3 py-2 font-medium">Number of Groups</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">People Covered</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Row Cost</th>
-                        <th className="px-3 py-2 w-10"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {packageOccupancies.map((row, i) => (
-                        <tr key={row.id} className="border-b last:border-0 hover:bg-muted/10">
-                          <td className="px-3 py-2">
-                            <Input type="number" min={1} className="h-8 w-24 text-sm"
-                              value={row.occupancySize || ''}
-                              onChange={e => {
-                                const updated = [...packageOccupancies];
-                                updated[i] = calcOccupancyRow({ ...row, occupancySize: parseInt(e.target.value) || 1 });
-                                setPackageOccupancies(updated);
-                              }} />
-                          </td>
-                          <td className="px-3 py-2">
-                            <Input type="number" min={0} className="h-8 w-32 text-sm"
-                              value={row.costPerRoom || ''}
-                              onChange={e => {
-                                const updated = [...packageOccupancies];
-                                updated[i] = calcOccupancyRow({ ...row, costPerRoom: parseFloat(e.target.value) || 0 });
-                                setPackageOccupancies(updated);
-                              }} />
-                          </td>
-                          <td className="px-3 py-2">
-                            <Input type="number" min={1} className="h-8 w-24 text-sm"
-                              value={row.roomCount || ''}
-                              onChange={e => {
-                                const updated = [...packageOccupancies];
-                                updated[i] = calcOccupancyRow({ ...row, roomCount: parseInt(e.target.value) || 1 });
-                                setPackageOccupancies(updated);
-                              }} />
-                          </td>
-                          <td className="px-3 py-2 font-medium text-muted-foreground">{row.peopleCovered}</td>
-                          <td className="px-3 py-2 font-medium text-primary">₹{row.rowCost.toLocaleString('en-IN')}</td>
-                          <td className="px-3 py-2">
-                            <Button type="button" size="sm" variant="ghost"
-                              className="text-destructive hover:text-destructive h-7 w-7 p-0"
-                              onClick={() => setPackageOccupancies(prev => prev.filter((_, idx) => idx !== i))}>
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {(() => {
-                  const defaultCurrency = getCountryCurrency(formData.countries[0] || '') || 'INR';
-                  const pkg = calcPackageCost(packageOccupancies, defaultCurrency, currencies);
-                  const totalPax = calculateTotalParticipants();
-                  const validation = validateOccupancyTotal(packageOccupancies, totalPax);
-                  return (
+            {planningMode === 'tour_planner' && (
+              <Card id="section-package-cost" className="shadow-card">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calculator className="w-5 h-5 text-primary" />
+                    Package Cost
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {packageOccupancies.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No occupancy rows yet. Add rows to define the package pricing structure.
+                    </p>
+                  ) : (
                     <>
-                      {!validation.valid && (
-                        <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">
-                          <Info className="w-4 h-4 shrink-0" />
-                          {validation.message}
-                        </div>
-                      )}
-                      <div className="grid grid-cols-3 gap-4 p-4 bg-muted/40 rounded-lg">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Total People Covered</p>
-                          <p className={`text-lg font-bold ${validation.valid ? 'text-green-600' : 'text-destructive'}`}>
-                            {pkg.totalPeople}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Total Package Cost</p>
-                          <p className="text-lg font-bold text-primary">₹{pkg.totalCostINR.toLocaleString('en-IN')}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Cost Per Person</p>
-                          <p className="text-lg font-bold text-primary">
-                            ₹{pkg.costPerPerson.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                          </p>
-                        </div>
+                      <div className="overflow-x-auto rounded-lg border">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-muted/40 border-b">
+                              <th className="text-left px-3 py-2 font-medium">Occupancy Size</th>
+                              <th className="text-left px-3 py-2 font-medium">Cost per Group</th>
+                              <th className="text-left px-3 py-2 font-medium">Number of Groups</th>
+                              <th className="text-left px-3 py-2 font-medium text-muted-foreground">People Covered</th>
+                              <th className="text-left px-3 py-2 font-medium text-muted-foreground">Row Cost</th>
+                              <th className="px-3 py-2 w-10"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {packageOccupancies.map((row, i) => (
+                              <tr key={row.id} className="border-b last:border-0 hover:bg-muted/10">
+                                <td className="px-3 py-2">
+                                  <Input type="number" min={1} className="h-8 w-24 text-sm"
+                                    value={row.occupancySize || ''}
+                                    onChange={e => {
+                                      const updated = [...packageOccupancies];
+                                      updated[i] = calcOccupancyRow({ ...row, occupancySize: parseInt(e.target.value) || 1 });
+                                      setPackageOccupancies(updated);
+                                    }} />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <Input type="number" min={0} className="h-8 w-32 text-sm"
+                                    value={row.costPerRoom || ''}
+                                    onChange={e => {
+                                      const updated = [...packageOccupancies];
+                                      updated[i] = calcOccupancyRow({ ...row, costPerRoom: parseFloat(e.target.value) || 0 });
+                                      setPackageOccupancies(updated);
+                                    }} />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <Input type="number" min={1} className="h-8 w-24 text-sm"
+                                    value={row.roomCount || ''}
+                                    onChange={e => {
+                                      const updated = [...packageOccupancies];
+                                      updated[i] = calcOccupancyRow({ ...row, roomCount: parseInt(e.target.value) || 1 });
+                                      setPackageOccupancies(updated);
+                                    }} />
+                                </td>
+                                <td className="px-3 py-2 font-medium text-muted-foreground">{row.peopleCovered}</td>
+                                <td className="px-3 py-2 font-medium text-primary">₹{row.rowCost.toLocaleString('en-IN')}</td>
+                                <td className="px-3 py-2">
+                                  <Button type="button" size="sm" variant="ghost"
+                                    className="text-destructive hover:text-destructive h-7 w-7 p-0"
+                                    onClick={() => setPackageOccupancies(prev => prev.filter((_, idx) => idx !== i))}>
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
+                      {(() => {
+                        const defaultCurrency = getCountryCurrency(formData.countries[0] || '') || 'INR';
+                        const pkg = calcPackageCost(packageOccupancies, defaultCurrency, currencies);
+                        const totalPax = calculateTotalParticipants();
+                        const validation = validateOccupancyTotal(packageOccupancies, totalPax);
+                        return (
+                          <>
+                            {!validation.valid && (
+                              <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">
+                                <Info className="w-4 h-4 shrink-0" />
+                                {validation.message}
+                              </div>
+                            )}
+                            <div className="grid grid-cols-3 gap-4 p-4 bg-muted/40 rounded-lg">
+                              <div>
+                                <p className="text-xs text-muted-foreground">Total People Covered</p>
+                                <p className={`text-lg font-bold ${validation.valid ? 'text-green-600' : 'text-destructive'}`}>
+                                  {pkg.totalPeople}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Total Package Cost</p>
+                                <p className="text-lg font-bold text-primary">₹{pkg.totalCostINR.toLocaleString('en-IN')}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Cost Per Person</p>
+                                <p className="text-lg font-bold text-primary">
+                                  ₹{pkg.costPerPerson.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                </p>
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </>
-                  );
-                })()}
-              </>
+                  )}
+                  <Button type="button" variant="outline" className="w-full h-10 border-dashed"
+                    onClick={() => setPackageOccupancies(prev => [...prev, createBlankOccupancyRow(`occ-${Date.now()}`)])}>
+                    <Plus className="w-4 h-4 mr-2" /> Add Occupancy Row
+                  </Button>
+                </CardContent>
+              </Card>
             )}
-            <Button type="button" variant="outline" className="w-full h-10 border-dashed"
-              onClick={() => setPackageOccupancies(prev => [...prev, createBlankOccupancyRow(`occ-${Date.now()}`)])}>
-              <Plus className="w-4 h-4 mr-2" /> Add Occupancy Row
-            </Button>
-          </CardContent>
-        </Card>
-      )}
 
             {/* Transport - Flights */}
             <Card id="section-flights" className="shadow-card">
@@ -3648,8 +3647,8 @@ export default function CreateTrip() {
                           <Input
                             type="number"
                             placeholder="0"
-                            value={extras.visaCostPerPerson || ''}
-                            onChange={(e) => setExtras({ ...extras, visaCostPerPerson: parseFloat(e.target.value) || 0 })}
+                            value={extras.visaCostPerPerson}
+                            onChange={(e) => setExtras({ ...extras, visaCostPerPerson: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
                           />
                         </div>
                         <div className="space-y-2">
@@ -3692,8 +3691,8 @@ export default function CreateTrip() {
                           <Input
                             type="number"
                             placeholder="0"
-                            value={extras.tipsCostPerPerson || ''}
-                            onChange={(e) => setExtras({ ...extras, tipsCostPerPerson: parseFloat(e.target.value) || 0 })}
+                            value={extras.tipsCostPerPerson}
+                            onChange={(e) => setExtras({ ...extras, tipsCostPerPerson: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
                           />
                         </div>
                         <div className="space-y-2">
@@ -3738,8 +3737,8 @@ export default function CreateTrip() {
                       <Input
                         type="number"
                         placeholder="0"
-                        value={extras.insuranceCostPerPerson || ''}
-                        onChange={(e) => setExtras({ ...extras, insuranceCostPerPerson: parseFloat(e.target.value) || 0 })}
+                        value={extras.insuranceCostPerPerson}
+                        onChange={(e) => setExtras({ ...extras, insuranceCostPerPerson: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
                       />
                     </div>
                     <div className="space-y-2">
@@ -4012,78 +4011,78 @@ export default function CreateTrip() {
                     <span className="text-2xl font-bold text-primary">{formatCurrency(totals.grandTotal, 'INR')}</span>
                   </div>
                   <div className="flex justify-between items-center">
-              <span className="font-semibold text-muted-foreground">
-                Cost per {tripType === 'institute' ? 'Student' : 'Participant'} (before tax)
-              </span>
-              <span className="text-xl font-semibold text-muted-foreground">
-                {formatCurrency(
-                  (() => {
+                    <span className="font-semibold text-muted-foreground">
+                      Cost per {tripType === 'institute' ? 'Student' : 'Participant'} (before tax)
+                    </span>
+                    <span className="text-xl font-semibold text-muted-foreground">
+                      {formatCurrency(
+                        (() => {
+                          const denominator = tripType === 'institute'
+                            ? (formData.boys + formData.girls)
+                            : calculateTotalParticipants();
+                          return denominator > 0 ? totals.adminSubtotal / denominator : 0;
+                        })(),
+                        'INR'
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-muted-foreground">
+                      Cost per {tripType === 'institute' ? 'Student' : 'Participant'}
+                    </span>
+                    <span className="text-xl font-semibold text-primary">
+                      {formatCurrency(totals.costPerParticipant, 'INR')}
+                    </span>
+                  </div>
+
+                  {/* Per Student / Participant Breakdown */}
+                  {(() => {
                     const denominator = tripType === 'institute'
                       ? (formData.boys + formData.girls)
                       : calculateTotalParticipants();
-                    return denominator > 0 ? totals.adminSubtotal / denominator : 0;
-                  })(),
-                  'INR'
-                )}
-              </span>
-            </div>
-                  <div className="flex justify-between items-center">
-              <span className="font-semibold text-muted-foreground">
-                Cost per {tripType === 'institute' ? 'Student' : 'Participant'}
-              </span>
-              <span className="text-xl font-semibold text-primary">
-                {formatCurrency(totals.costPerParticipant, 'INR')}
-              </span>
-            </div>
-
-            {/* Per Student / Participant Breakdown */}
-            {(() => {
-              const denominator = tripType === 'institute'
-                ? (formData.boys + formData.girls)
-                : calculateTotalParticipants();
-              if (denominator === 0) return null;
-              const beforeTax = totals.adminSubtotal / denominator;
-              const gstPer   = totals.gstAmount / denominator;
-              const tcsPer   = totals.tcsAmount / denominator;
-              const totalPer = totals.grandTotal / denominator;
-              return (
-                <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-3">
-                  <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
-                    Per {tripType === 'institute' ? 'Student' : 'Participant'} Breakdown
-                    <span className="font-normal text-blue-700 dark:text-blue-300 ml-2 text-xs">
-                      ({denominator} {tripType === 'institute' ? 'students' : 'participants'})
-                    </span>
-                  </p>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-blue-800 dark:text-blue-200">Cost before tax</span>
-                      <span className="font-semibold">{formatCurrency(beforeTax, 'INR')}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-blue-800 dark:text-blue-200">GST ({totals.gstPercentage}%)</span>
-                      <span className="font-semibold">{formatCurrency(gstPer, 'INR')}</span>
-                    </div>
-                    {tripCategory === 'international' && (
-                      <div className="flex justify-between">
-                        <span className="text-blue-800 dark:text-blue-200">TCS ({totals.tcsPercentage}%)</span>
-                        <span className="font-semibold">{formatCurrency(tcsPer, 'INR')}</span>
+                    if (denominator === 0) return null;
+                    const beforeTax = totals.adminSubtotal / denominator;
+                    const gstPer = totals.gstAmount / denominator;
+                    const tcsPer = totals.tcsAmount / denominator;
+                    const totalPer = totals.grandTotal / denominator;
+                    return (
+                      <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-3">
+                        <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                          Per {tripType === 'institute' ? 'Student' : 'Participant'} Breakdown
+                          <span className="font-normal text-blue-700 dark:text-blue-300 ml-2 text-xs">
+                            ({denominator} {tripType === 'institute' ? 'students' : 'participants'})
+                          </span>
+                        </p>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-blue-800 dark:text-blue-200">Cost before tax</span>
+                            <span className="font-semibold">{formatCurrency(beforeTax, 'INR')}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-blue-800 dark:text-blue-200">GST ({totals.gstPercentage}%)</span>
+                            <span className="font-semibold">{formatCurrency(gstPer, 'INR')}</span>
+                          </div>
+                          {tripCategory === 'international' && (
+                            <div className="flex justify-between">
+                              <span className="text-blue-800 dark:text-blue-200">TCS ({totals.tcsPercentage}%)</span>
+                              <span className="font-semibold">{formatCurrency(tcsPer, 'INR')}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between pt-2 border-t border-blue-200 dark:border-blue-700">
+                            <span className="font-bold text-blue-900 dark:text-blue-100">
+                              Total per {tripType === 'institute' ? 'student' : 'participant'}
+                            </span>
+                            <span className="font-bold text-blue-900 dark:text-blue-100">
+                              {formatCurrency(totalPer, 'INR')}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                    )}
-                    <div className="flex justify-between pt-2 border-t border-blue-200 dark:border-blue-700">
-                      <span className="font-bold text-blue-900 dark:text-blue-100">
-                        Total per {tripType === 'institute' ? 'student' : 'participant'}
-                      </span>
-                      <span className="font-bold text-blue-900 dark:text-blue-100">
-                        {formatCurrency(totalPer, 'INR')}
-                      </span>
-                    </div>
-                  </div>
+                    );
+                  })()}
                 </div>
-              );
-            })()}
-          </div>
-        </CardContent>
-      </Card>
+              </CardContent>
+            </Card>
 
             {/* Add Hotel Dialog */}
             <Dialog open={addHotelDialogOpen} onOpenChange={(open) => { if (!open) setAddHotelDialogOpen(false); }}>

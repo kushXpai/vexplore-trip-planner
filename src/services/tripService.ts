@@ -800,7 +800,7 @@ export async function getTripById(tripId: string) {
       .select('*')
       .eq('trip_id', tripId)
       .single();
-    if (participantsError) throw participantsError;
+    if (participantsError && participantsError.code !== 'PGRST116') throw participantsError;
 
     const { data: extras, error: extrasError } = await supabase
       .from('trip_extras')
@@ -968,7 +968,7 @@ export async function updateTripStatus(
 }
 
 export const sendTripForApproval = (tripId: string) => updateTripStatus(tripId, 'sent');
-export const approveTrip        = (tripId: string) => updateTripStatus(tripId, 'approved');
-export const rejectTrip         = (tripId: string) => updateTripStatus(tripId, 'rejected');
-export const completeTrip       = (tripId: string) => updateTripStatus(tripId, 'completed');
-export const lockTrip           = (tripId: string) => updateTripStatus(tripId, 'locked');
+export const approveTrip = (tripId: string) => updateTripStatus(tripId, 'approved');
+export const rejectTrip = (tripId: string) => updateTripStatus(tripId, 'rejected');
+export const completeTrip = (tripId: string) => updateTripStatus(tripId, 'completed');
+export const lockTrip = (tripId: string) => updateTripStatus(tripId, 'locked');
