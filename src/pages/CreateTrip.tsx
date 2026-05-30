@@ -3594,7 +3594,7 @@ export default function CreateTrip() {
                           <Input
                             type="number" onFocus={handleNumberFocus}
                             placeholder="0"
-                            value={extras.visaCostPerPerson}
+                            value={extras.visaCostPerPerson === 0 ? '' : extras.visaCostPerPerson}
                             onChange={(e) => setExtras({ ...extras, visaCostPerPerson: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
                           />
                         </div>
@@ -3638,7 +3638,7 @@ export default function CreateTrip() {
                           <Input
                             type="number" onFocus={handleNumberFocus}
                             placeholder="0"
-                            value={extras.tipsCostPerPerson}
+                            value={extras.tipsCostPerPerson === 0 ? '' : extras.tipsCostPerPerson}
                             onChange={(e) => setExtras({ ...extras, tipsCostPerPerson: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
                           />
                         </div>
@@ -3684,7 +3684,7 @@ export default function CreateTrip() {
                       <Input
                         type="number" onFocus={handleNumberFocus}
                         placeholder="0"
-                        value={extras.insuranceCostPerPerson}
+                        value={extras.insuranceCostPerPerson === 0 ? '' : extras.insuranceCostPerPerson}
                         onChange={(e) => setExtras({ ...extras, insuranceCostPerPerson: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
                       />
                     </div>
@@ -3863,7 +3863,7 @@ export default function CreateTrip() {
                     <Input
                       type="number" onFocus={handleNumberFocus}
                       placeholder="0"
-                      value={profit || ''}
+                      value={profit === 0 ? '' : profit}
                       onChange={(e) => setProfit(parseFloat(e.target.value) || 0)}
                       className="flex-1"
                     />
