@@ -6,8 +6,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { ActualExpensesEntry, ActualExpenses } from '@/components/trip/ActualExpensesEntry';
 import { toast } from 'sonner';
+import { sendTripSubmittedEmail, sendTripApprovedEmail, sendTripRejectedEmail } from '@/services/email';
 import {
   ArrowLeft,
   Pencil,
@@ -63,7 +74,13 @@ export default function TripDetail() {
   const [isLocked, setIsLocked] = useState(false);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [currentUserRole, setCurrentUserRole] = useState<'superadmin' | 'admin' | 'manager' | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [showApprovalDialog, setShowApprovalDialog] = useState(false);
+  const [showRejectionDialog, setShowRejectionDialog] = useState(false);
+  const [approvalRemarks, setApprovalRemarks] = useState('');
+  const [rejectionRemarks, setRejectionRemarks] = useState('');
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
 
   // Fetch currencies on mount
   useEffect(() => {
@@ -76,11 +93,12 @@ export default function TripDetail() {
     loadCurrencies();
   }, []);
 
-  // Fetch current user role
+  // Fetch current user role + id
   useEffect(() => {
     const fetchUserRole = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        setCurrentUserId(user.id);
         const { data: userData } = await supabase
           .from('users')
           .select('role')
@@ -382,41 +400,121 @@ export default function TripDetail() {
     }
 
     setTripStatus('sent');
-    toast.success('Trip sent for approval! Waiting for admin approval.');
+
+    // Send submission email notification
+    try {
+      const emailResult = await sendTripSubmittedEmail(trip.id);
+      if (emailResult.success) {
+        toast.success('Trip sent for approval! Email notification sent to admins.');
+      } else {
+        toast.success('Trip sent for approval!', {
+          description: 'Note: Email notification failed to send.',
+        });
+      }
+    } catch {
+      toast.success('Trip sent for approval!', {
+        description: 'Note: Email notification failed to send.',
+      });
+    }
   };
 
   const handleApproveTrip = async () => {
-    if (!trip) return;
+    if (!trip || isProcessingAction) return;
+
+    setIsProcessingAction(true);
+    setShowApprovalDialog(false);
 
     const { error } = await supabase
       .from('trips')
-      .update({ status: 'approved' })
+      .update({
+        status: 'approved',
+        approved_by: currentUserId,
+        approved_at: new Date().toISOString(),
+        approval_remarks: approvalRemarks || null,
+      })
       .eq('id', trip.id);
 
     if (error) {
       toast.error('Failed to approve trip');
+      setIsProcessingAction(false);
       return;
     }
 
     setTripStatus('approved');
-    toast.success('Trip approved successfully!');
+
+    // Send approval email
+    try {
+      const role = currentUserRole === 'superadmin' ? 'superadmin' : 'admin';
+      const emailResult = await sendTripApprovedEmail(trip.id, role, currentUserId!, approvalRemarks);
+      if (emailResult.success) {
+        toast.success('Trip approved successfully!', {
+          description: 'Email notification sent to the trip creator.',
+        });
+      } else {
+        toast.success('Trip approved successfully!', {
+          description: 'Note: Email notification failed to send.',
+        });
+      }
+    } catch {
+      toast.success('Trip approved successfully!', {
+        description: 'Note: Email notification failed to send.',
+      });
+    }
+
+    setApprovalRemarks('');
+    setIsProcessingAction(false);
   };
 
   const handleRejectTrip = async () => {
-    if (!trip) return;
+    if (!trip || isProcessingAction) return;
+
+    if (!rejectionRemarks.trim()) {
+      toast.error('Please provide a reason for rejection');
+      return;
+    }
+
+    setIsProcessingAction(true);
+    setShowRejectionDialog(false);
 
     const { error } = await supabase
       .from('trips')
-      .update({ status: 'rejected' })
+      .update({
+        status: 'rejected',
+        approved_by: currentUserId,
+        approved_at: new Date().toISOString(),
+        approval_remarks: rejectionRemarks,
+      })
       .eq('id', trip.id);
 
     if (error) {
       toast.error('Failed to reject trip');
+      setIsProcessingAction(false);
       return;
     }
 
     setTripStatus('rejected');
-    toast.success('Trip rejected');
+
+    // Send rejection email
+    try {
+      const role = currentUserRole === 'superadmin' ? 'superadmin' : 'admin';
+      const emailResult = await sendTripRejectedEmail(trip.id, role, currentUserId!, rejectionRemarks);
+      if (emailResult.success) {
+        toast.success('Trip rejected.', {
+          description: 'Email notification sent to the trip creator.',
+        });
+      } else {
+        toast.success('Trip rejected.', {
+          description: 'Note: Email notification failed to send.',
+        });
+      }
+    } catch {
+      toast.success('Trip rejected.', {
+        description: 'Note: Email notification failed to send.',
+      });
+    }
+
+    setRejectionRemarks('');
+    setIsProcessingAction(false);
   };
 
   const handleCompleteTrip = async () => {
@@ -613,11 +711,19 @@ export default function TripDetail() {
           {/* SENT - Approve/Reject for admins/superadmins */}
           {!isLocked && tripStatus === 'sent' && (currentUserRole === 'admin' || currentUserRole === 'superadmin') && (
             <>
-              <Button onClick={handleApproveTrip} className="bg-green-600 hover:bg-green-700">
+              <Button
+                onClick={() => setShowApprovalDialog(true)}
+                className="bg-green-600 hover:bg-green-700"
+                disabled={isProcessingAction}
+              >
                 <CheckCircle className="w-4 h-4 mr-2" />
                 Approve
               </Button>
-              <Button onClick={handleRejectTrip} variant="destructive">
+              <Button
+                onClick={() => setShowRejectionDialog(true)}
+                variant="destructive"
+                disabled={isProcessingAction}
+              >
                 <XCircle className="w-4 h-4 mr-2" />
                 Reject
               </Button>
@@ -661,6 +767,75 @@ export default function TripDetail() {
           )}
         </div>
       </div>
+
+      {/* Approval Dialog */}
+      <Dialog open={showApprovalDialog} onOpenChange={setShowApprovalDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Approve Trip Cost Sheet</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to approve this trip? An email notification will be sent to the creator.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label>Remarks (Optional)</Label>
+            <Textarea
+              value={approvalRemarks}
+              onChange={(e) => setApprovalRemarks(e.target.value)}
+              placeholder="Add any remarks for the creator..."
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowApprovalDialog(false)} disabled={isProcessingAction}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleApproveTrip}
+              className="bg-green-600 hover:bg-green-700"
+              disabled={isProcessingAction}
+            >
+              <CheckCircle className="w-4 h-4 mr-2" />
+              {isProcessingAction ? 'Processing...' : 'Approve'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rejection Dialog */}
+      <Dialog open={showRejectionDialog} onOpenChange={setShowRejectionDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Trip Cost Sheet</DialogTitle>
+            <DialogDescription>
+              Provide a reason for rejecting this trip. The creator will be notified by email.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label>Rejection Reason *</Label>
+            <Textarea
+              value={rejectionRemarks}
+              onChange={(e) => setRejectionRemarks(e.target.value)}
+              placeholder="Explain why this trip is being rejected..."
+              rows={4}
+              required
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRejectionDialog(false)} disabled={isProcessingAction}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleRejectTrip}
+              disabled={isProcessingAction}
+            >
+              <XCircle className="w-4 h-4 mr-2" />
+              {isProcessingAction ? 'Processing...' : 'Reject'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Complete Trip Confirmation Dialog */}
       {showCompleteDialog && (

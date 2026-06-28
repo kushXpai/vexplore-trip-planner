@@ -1419,7 +1419,28 @@ export default function CreateTrip() {
         : await createTrip(tripData);
 
       if (result.success) {
-        toast.success(isEditing ? 'Trip updated successfully!' : 'Trip created successfully!');
+        // Send submission email when a NEW trip is created (not on edits)
+        if (!isEditing && (result as any).tripId) {
+          try {
+            const { sendTripSubmittedEmail } = await import('../services/email');
+            const emailResult = await sendTripSubmittedEmail((result as any).tripId);
+            if (emailResult.success) {
+              toast.success('Trip created and submitted for approval!', {
+                description: 'Email notification sent to admins.',
+              });
+            } else {
+              toast.success('Trip created successfully!', {
+                description: 'Note: Email notification failed to send.',
+              });
+            }
+          } catch {
+            toast.success('Trip created successfully!', {
+              description: 'Note: Email notification failed to send.',
+            });
+          }
+        } else {
+          toast.success(isEditing ? 'Trip updated successfully!' : 'Trip created successfully!');
+        }
         navigate('/dashboard');
       } else {
         toast.error(result.error || 'Failed to save trip');
