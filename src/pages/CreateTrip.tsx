@@ -1,5 +1,5 @@
 // src/pages/CreateTrip.tsx - UPDATED WITH ALL NEW FEATURES
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -63,6 +63,9 @@ export default function CreateTrip() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isInitialLoadRef = useRef(true);
 
   // NEW: Trip classification state
   const [tripCategory, setTripCategory] = useState<TripCategory>('domestic');
@@ -112,6 +115,8 @@ export default function CreateTrip() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [overheads, setOverheads] = useState<Overhead[]>([]);
   const [profit, setProfit] = useState(0);
+  const [profitMode, setProfitMode] = useState<'flat' | 'percentage'>('flat');
+  const [profitPercentage, setProfitPercentage] = useState(0);
 
   // NEW: Extras state
   const [extras, setExtras] = useState<TripExtras>({
@@ -175,6 +180,7 @@ export default function CreateTrip() {
   const [pendingCityToDate, setPendingCityToDate] = useState('');
 
   const [packageOccupancies, setPackageOccupancies] = useState<PackageOccupancyRow[]>([]);
+  const [packageCurrency, setPackageCurrency] = useState<string>('INR');
 
   useEffect(() => {
     if (tripCategory === 'domestic') {
@@ -282,6 +288,7 @@ export default function CreateTrip() {
           overheads: dbOverheads,
           meals: dbMeals,
           extras: dbExtras,
+          packageOccupancies: dbPackageOccupancies,
         } = result.data;
 
         // NEW: Set trip category, type, and planning mode
@@ -315,7 +322,25 @@ export default function CreateTrip() {
         });
 
         // NEW: Load profit from trip
-        setProfit(trip.profit || 0);
+        const loadedProfit = trip.profit || 0;
+        setProfit(loadedProfit);
+
+        // Load package currency
+        if (trip.package_currency) {
+          setPackageCurrency(trip.package_currency);
+        }
+
+        // Load package occupancies (tour_planner mode)
+        if (dbPackageOccupancies && Array.isArray(dbPackageOccupancies)) {
+          setPackageOccupancies(dbPackageOccupancies.map((o: any) => ({
+            id: o.id,
+            occupancySize: o.occupancy_size,
+            costPerRoom: o.cost_per_room,
+            roomCount: o.room_count,
+            peopleCovered: o.occupancy_size * o.room_count,
+            rowCost: o.cost_per_room * o.room_count,
+          })));
+        }
 
         // Load extras if available
         if (dbExtras) {
@@ -549,9 +574,13 @@ export default function CreateTrip() {
   const calculateHotelMealCost = (accId: string, nights: number, totalPax: number, currency: string) => {
     const m = getHotelMealDefaults(accId, currency);
     const rate = getCurrencyRate(m.currency);
-    const bfTotal = m.breakfastCostPerPerson * Math.max(0, totalPax - m.freeBreakfast) * nights;
-    const lunchTotal = m.lunchCostPerPerson * Math.max(0, totalPax - m.freeLunch) * nights;
-    const dinnerTotal = m.dinnerCostPerPerson * Math.max(0, totalPax - m.freeDinner) * nights;
+    // freeBreakfast/freeLunch/freeDinner = number of free nights (not free people)
+    const billableBfNights = Math.max(0, nights - m.freeBreakfast);
+    const billableLunchNights = Math.max(0, nights - m.freeLunch);
+    const billableDinnerNights = Math.max(0, nights - m.freeDinner);
+    const bfTotal = m.breakfastCostPerPerson * billableBfNights * totalPax;
+    const lunchTotal = m.lunchCostPerPerson * billableLunchNights * totalPax;
+    const dinnerTotal = m.dinnerCostPerPerson * billableDinnerNights * totalPax;
     const totalCost = bfTotal + lunchTotal + dinnerTotal;
     return {
       breakfastTotal: bfTotal,
@@ -1144,13 +1173,25 @@ export default function CreateTrip() {
     const overheadsTotal = overheads.reduce((sum, o) => sum + o.totalCostINR, 0);
     const extrasTotal = extras.visaTotalCostINR + extras.tipsTotalCostINR + extras.insuranceTotalCostINR;
 
-    const subtotal = transportTotal + accommodationTotal + mealsTotal + activitiesTotal + overheadsTotal + extrasTotal;
+    // For tour_planner mode, include the package occupancy cost instead of individual line items
+    const packageTotal = planningMode === 'tour_planner' && packageOccupancies.length > 0
+      ? calcPackageCost(packageOccupancies, packageCurrency, currencies).totalCostINR
+      : 0;
 
+    const subtotal = planningMode === 'tour_planner'
+      ? packageTotal + extrasTotal + overheadsTotal
+      : transportTotal + accommodationTotal + mealsTotal + activitiesTotal + overheadsTotal + extrasTotal;
+
+    // Business rules:
+    // - TCS: international trips only, NOT for commercial trips (any category) or FTI
+    // - FTI trips: no TCS, no TDS
+    const applyInternational = tripCategory === 'international' && tripType !== 'fti' && tripType !== 'commercial';
+    const applyFTI = false; // FTI no longer gets TDS per business rule
     const taxCalc = await calculateGrandTotal(
       subtotal,
       profit,
-      tripCategory === 'international',
-      tripType === 'fti'
+      applyInternational,
+      applyFTI
     );
 
     return {
@@ -1160,6 +1201,7 @@ export default function CreateTrip() {
       activities: activitiesTotal,
       overheads: overheadsTotal,
       extras: extrasTotal,
+      packageTotal,
       subtotalBeforeTax: taxCalc.subtotal,
       profit: taxCalc.profit,
       adminSubtotal: taxCalc.adminSubtotal,
@@ -1190,6 +1232,7 @@ export default function CreateTrip() {
     activities: 0,
     overheads: 0,
     extras: 0,
+    packageTotal: 0,
     subtotalBeforeTax: 0,
     profit: 0,
     adminSubtotal: 0,
@@ -1223,6 +1266,8 @@ export default function CreateTrip() {
     tripCategory,
     tripType,
     planningMode,
+    packageOccupancies,
+    packageCurrency,
     formData.boys,
     formData.girls,
     formData.maleCount,
@@ -1290,6 +1335,7 @@ export default function CreateTrip() {
         totalDays: days,
         totalNights: nights,
         defaultCurrency: getCountryCurrency(formData.countries[0] || '') || 'INR',
+        packageCurrency: planningMode === 'tour_planner' ? packageCurrency : undefined,
 
         participants: {
           boys: formData.boys,
@@ -1344,6 +1390,17 @@ export default function CreateTrip() {
 
         extras,
 
+        // Package occupancies (tour_planner only)
+        packageOccupancies: planningMode === 'tour_planner' ? packageOccupancies : [],
+        ...(planningMode === 'tour_planner' && packageOccupancies.length > 0 ? (() => {
+          const pkg = calcPackageCost(packageOccupancies, packageCurrency, currencies);
+          return {
+            packageTotalCost: pkg.totalCost,
+            packageTotalCostINR: pkg.totalCostINR,
+            packageCostPerPerson: pkg.costPerPerson,
+          };
+        })() : {}),
+
         subtotalBeforeTax: totals.subtotalBeforeTax,
         profit: profit,
         gstPercentage: totals.gstPercentage,
@@ -1375,6 +1432,141 @@ export default function CreateTrip() {
     }
   };
 
+  // Auto-save: fires 3s after last change, only when editing an existing trip
+  const performAutoSave = useCallback(async () => {
+    if (!isEditing || !editId || isSaving || isLoading || isLoadingMasterData) return;
+    if (!formData.name.trim() || formData.countries.length === 0) return;
+
+    setAutoSaveStatus('saving');
+    try {
+      const { days, nights } = calculateTripDuration();
+      const totalParticipants = calculateTotalParticipants();
+      const countryNames = formData.countries.map(countryId => {
+        const country = countries.find(c => c.id === countryId);
+        return country?.name || countryId;
+      });
+
+      const tripData = {
+        name: formData.name,
+        institution: formData.institution,
+        tripCategory,
+        tripType,
+        planningMode,
+        countries: countryNames,
+        cities: formData.cities,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        totalDays: days,
+        totalNights: nights,
+        defaultCurrency: getCountryCurrency(formData.countries[0] || '') || 'INR',
+        packageCurrency: planningMode === 'tour_planner' ? packageCurrency : undefined,
+        participants: {
+          boys: formData.boys,
+          girls: formData.girls,
+          maleFaculty: formData.maleFaculty,
+          femaleFaculty: formData.femaleFaculty,
+          maleVXplorers: formData.maleVXplorers,
+          femaleVXplorers: formData.femaleVXplorers,
+          maleCount: formData.maleCount,
+          femaleCount: formData.femaleCount,
+          otherCount: formData.otherCount,
+          commercialMaleVXplorers: tripType === 'fti' ? 0 : formData.commercialMaleVXplorers,
+          commercialFemaleVXplorers: tripType === 'fti' ? 0 : formData.commercialFemaleVXplorers,
+          totalStudents: calculateTotalStudents(),
+          totalFaculty: calculateTotalFaculty(),
+          totalVXplorers: tripType === 'fti' ? 0 : (formData.maleVXplorers + formData.femaleVXplorers + formData.commercialMaleVXplorers + formData.commercialFemaleVXplorers),
+          totalCommercial: calculateTotalCommercial(),
+          totalParticipants,
+        },
+        flights,
+        buses,
+        trains,
+        accommodations,
+        meals: accommodations.map(acc => {
+          const m = getHotelMealDefaults(acc.id, acc.currency);
+          const totalPax = calculateTotalParticipants();
+          const { totalCost, totalCostINR } = calculateHotelMealCost(acc.id, acc.numberOfNights, totalPax, acc.currency);
+          return {
+            accommodation_id: acc.id,
+            hotel_name: acc.hotelName,
+            city: acc.city,
+            number_of_nights: acc.numberOfNights,
+            restaurant_id: m.restaurantId || undefined,
+            restaurant_name: m.restaurantName || undefined,
+            breakfast_cost_per_person: m.breakfastCostPerPerson,
+            lunch_cost_per_person: m.lunchCostPerPerson,
+            dinner_cost_per_person: m.dinnerCostPerPerson,
+            free_breakfast: m.freeBreakfast,
+            free_lunch: m.freeLunch,
+            free_dinner: m.freeDinner,
+            currency: m.currency,
+            total_participants: totalPax,
+            total_cost: totalCost,
+            total_cost_inr: totalCostINR,
+          };
+        }),
+        activities,
+        overheads,
+        extras,
+        packageOccupancies: planningMode === 'tour_planner' ? packageOccupancies : [],
+        ...(planningMode === 'tour_planner' && packageOccupancies.length > 0 ? (() => {
+          const pkg = calcPackageCost(packageOccupancies, packageCurrency, currencies);
+          return {
+            packageTotalCost: pkg.totalCost,
+            packageTotalCostINR: pkg.totalCostINR,
+            packageCostPerPerson: pkg.costPerPerson,
+          };
+        })() : {}),
+        subtotalBeforeTax: totals.subtotalBeforeTax,
+        profit,
+        gstPercentage: totals.gstPercentage,
+        gstAmount: totals.gstAmount,
+        tcsPercentage: totals.tcsPercentage,
+        tcsAmount: totals.tcsAmount,
+        tdsPercentage: totals.tdsPercentage,
+        tdsAmount: totals.tdsAmount,
+        grandTotal: totals.grandTotal,
+        grandTotalINR: totals.grandTotal,
+        costPerParticipant: totals.costPerParticipant,
+      };
+
+      const result = await updateTrip(editId, tripData);
+      setAutoSaveStatus(result.success ? 'saved' : 'error');
+    } catch {
+      setAutoSaveStatus('error');
+    }
+    // Reset status after 3s
+    setTimeout(() => setAutoSaveStatus('idle'), 3000);
+  }, [
+    isEditing, editId, isSaving, isLoading, isLoadingMasterData, formData, tripCategory, tripType,
+    planningMode, flights, buses, trains, accommodations, hotelMeals, activities, overheads, extras,
+    profit, totals, packageCurrency, packageOccupancies, countries, currencies
+  ]);
+
+  // Debounce auto-save: schedule it 3s after last state change (edit mode only)
+  useEffect(() => {
+    if (!isEditing || isInitialLoadRef.current) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      performAutoSave();
+    }, 3000);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [
+    formData, flights, buses, trains, accommodations, hotelMeals, activities, overheads,
+    extras, profit, tripCategory, tripType, planningMode, packageCurrency, packageOccupancies
+  ]);
+
+  // Mark initial load complete so auto-save doesn't fire on load
+  useEffect(() => {
+    if (!isLoading && !isLoadingMasterData && isEditing) {
+      // Short delay to let all state setters from loadTripData settle
+      const t = setTimeout(() => { isInitialLoadRef.current = false; }, 500);
+      return () => clearTimeout(t);
+    }
+  }, [isLoading, isLoadingMasterData, isEditing]);
+
   if (isLoadingMasterData || (isEditing && isLoading)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -1391,12 +1583,26 @@ export default function CreateTrip() {
       {/* Fixed header */}
       <div className="px-6 pt-6 pb-4 shrink-0">
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-3xl font-bold gradient-text">
-            {isEditing ? 'Edit Trip' : 'Create New Trip'}
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            {isEditing ? 'Update trip details and costs' : 'Plan a new trip'}
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold gradient-text">
+                {isEditing ? 'Edit Trip' : 'Create New Trip'}
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                {isEditing ? 'Update trip details and costs' : 'Plan a new trip'}
+              </p>
+            </div>
+            {isEditing && autoSaveStatus !== 'idle' && (
+              <div className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-full ${
+                autoSaveStatus === 'saving' ? 'bg-muted text-muted-foreground' :
+                autoSaveStatus === 'saved' ? 'bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400' :
+                'bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400'
+              }`}>
+                {autoSaveStatus === 'saving' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {autoSaveStatus === 'saving' ? 'Auto-saving...' : autoSaveStatus === 'saved' ? '✓ Auto-saved' : 'Auto-save failed'}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1518,18 +1724,9 @@ export default function CreateTrip() {
                       <div className="text-sm text-amber-900 dark:text-amber-100">
                         <p className="font-semibold mb-1">FTI Trip - Tax Info</p>
                         <ul className="list-disc list-inside space-y-1 text-amber-800 dark:text-amber-200">
-                          {tripCategory === 'domestic' ? (
-                            <>
-                              <li>GST: applied on subtotal</li>
-                              <li>TDS: deducted on (Subtotal + GST)</li>
-                            </>
-                          ) : (
-                            <>
-                              <li>GST: applied on subtotal</li>
-                              <li>TCS: applied on (Subtotal + GST)</li>
-                              <li>TDS: deducted on (Subtotal + GST + TCS)</li>
-                            </>
-                          )}
+                          <li>GST: applied on subtotal</li>
+                          <li>TCS: not applicable for FTI trips</li>
+                          <li>TDS: not applicable for FTI trips</li>
                         </ul>
                       </div>
                     </div>
@@ -1968,7 +2165,7 @@ export default function CreateTrip() {
                   </>
                 ) : (
                   <>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-4 gap-4">
                       <div className="space-y-2">
                         <Label>Male Participants</Label>
                         <Input type="number" min="0" placeholder="0"
@@ -1982,6 +2179,13 @@ export default function CreateTrip() {
                           value={formData.femaleCount || ''}
                           onFocus={handleNumberFocus}
                           onChange={(e) => setFormData({ ...formData, femaleCount: parseInt(e.target.value) || 0 })} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Kids</Label>
+                        <Input type="number" min="0" placeholder="0"
+                          value={formData.otherCount || ''}
+                          onFocus={handleNumberFocus}
+                          onChange={(e) => setFormData({ ...formData, otherCount: parseInt(e.target.value) || 0 })} />
                       </div>
                       <div className="space-y-2 flex flex-col justify-end">
                         <div className="p-3 bg-muted rounded-lg">
@@ -2044,6 +2248,29 @@ export default function CreateTrip() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* Package Currency selector */}
+                  <div className="flex items-center gap-4 p-3 bg-muted/30 rounded-lg">
+                    <Label className="text-sm font-semibold shrink-0">Package Currency</Label>
+                    <Select
+                      value={packageCurrency}
+                      onValueChange={(v) => setPackageCurrency(v)}
+                      disabled={isLoadingMasterData}
+                    >
+                      <SelectTrigger className="h-9 w-48 text-sm">
+                        <SelectValue placeholder="Select currency" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover">
+                        {currencies.map((currency) => (
+                          <SelectItem key={currency.id} value={currency.code}>
+                            {currency.code} — {currency.name} ({currency.symbol})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <span className="text-xs text-muted-foreground">
+                      Rate: 1 {packageCurrency} = ₹{getCurrencyRate(packageCurrency).toLocaleString('en-IN')}
+                    </span>
+                  </div>
                   {packageOccupancies.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">
                       No occupancy rows yet. Add rows to define the package pricing structure.
@@ -2093,7 +2320,7 @@ export default function CreateTrip() {
                                     }} />
                                 </td>
                                 <td className="px-3 py-2 font-medium text-muted-foreground">{row.peopleCovered}</td>
-                                <td className="px-3 py-2 font-medium text-primary">₹{row.rowCost.toLocaleString('en-IN')}</td>
+                                <td className="px-3 py-2 font-medium text-primary">{formatCurrency(row.rowCost, packageCurrency)}</td>
                                 <td className="px-3 py-2">
                                   <Button type="button" size="sm" variant="ghost"
                                     className="text-destructive hover:text-destructive h-7 w-7 p-0"
@@ -2107,8 +2334,7 @@ export default function CreateTrip() {
                         </table>
                       </div>
                       {(() => {
-                        const defaultCurrency = getCountryCurrency(formData.countries[0] || '') || 'INR';
-                        const pkg = calcPackageCost(packageOccupancies, defaultCurrency, currencies);
+                        const pkg = calcPackageCost(packageOccupancies, packageCurrency, currencies);
                         const totalPax = calculateTotalParticipants();
                         const validation = validateOccupancyTotal(packageOccupancies, totalPax);
                         return (
@@ -2128,12 +2354,15 @@ export default function CreateTrip() {
                               </div>
                               <div>
                                 <p className="text-xs text-muted-foreground">Total Package Cost</p>
-                                <p className="text-lg font-bold text-primary">₹{pkg.totalCostINR.toLocaleString('en-IN')}</p>
+                                <p className="text-lg font-bold text-primary">{formatCurrency(pkg.totalCost, packageCurrency)}</p>
+                                {packageCurrency !== 'INR' && (
+                                  <p className="text-xs text-muted-foreground">{formatCurrency(pkg.totalCostINR, 'INR')}</p>
+                                )}
                               </div>
                               <div>
                                 <p className="text-xs text-muted-foreground">Cost Per Person</p>
                                 <p className="text-lg font-bold text-primary">
-                                  ₹{pkg.costPerPerson.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                                  {formatCurrency(pkg.costPerPerson, packageCurrency)}
                                 </p>
                               </div>
                             </div>
@@ -3133,7 +3362,7 @@ export default function CreateTrip() {
                                       <>
                                         <RoomCounterGroup label={`Male Participants (${formData.maleCount})`} totalPeople={formData.maleCount} groupKey="commercialMale" />
                                         <RoomCounterGroup label={`Female Participants (${formData.femaleCount})`} totalPeople={formData.femaleCount} groupKey="commercialFemale" />
-                                        <RoomCounterGroup label={`Other Participants (${formData.otherCount})`} totalPeople={formData.otherCount} groupKey="commercialOther" />
+                                        <RoomCounterGroup label={`Kids (${formData.otherCount})`} totalPeople={formData.otherCount} groupKey="commercialOther" />
                                         <RoomCounterGroup label={`Male VXplorers (${formData.commercialMaleVXplorers})`} totalPeople={formData.commercialMaleVXplorers} groupKey="commercialMaleVXplorers" />
                                         <RoomCounterGroup label={`Female VXplorers (${formData.commercialFemaleVXplorers})`} totalPeople={formData.commercialFemaleVXplorers} groupKey="commercialFemaleVXplorers" />
                                       </>
@@ -3856,41 +4085,114 @@ export default function CreateTrip() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* NEW: Admin Charges Input */}
-                <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg space-y-2">
-                  <Label className="text-sm font-semibold">Admin Charges</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number" onFocus={handleNumberFocus}
-                      placeholder="0"
-                      value={profit === 0 ? '' : profit}
-                      onChange={(e) => setProfit(parseFloat(e.target.value) || 0)}
-                      className="flex-1"
-                    />
-                    <span className="text-sm text-muted-foreground">₹</span>
+                {/* Admin Charges Input */}
+                <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold">Admin Charges</Label>
+                    <div className="flex items-center gap-1 p-0.5 bg-muted rounded-lg text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setProfitMode('flat')}
+                        className={`px-3 py-1 rounded-md transition-all ${profitMode === 'flat' ? 'bg-background shadow font-semibold' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        ₹ Flat
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProfitMode('percentage')}
+                        className={`px-3 py-1 rounded-md transition-all ${profitMode === 'percentage' ? 'bg-background shadow font-semibold' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        % of Subtotal
+                      </button>
+                    </div>
                   </div>
+                  <div className="flex items-center gap-3">
+                    {profitMode === 'flat' ? (
+                      <div className="flex-1 space-y-1">
+                        <Label className="text-xs text-muted-foreground">Amount (₹)</Label>
+                        <Input
+                          type="number" onFocus={handleNumberFocus}
+                          placeholder="0"
+                          value={profit === 0 ? '' : profit}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            setProfit(val);
+                            if (totals.subtotalBeforeTax > 0) {
+                              setProfitPercentage(parseFloat(((val / totals.subtotalBeforeTax) * 100).toFixed(4)));
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex-1 space-y-1">
+                        <Label className="text-xs text-muted-foreground">Percentage (%)</Label>
+                        <Input
+                          type="number" onFocus={handleNumberFocus}
+                          placeholder="0"
+                          value={profitPercentage === 0 ? '' : profitPercentage}
+                          onChange={(e) => {
+                            const pct = parseFloat(e.target.value) || 0;
+                            setProfitPercentage(pct);
+                            const flatVal = parseFloat(((totals.subtotalBeforeTax * pct) / 100).toFixed(2));
+                            setProfit(flatVal);
+                          }}
+                        />
+                      </div>
+                    )}
+                    <div className="shrink-0 text-right">
+                      {profitMode === 'flat' && totals.subtotalBeforeTax > 0 && profit > 0 && (
+                        <>
+                          <p className="text-xs text-muted-foreground">As % of Subtotal</p>
+                          <p className="text-lg font-bold text-primary">
+                            {((profit / totals.subtotalBeforeTax) * 100).toFixed(2)}%
+                          </p>
+                        </>
+                      )}
+                      {profitMode === 'percentage' && profit > 0 && (
+                        <>
+                          <p className="text-xs text-muted-foreground">Flat Amount</p>
+                          <p className="text-lg font-bold text-primary">{formatCurrency(profit, 'INR')}</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {profit > 0 && (
+                    <div className="flex items-center justify-between text-sm bg-background rounded-md px-3 py-2 border">
+                      <span className="text-muted-foreground">Admin Charges:</span>
+                      <span className="font-semibold text-primary">{formatCurrency(profit, 'INR')}</span>
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground">
-                    Admin Charges will be added to subtotal before calculating GST and TCS
+                    Admin Charges are added to subtotal before GST is calculated
                   </p>
                 </div>
 
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center pb-2 border-b">
-                    <span className="text-muted-foreground">Transport</span>
-                    <span className="font-semibold">{formatCurrency(totals.transport, 'INR')}</span>
-                  </div>
-                  <div className="flex justify-between items-center pb-2 border-b">
-                    <span className="text-muted-foreground">Accommodation</span>
-                    <span className="font-semibold">{formatCurrency(totals.accommodation, 'INR')}</span>
-                  </div>
-                  <div className="flex justify-between items-center pb-2 border-b">
-                    <span className="text-muted-foreground">Meals</span>
-                    <span className="font-semibold">{formatCurrency(totals.meals, 'INR')}</span>
-                  </div>
-                  <div className="flex justify-between items-center pb-2 border-b">
-                    <span className="text-muted-foreground">Activities</span>
-                    <span className="font-semibold">{formatCurrency(totals.activities, 'INR')}</span>
-                  </div>
+                  {planningMode === 'tour_planner' ? (
+                    <div className="flex justify-between items-center pb-2 border-b">
+                      <span className="text-muted-foreground">Package Cost (Tour Planner)</span>
+                      <span className="font-semibold">{formatCurrency(totals.packageTotal, 'INR')}</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between items-center pb-2 border-b">
+                        <span className="text-muted-foreground">Transport</span>
+                        <span className="font-semibold">{formatCurrency(totals.transport, 'INR')}</span>
+                      </div>
+                      <div className="flex justify-between items-center pb-2 border-b">
+                        <span className="text-muted-foreground">Accommodation</span>
+                        <span className="font-semibold">{formatCurrency(totals.accommodation, 'INR')}</span>
+                      </div>
+                      <div className="flex justify-between items-center pb-2 border-b">
+                        <span className="text-muted-foreground">Meals</span>
+                        <span className="font-semibold">{formatCurrency(totals.meals, 'INR')}</span>
+                      </div>
+                      <div className="flex justify-between items-center pb-2 border-b">
+                        <span className="text-muted-foreground">Activities</span>
+                        <span className="font-semibold">{formatCurrency(totals.activities, 'INR')}</span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between items-center pb-2 border-b">
                     <span className="text-muted-foreground">Visa, Tips and Insurance</span>
                     <span className="font-semibold">{formatCurrency(totals.extras, 'INR')}</span>
@@ -3907,11 +4209,16 @@ export default function CreateTrip() {
                     <span className="text-lg font-bold">{formatCurrency(totals.subtotalBeforeTax, 'INR')}</span>
                   </div>
 
-                  {/* NEW: Admin Charges */}
+                  {/* Admin Charges */}
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-muted-foreground flex items-center gap-2">
                       <BadgePercent className="w-4 h-4" />
                       Admin Charges
+                      {totals.subtotalBeforeTax > 0 && totals.profit > 0 && (
+                        <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                          {((totals.profit / totals.subtotalBeforeTax) * 100).toFixed(2)}%
+                        </span>
+                      )}
                     </span>
                     <span className="font-semibold">{formatCurrency(totals.profit, 'INR')}</span>
                   </div>
@@ -3931,8 +4238,8 @@ export default function CreateTrip() {
                     <span className="font-semibold">{formatCurrency(totals.gstAmount, 'INR')}</span>
                   </div>
 
-                  {/* TCS (International only) */}
-                  {tripCategory === 'international' && (
+                  {/* TCS — international trips only, not applicable for FTI or commercial domestic */}
+                  {tripCategory === 'international' && tripType !== 'fti' && tripType !== 'commercial' && (
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-muted-foreground flex items-center gap-2">
                         <BadgePercent className="w-4 h-4" />
@@ -3941,15 +4248,14 @@ export default function CreateTrip() {
                       <span className="font-semibold">{formatCurrency(totals.tcsAmount, 'INR')}</span>
                     </div>
                   )}
-
-                  {/* TDS (FTI trips only) */}
+                  {tripType === 'commercial' && (
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Info className="w-3.5 h-3.5" /> TCS not applicable for commercial trips
+                    </div>
+                  )}
                   {tripType === 'fti' && (
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground flex items-center gap-2">
-                        <BadgePercent className="w-4 h-4" />
-                        TDS ({totals.tdsPercentage}% deducted{tripCategory === 'international' ? ' on Subtotal + GST + TCS' : ' on Subtotal + GST'})
-                      </span>
-                      <span className="font-semibold text-destructive">- {formatCurrency(totals.tdsAmount, 'INR')}</span>
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Info className="w-3.5 h-3.5" /> TCS and TDS not applicable for FTI trips
                     </div>
                   )}
 
@@ -4009,7 +4315,7 @@ export default function CreateTrip() {
                             <span className="text-blue-800 dark:text-blue-200">GST ({totals.gstPercentage}%)</span>
                             <span className="font-semibold">{formatCurrency(gstPer, 'INR')}</span>
                           </div>
-                          {tripCategory === 'international' && (
+                          {tripCategory === 'international' && tripType !== 'fti' && tripType !== 'commercial' && (
                             <div className="flex justify-between">
                               <span className="text-blue-800 dark:text-blue-200">TCS ({totals.tcsPercentage}%)</span>
                               <span className="font-semibold">{formatCurrency(tcsPer, 'INR')}</span>

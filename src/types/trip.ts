@@ -52,6 +52,7 @@ export interface Trip {
   totalNights: number;
 
   defaultCurrency: string;
+  packageCurrency: string;
 
   status: TripStatus;
 

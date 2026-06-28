@@ -38,6 +38,7 @@ interface DbTrip {
   total_days: number;
   total_nights: number;
   default_currency: string;
+  package_currency?: string;
   status: string;
   subtotal_before_tax: number;
   profit: number;
@@ -243,6 +244,7 @@ interface TripInput {
   totalDays: number;
   totalNights: number;
   defaultCurrency: string;
+  packageCurrency?: string;
   participants: Participants;
   flights: Flight[];
   buses: Bus[];
@@ -429,6 +431,7 @@ export async function createTrip(tripData: TripInput) {
       total_days: tripData.totalDays,
       total_nights: tripData.totalNights,
       default_currency: tripData.defaultCurrency,
+      package_currency: tripData.packageCurrency || undefined,
       status: 'draft',
       subtotal_before_tax: tripData.subtotalBeforeTax,
       profit: tripData.profit,
@@ -614,6 +617,7 @@ export async function updateTrip(tripId: string, tripData: TripInput) {
       total_days: tripData.totalDays,
       total_nights: tripData.totalNights,
       default_currency: tripData.defaultCurrency,
+      package_currency: tripData.packageCurrency || undefined,
       subtotal_before_tax: tripData.subtotalBeforeTax,
       profit: tripData.profit,
       gst_percentage: tripData.gstPercentage,

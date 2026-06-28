@@ -885,7 +885,7 @@ function ParticipantsSection({ trip }: { trip: Trip }) {
               <p className="text-2xl font-bold">{participants.femaleCount}</p>
             </div>
             <div className="p-4 bg-muted/30 rounded-lg">
-              <p className="text-sm text-muted-foreground">Other</p>
+              <p className="text-sm text-muted-foreground">Kids</p>
               <p className="text-2xl font-bold">{participants.otherCount}</p>
             </div>
             <div className="p-4 bg-muted/30 rounded-lg">
@@ -1274,7 +1274,7 @@ function AccommodationSection({ trip, currencies }: { trip: Trip; currencies: Cu
                     : [
                         { label: 'Male',             rooms: alloc.commercialMaleRooms,             bd: breakdown?.commercialMale },
                         { label: 'Female',           rooms: alloc.commercialFemaleRooms,           bd: breakdown?.commercialFemale },
-                        { label: 'Other',            rooms: alloc.commercialOtherRooms,            bd: breakdown?.commercialOther },
+                        { label: 'Kids',             rooms: alloc.commercialOtherRooms,            bd: breakdown?.commercialOther },
                         { label: 'Male VXplorers',   rooms: alloc.commercialMaleVXplorerRooms,     bd: breakdown?.commercialMaleVXplorers },
                         { label: 'Female VXplorers', rooms: alloc.commercialFemaleVXplorerRooms,   bd: breakdown?.commercialFemaleVXplorers },
                       ];
@@ -1773,12 +1773,17 @@ function CostSummarySection({ trip }: { trip: Trip }) {
             />
           </div>
 
-          {/* NEW: Profit */}
+          {/* Admin Charges (Profit) */}
           {trip.profit > 0 && (
             <div className="flex justify-between items-center text-sm">
               <div className="flex items-center gap-2">
                 <BadgePercent className="w-4 h-4 text-primary" />
-                <span className="font-medium">Profit</span>
+                <span className="font-medium">Admin Charges</span>
+                {trip.subtotalBeforeTax > 0 && (
+                  <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                    {((trip.profit / trip.subtotalBeforeTax) * 100).toFixed(2)}%
+                  </span>
+                )}
               </div>
               <span className="font-semibold">{formatINR(trip.profit)}</span>
             </div>
@@ -1799,8 +1804,8 @@ function CostSummarySection({ trip }: { trip: Trip }) {
             <span className="font-semibold">{formatINR(trip.gstAmount)}</span>
           </div>
 
-          {/* NEW: TCS (for international trips only) */}
-          {trip.tripCategory === 'international' && trip.tcsAmount > 0 && (
+          {/* TCS — international institute/FTI trips only, not applicable for commercial trips */}
+          {trip.tripCategory === 'international' && trip.tripType !== 'fti' && trip.tripType !== 'commercial' && trip.tcsAmount > 0 && (
             <div className="flex justify-between items-center text-sm">
               <div className="flex items-center gap-2">
                 <BadgePercent className="w-4 h-4 text-primary" />
@@ -1809,18 +1814,11 @@ function CostSummarySection({ trip }: { trip: Trip }) {
               <span className="font-semibold">{formatINR(trip.tcsAmount)}</span>
             </div>
           )}
-
-          {/* TDS (FTI trips only) */}
-          {trip.tripType === 'fti' && trip.tdsAmount > 0 && (
-            <div className="flex justify-between items-center text-sm">
-              <div className="flex items-center gap-2">
-                <BadgePercent className="w-4 h-4 text-primary" />
-                <span className="font-medium">
-                  TDS ({trip.tdsPercentage}% deducted{trip.tripCategory === 'international' ? ' on Subtotal + GST + TCS' : ' on Subtotal + GST'})
-                </span>
-              </div>
-              <span className="font-semibold text-destructive">- {formatINR(trip.tdsAmount)}</span>
-            </div>
+          {trip.tripType === 'commercial' && (
+            <p className="text-xs text-muted-foreground">TCS not applicable for commercial trips</p>
+          )}
+          {trip.tripType === 'fti' && (
+            <p className="text-xs text-muted-foreground">TCS and TDS not applicable for FTI trips</p>
           )}
 
           {/* Hidden Overheads Warning */}
@@ -1884,7 +1882,7 @@ function CostSummarySection({ trip }: { trip: Trip }) {
                       <span className="text-blue-800 dark:text-blue-200">GST ({trip.gstPercentage}%)</span>
                       <span className="font-semibold">{formatINR(gstPer)}</span>
                     </div>
-                    {trip.tripCategory === 'international' && (
+                    {trip.tripCategory === 'international' && trip.tripType !== 'fti' && trip.tripType !== 'commercial' && (
                       <div className="flex justify-between">
                         <span className="text-blue-800 dark:text-blue-200">TCS ({trip.tcsPercentage}%)</span>
                         <span className="font-semibold">{formatINR(tcsPer)}</span>
