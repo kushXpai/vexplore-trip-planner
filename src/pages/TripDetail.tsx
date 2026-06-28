@@ -144,10 +144,9 @@ export default function TripDetail() {
           countries: data.countries || [],
 
           // Multi-city support with dates
-          cities: (data.cities || []).map((c: any) =>
-            typeof c === 'string'
-              ? { name: c, fromDate: data.start_date, toDate: data.end_date }
-              : { name: c.name, fromDate: c.fromDate, toDate: c.toDate }
+          cities: (data.cities || []).map((c: any) => typeof c === 'string'
+            ? { name: c, fromDate: data.start_date, toDate: data.end_date }
+            : { name: c.name, fromDate: c.fromDate, toDate: c.toDate }
           ),
 
           startDate: data.start_date,
@@ -276,7 +275,7 @@ export default function TripDetail() {
           activities: (data.trip_activities || []).map((a: any) => ({
             id: a.id,
             name: a.name ?? '',
-            city: a.city,  // NEW: City for multi-city trips
+            city: a.city, // NEW: City for multi-city trips
             entryCost: a.entry_cost ?? 0,
             transportCost: a.transport_cost ?? 0,
             guideCost: a.guide_cost ?? 0,
@@ -300,10 +299,10 @@ export default function TripDetail() {
           // NEW: Extras (visa, tips, insurance)
           // ✅ FIX: Handle trip_extras as array
           extras: (() => {
-            const extrasData = Array.isArray(data.trip_extras) 
-              ? data.trip_extras[0] 
+            const extrasData = Array.isArray(data.trip_extras)
+              ? data.trip_extras[0]
               : data.trip_extras;
-            
+
             return extrasData ? {
               visaCostPerPerson: extrasData.visa_cost_per_person ?? 0,
               visaCurrency: extrasData.visa_currency ?? 'INR',
@@ -348,6 +347,7 @@ export default function TripDetail() {
             varianceExplanation: data.post_trip_analysis.variance_explanation ?? '',
             isFinalized: data.post_trip_analysis.is_finalized ?? false,
           } : undefined,
+          packageCurrency: ''
         };
 
         setTrip(mappedTrip);
