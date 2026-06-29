@@ -347,7 +347,7 @@ export const convertToINR = (currencies: Currency[], amount: number, currencyCod
 export const formatCurrency = (currencies: Currency[], amount: number, currencyCode: string): string => {
   const currency = currencies.find(c => c.code === currencyCode);
   const symbol = currency?.symbol ?? '₹';
-  return `${symbol}${amount.toLocaleString('en-IN')}`;
+  return `${symbol}${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 // =====================================================

@@ -50,6 +50,7 @@ import {
 import { Trip, PostTripAnalysis, TripCategory, TripType } from '@/types/trip';
 import { supabase } from '@/supabase/client';
 import { fetchCurrencies, Currency } from '@/services/masterDataService';
+import { generateTripPDF } from '@/services/pdfGenerator';
 
 // Helper function to format currency with symbol
 const formatCurrencyWithSymbol = (amount: number, currencyCode: string, currencies: Currency[]): string => {
@@ -58,9 +59,14 @@ const formatCurrencyWithSymbol = (amount: number, currencyCode: string, currenci
   return `${symbol}${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
-// Helper function to format INR specifically
+// Helper function to format INR specifically (2 dp for unit costs)
 const formatINR = (amount: number): string => {
   return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
+// Round totals/subtotals to whole rupees — no decimal places
+const formatINRRounded = (amount: number): string => {
+  return `₹${Math.round(amount).toLocaleString('en-IN')}`;
 };
 
 export default function TripDetail() {
@@ -685,6 +691,15 @@ export default function TripDetail() {
         </div>
         <div className="flex items-center gap-3">
           <StatusBadge status={tripStatus} />
+
+          {/* Download PDF — always available */}
+          <Button
+            variant="outline"
+            onClick={() => generateTripPDF(trip, currencies)}
+          >
+            <FileDown className="w-4 h-4 mr-2" />
+            Download PDF
+          </Button>
 
           {/* DRAFT - Show Edit and Send for Approval */}
           {!isLocked && tripStatus === 'draft' && (
@@ -1930,14 +1945,14 @@ function CostSummarySection({ trip }: { trip: Trip }) {
       <CardContent>
         <div className="space-y-4">
           {/* Cost Components */}
-          <CostRow label="Transport" sublabel="Flights, Buses, Trains" amount={transportTotal} />
-          <CostRow label="Accommodation" sublabel="Hotels & Stay" amount={accommodationTotal} />
-          <CostRow label="Meals" sublabel="Breakfast, Lunch & Dinner" amount={mealsTotal} />
-          <CostRow label="Activities" sublabel="Entry, Transport, Guides" amount={activitiesTotal} />
+          <CostRow label="Transport" sublabel="Flights, Buses, Trains" amount={transportTotal} rounded />
+          <CostRow label="Accommodation" sublabel="Hotels & Stay" amount={accommodationTotal} rounded />
+          <CostRow label="Meals" sublabel="Breakfast, Lunch & Dinner" amount={mealsTotal} rounded />
+          <CostRow label="Activities" sublabel="Entry, Transport, Guides" amount={activitiesTotal} rounded />
           {extrasTotal > 0 && (
-            <CostRow label="Extras" sublabel="Visa, Tips, Insurance" amount={extrasTotal} />
+            <CostRow label="Extras" sublabel="Visa, Tips, Insurance" amount={extrasTotal} rounded />
           )}
-          <CostRow label="Overheads" sublabel="All overheads" amount={overheadsTotal} />
+          <CostRow label="Overheads" sublabel="All overheads" amount={overheadsTotal} rounded />
 
           {/* Subtotal Before Tax */}
           <div className="pt-4 border-t">
@@ -1945,6 +1960,7 @@ function CostSummarySection({ trip }: { trip: Trip }) {
               label="Subtotal (Before Profit & Tax)"
               amount={trip.subtotalBeforeTax}
               isSubtotal
+              rounded
             />
           </div>
 
@@ -1960,23 +1976,23 @@ function CostSummarySection({ trip }: { trip: Trip }) {
                   </span>
                 )}
               </div>
-              <span className="font-semibold">{formatINR(trip.profit)}</span>
+              <span className="font-semibold">{formatINRRounded(trip.profit)}</span>
             </div>
           )}
 
           {/* Admin Subtotal (Subtotal + Profit) */}
           <div className="flex justify-between items-center py-2 border-t border-dashed">
             <span className="font-semibold">Admin Subtotal (Subtotal + Profit)</span>
-            <span className="font-semibold text-lg">{formatINR(trip.subtotalBeforeTax + trip.profit)}</span>
+            <span className="font-semibold text-lg">{formatINRRounded(trip.subtotalBeforeTax + trip.profit)}</span>
           </div>
 
-          {/* NEW: GST */}
+          {/* GST */}
           <div className="flex justify-between items-center text-sm">
             <div className="flex items-center gap-2">
               <BadgePercent className="w-4 h-4 text-primary" />
               <span className="font-medium">GST ({trip.gstPercentage}%)</span>
             </div>
-            <span className="font-semibold">{formatINR(trip.gstAmount)}</span>
+            <span className="font-semibold">{formatINRRounded(trip.gstAmount)}</span>
           </div>
 
           {/* TCS — international institute/FTI trips only, not applicable for commercial trips */}
@@ -1986,7 +2002,7 @@ function CostSummarySection({ trip }: { trip: Trip }) {
                 <BadgePercent className="w-4 h-4 text-primary" />
                 <span className="font-medium">TCS ({trip.tcsPercentage}% on Subtotal + GST)</span>
               </div>
-              <span className="font-semibold">{formatINR(trip.tcsAmount)}</span>
+              <span className="font-semibold">{formatINRRounded(trip.tcsAmount)}</span>
             </div>
           )}
           {trip.tripType === 'commercial' && (
@@ -2003,6 +2019,7 @@ function CostSummarySection({ trip }: { trip: Trip }) {
                 label="Hidden Overheads (Admin Only)"
                 sublabel="Margins, Admin charges"
                 amount={overheadsTotal - visibleOverheadsTotal}
+                rounded
                 className="text-warning"
               />
             </div>
@@ -2019,14 +2036,14 @@ function CostSummarySection({ trip }: { trip: Trip }) {
                     : 'Including GST & all charges'}
                 </p>
               </div>
-              <p className="text-2xl font-bold text-primary">{formatINR(trip.grandTotalINR)}</p>
+              <p className="text-2xl font-bold text-primary">{formatINRRounded(trip.grandTotalINR)}</p>
             </div>
 
             <div className="flex justify-between items-center mt-4 p-3 bg-primary/5 rounded-lg">
               <span className="font-medium">
                 Cost per {trip.tripType === 'institute' ? 'Student' : 'Participant'}
               </span>
-              <span className="text-lg font-bold">{formatINR(trip.costPerParticipant)}</span>
+              <span className="text-lg font-bold">{formatINRRounded(trip.costPerParticipant)}</span>
             </div>
 
             {/* Per Student / Participant Breakdown */}
@@ -2067,7 +2084,7 @@ function CostSummarySection({ trip }: { trip: Trip }) {
                       <span className="font-bold text-blue-900 dark:text-blue-100">
                         Total per {trip.tripType === 'institute' ? 'student' : 'participant'}
                       </span>
-                      <span className="font-bold text-blue-900 dark:text-blue-100">{formatINR(totalPer)}</span>
+                      <span className="font-bold text-blue-900 dark:text-blue-100">{formatINRRounded(totalPer)}</span>
                     </div>
                   </div>
                 </div>
@@ -2085,12 +2102,14 @@ function CostRow({
   sublabel,
   amount,
   isSubtotal = false,
+  rounded = false,
   className = ''
 }: {
   label: string;
   sublabel?: string;
   amount: number;
   isSubtotal?: boolean;
+  rounded?: boolean;
   className?: string;
 }) {
   return (
@@ -2099,7 +2118,9 @@ function CostRow({
         <p className={isSubtotal ? 'font-semibold' : 'font-medium'}>{label}</p>
         {sublabel && <p className="text-xs text-muted-foreground">{sublabel}</p>}
       </div>
-      <p className={isSubtotal ? 'font-semibold text-lg' : 'font-medium'}>{formatINR(amount)}</p>
+      <p className={isSubtotal ? 'font-semibold text-lg' : 'font-medium'}>
+        {rounded ? formatINRRounded(amount) : formatINR(amount)}
+      </p>
     </div>
   );
 }

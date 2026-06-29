@@ -526,6 +526,10 @@ export default function CreateTrip() {
     return formatCurrencyHelper(currencies, amount, currencyCode);
   };
 
+  // Totals / grand total displayed with no decimal places
+  const formatINRRounded = (amount: number): string =>
+    `₹${Math.round(amount).toLocaleString('en-IN')}`;
+
   const getCountryCurrency = (countryIds: string | string[]): string => {
     // Convert to array and filter out empty strings
     const idArray = Array.isArray(countryIds) ? countryIds.filter(id => id) : (countryIds ? [countryIds] : []);
@@ -1276,6 +1280,124 @@ export default function CreateTrip() {
     formData.startDate,
     formData.endDate,
   ]);
+
+  // Save draft — no validation, stays on page, persists partial data
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+
+  const handleSaveDraft = async () => {
+    if (!formData.name.trim()) {
+      toast.error('Trip name is required to save a draft');
+      return;
+    }
+
+    setIsSavingDraft(true);
+    try {
+      const { days, nights } = calculateTripDuration();
+      const totalParticipants = calculateTotalParticipants();
+      const countryNames = formData.countries.map(countryId => {
+        const country = countries.find(c => c.id === countryId);
+        return country?.name || countryId;
+      });
+
+      const draftData = {
+        name: formData.name,
+        institution: formData.institution || '',
+        tripCategory,
+        tripType,
+        planningMode,
+        countries: countryNames,
+        cities: formData.cities,
+        startDate: formData.startDate || '',
+        endDate: formData.endDate || '',
+        totalDays: days,
+        totalNights: nights,
+        defaultCurrency: getCountryCurrency(formData.countries[0] || '') || 'INR',
+        packageCurrency: planningMode === 'tour_planner' ? packageCurrency : undefined,
+        participants: {
+          boys: formData.boys,
+          girls: formData.girls,
+          maleFaculty: formData.maleFaculty,
+          femaleFaculty: formData.femaleFaculty,
+          maleVXplorers: formData.maleVXplorers,
+          femaleVXplorers: formData.femaleVXplorers,
+          maleCount: formData.maleCount,
+          femaleCount: formData.femaleCount,
+          otherCount: formData.otherCount,
+          commercialMaleVXplorers: tripType === 'fti' ? 0 : formData.commercialMaleVXplorers,
+          commercialFemaleVXplorers: tripType === 'fti' ? 0 : formData.commercialFemaleVXplorers,
+          totalStudents: calculateTotalStudents(),
+          totalFaculty: calculateTotalFaculty(),
+          totalVXplorers: tripType === 'fti' ? 0 : (formData.maleVXplorers + formData.femaleVXplorers + formData.commercialMaleVXplorers + formData.commercialFemaleVXplorers),
+          totalCommercial: calculateTotalCommercial(),
+          totalParticipants,
+        },
+        flights,
+        buses,
+        trains,
+        accommodations,
+        meals: accommodations.map(acc => {
+          const m = getHotelMealDefaults(acc.id, acc.currency);
+          const totalPax = calculateTotalParticipants();
+          const { totalCost, totalCostINR } = calculateHotelMealCost(acc.id, acc.numberOfNights, totalPax, acc.currency);
+          return {
+            accommodation_id: acc.id,
+            hotel_name: acc.hotelName,
+            city: acc.city,
+            number_of_nights: acc.numberOfNights,
+            restaurant_id: m.restaurantId || undefined,
+            restaurant_name: m.restaurantName || undefined,
+            breakfast_cost_per_person: m.breakfastCostPerPerson,
+            lunch_cost_per_person: m.lunchCostPerPerson,
+            dinner_cost_per_person: m.dinnerCostPerPerson,
+            free_breakfast: m.freeBreakfast,
+            free_lunch: m.freeLunch,
+            free_dinner: m.freeDinner,
+            currency: m.currency,
+            total_participants: totalPax,
+            total_cost: totalCost,
+            total_cost_inr: totalCostINR,
+          };
+        }),
+        activities,
+        overheads,
+        extras,
+        packageOccupancies: planningMode === 'tour_planner' ? packageOccupancies : [],
+        subtotalBeforeTax: totals.subtotalBeforeTax,
+        profit,
+        gstPercentage: totals.gstPercentage,
+        gstAmount: totals.gstAmount,
+        tcsPercentage: totals.tcsPercentage,
+        tcsAmount: totals.tcsAmount,
+        tdsPercentage: totals.tdsPercentage,
+        tdsAmount: totals.tdsAmount,
+        grandTotal: totals.grandTotal,
+        grandTotalINR: totals.grandTotal,
+        costPerParticipant: totals.costPerParticipant,
+      };
+
+      if (isEditing && editId) {
+        const result = await updateTrip(editId, draftData);
+        if (result.success) {
+          toast.success('Draft saved successfully');
+        } else {
+          toast.error(result.error || 'Failed to save draft');
+        }
+      } else {
+        const result = await createTrip(draftData);
+        if (result.success && (result as any).tripId) {
+          toast.success('Draft saved! You can continue editing.');
+          // Navigate to edit mode so subsequent saves update the same record
+          navigate(`/trips/create?edit=${(result as any).tripId}`, { replace: true });
+        } else {
+          toast.error(result.error || 'Failed to save draft');
+        }
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'An error occurred while saving the draft');
+    } finally {
+      setIsSavingDraft(false);
+    }
+  };
 
   // Save trip
   const handleSaveTrip = async () => {
@@ -4192,42 +4314,42 @@ export default function CreateTrip() {
                   {planningMode === 'tour_planner' ? (
                     <div className="flex justify-between items-center pb-2 border-b">
                       <span className="text-muted-foreground">Package Cost (Tour Planner)</span>
-                      <span className="font-semibold">{formatCurrency(totals.packageTotal, 'INR')}</span>
+                      <span className="font-semibold">{formatINRRounded(totals.packageTotal)}</span>
                     </div>
                   ) : (
                     <>
                       <div className="flex justify-between items-center pb-2 border-b">
                         <span className="text-muted-foreground">Transport</span>
-                        <span className="font-semibold">{formatCurrency(totals.transport, 'INR')}</span>
+                        <span className="font-semibold">{formatINRRounded(totals.transport)}</span>
                       </div>
                       <div className="flex justify-between items-center pb-2 border-b">
                         <span className="text-muted-foreground">Accommodation</span>
-                        <span className="font-semibold">{formatCurrency(totals.accommodation, 'INR')}</span>
+                        <span className="font-semibold">{formatINRRounded(totals.accommodation)}</span>
                       </div>
                       <div className="flex justify-between items-center pb-2 border-b">
                         <span className="text-muted-foreground">Meals</span>
-                        <span className="font-semibold">{formatCurrency(totals.meals, 'INR')}</span>
+                        <span className="font-semibold">{formatINRRounded(totals.meals)}</span>
                       </div>
                       <div className="flex justify-between items-center pb-2 border-b">
                         <span className="text-muted-foreground">Activities</span>
-                        <span className="font-semibold">{formatCurrency(totals.activities, 'INR')}</span>
+                        <span className="font-semibold">{formatINRRounded(totals.activities)}</span>
                       </div>
                     </>
                   )}
                   <div className="flex justify-between items-center pb-2 border-b">
                     <span className="text-muted-foreground">Visa, Tips and Insurance</span>
-                    <span className="font-semibold">{formatCurrency(totals.extras, 'INR')}</span>
+                    <span className="font-semibold">{formatINRRounded(totals.extras)}</span>
                   </div>
                   <div className="flex justify-between items-center pb-2 border-b">
                     <span className="text-muted-foreground">Overheads</span>
-                    <span className="font-semibold">{formatCurrency(totals.overheads, 'INR')}</span>
+                    <span className="font-semibold">{formatINRRounded(totals.overheads)}</span>
                   </div>
                 </div>
 
                 <div className="pt-4 border-t space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-base font-semibold">Subtotal (Before Admin Charges)</span>
-                    <span className="text-lg font-bold">{formatCurrency(totals.subtotalBeforeTax, 'INR')}</span>
+                    <span className="text-lg font-bold">{formatINRRounded(totals.subtotalBeforeTax)}</span>
                   </div>
 
                   {/* Admin Charges */}
@@ -4241,13 +4363,13 @@ export default function CreateTrip() {
                         </span>
                       )}
                     </span>
-                    <span className="font-semibold">{formatCurrency(totals.profit, 'INR')}</span>
+                    <span className="font-semibold">{formatINRRounded(totals.profit)}</span>
                   </div>
 
-                  {/* NEW: Admin Subtotal */}
+                  {/* Admin Subtotal */}
                   <div className="flex justify-between items-center">
                     <span className="text-base font-semibold">Admin Subtotal (Subtotal + Admin Charges)</span>
-                    <span className="text-lg font-bold">{formatCurrency(totals.adminSubtotal, 'INR')}</span>
+                    <span className="text-lg font-bold">{formatINRRounded(totals.adminSubtotal)}</span>
                   </div>
 
                   {/* GST */}
@@ -4256,7 +4378,7 @@ export default function CreateTrip() {
                       <BadgePercent className="w-4 h-4" />
                       GST ({totals.gstPercentage}%)
                     </span>
-                    <span className="font-semibold">{formatCurrency(totals.gstAmount, 'INR')}</span>
+                    <span className="font-semibold">{formatINRRounded(totals.gstAmount)}</span>
                   </div>
 
                   {/* TCS — international trips only, not applicable for FTI or commercial domestic */}
@@ -4266,7 +4388,7 @@ export default function CreateTrip() {
                         <BadgePercent className="w-4 h-4" />
                         TCS ({totals.tcsPercentage}% on Subtotal + GST)
                       </span>
-                      <span className="font-semibold">{formatCurrency(totals.tcsAmount, 'INR')}</span>
+                      <span className="font-semibold">{formatINRRounded(totals.tcsAmount)}</span>
                     </div>
                   )}
                   {tripType === 'commercial' && (
@@ -4282,21 +4404,20 @@ export default function CreateTrip() {
 
                   <div className="flex justify-between items-center pt-3 border-t">
                     <span className="text-lg font-bold">Grand Total</span>
-                    <span className="text-2xl font-bold text-primary">{formatCurrency(totals.grandTotal, 'INR')}</span>
+                    <span className="text-2xl font-bold text-primary">{formatINRRounded(totals.grandTotal)}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="font-semibold text-muted-foreground">
                       Cost per {tripType === 'institute' ? 'Student' : 'Participant'} (before tax)
                     </span>
                     <span className="text-xl font-semibold text-muted-foreground">
-                      {formatCurrency(
+                      {formatINRRounded(
                         (() => {
                           const denominator = tripType === 'institute'
                             ? (formData.boys + formData.girls)
                             : calculateTotalParticipants();
                           return denominator > 0 ? totals.adminSubtotal / denominator : 0;
-                        })(),
-                        'INR'
+                        })()
                       )}
                     </span>
                   </div>
@@ -4305,7 +4426,7 @@ export default function CreateTrip() {
                       Cost per {tripType === 'institute' ? 'Student' : 'Participant'}
                     </span>
                     <span className="text-xl font-semibold text-primary">
-                      {formatCurrency(totals.costPerParticipant, 'INR')}
+                      {formatINRRounded(totals.costPerParticipant)}
                     </span>
                   </div>
 
@@ -4347,7 +4468,7 @@ export default function CreateTrip() {
                               Total per {tripType === 'institute' ? 'student' : 'participant'}
                             </span>
                             <span className="font-bold text-blue-900 dark:text-blue-100">
-                              {formatCurrency(totalPer, 'INR')}
+                              {formatINRRounded(totalPer)}
                             </span>
                           </div>
                         </div>
@@ -4553,14 +4674,32 @@ export default function CreateTrip() {
               </DialogContent>
             </Dialog>
 
-            {/* Save Button */}
-            <div className="flex justify-end gap-4 pt-4">
-              <Button variant="outline" onClick={() => navigate('/dashboard')} disabled={isSaving}>
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-3 pt-4">
+              <Button variant="outline" onClick={() => navigate('/dashboard')} disabled={isSaving || isSavingDraft}>
                 Cancel
               </Button>
               <Button
+                variant="outline"
+                onClick={handleSaveDraft}
+                disabled={isSaving || isSavingDraft}
+                className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-400 dark:hover:bg-amber-950/20"
+              >
+                {isSavingDraft ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Saving Draft...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Draft
+                  </>
+                )}
+              </Button>
+              <Button
                 onClick={handleSaveTrip}
-                disabled={isSaving}
+                disabled={isSaving || isSavingDraft}
                 className="gradient-primary text-primary-foreground px-8"
               >
                 {isSaving ? (
@@ -4571,7 +4710,7 @@ export default function CreateTrip() {
                 ) : (
                   <>
                     <Save className="w-4 h-4 mr-2" />
-                    {isEditing ? 'Update Trip' : 'Create Trip'}
+                    {isEditing ? 'Update Trip' : 'Create & Submit Trip'}
                   </>
                 )}
               </Button>
