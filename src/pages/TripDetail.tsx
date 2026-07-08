@@ -299,7 +299,8 @@ export default function TripDetail() {
           activities: (data.trip_activities || []).map((a: any) => ({
             id: a.id,
             name: a.name ?? '',
-            city: a.city, // NEW: City for multi-city trips
+            city: a.city,
+            costType: a.cost_type ?? 'per_person',
             entryCost: a.entry_cost ?? 0,
             transportCost: a.transport_cost ?? 0,
             guideCost: a.guide_cost ?? 0,
@@ -346,6 +347,7 @@ export default function TripDetail() {
           // Cost calculations
           subtotalBeforeTax: data.subtotal_before_tax ?? 0,
           profit: data.profit ?? 0,
+          profitMode: data.profit_mode ?? 'flat',
 
           // NEW: Tax fields
           gstPercentage: data.gst_percentage ?? 5,
@@ -371,7 +373,7 @@ export default function TripDetail() {
             varianceExplanation: data.post_trip_analysis.variance_explanation ?? '',
             isFinalized: data.post_trip_analysis.is_finalized ?? false,
           } : undefined,
-          packageCurrency: ''
+          packageCurrency: data.package_currency ?? ''
         };
 
         setTrip(mappedTrip);
@@ -559,6 +561,24 @@ export default function TripDetail() {
     toast.success('Trip locked successfully');
   };
 
+  const handleUnlockTrip = async () => {
+    if (!trip) return;
+
+    const { error } = await supabase
+      .from('trips')
+      .update({ status: 'approved' })
+      .eq('id', trip.id);
+
+    if (error) {
+      toast.error('Failed to unlock trip');
+      return;
+    }
+
+    setTripStatus('approved');
+    setIsLocked(false);
+    toast.success('Cost sheet unlocked');
+  };
+
   const handleActualExpensesSubmit = async (actuals: ActualExpenses) => {
     if (!trip) return;
 
@@ -695,7 +715,17 @@ export default function TripDetail() {
           {/* Download PDF — always available */}
           <Button
             variant="outline"
-            onClick={() => generateTripPDF(trip, currencies)}
+            onClick={() =>
+              generateTripPDF(
+                trip,
+                // Ensure currencies conform to expected Trip Currency shape
+                currencies.map((c) => ({
+                  ...c,
+                  rateToINR: (c as any).rateToINR ?? 1,
+                  effectiveDate: (c as any).effectiveDate ?? new Date().toISOString(),
+                }))
+              )
+            }
           >
             <FileDown className="w-4 h-4 mr-2" />
             Download PDF
@@ -779,6 +809,20 @@ export default function TripDetail() {
                 Lock Trip
               </Button>
             </>
+          )}
+
+          {/* LOCKED - Superadmin can unlock */}
+          {isLocked && currentUserRole === 'superadmin' && (
+            <Button onClick={handleUnlockTrip} variant="outline" className="border-orange-300 text-orange-700 hover:bg-orange-50">
+              <Lock className="w-4 h-4 mr-2" />
+              Unlock Cost Sheet
+            </Button>
+          )}
+          {isLocked && currentUserRole !== 'superadmin' && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-md">
+              <Lock className="w-4 h-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-600">Cost Sheet Locked</span>
+            </div>
           )}
         </div>
       </div>
@@ -897,6 +941,15 @@ export default function TripDetail() {
               </div>
             </div>
 
+            {/* Planning Mode */}
+            <div className="flex items-start gap-3">
+              <ClipboardEdit className="w-5 h-5 text-primary mt-1" />
+              <div>
+                <p className="text-sm text-muted-foreground">Planning Mode</p>
+                <p className="font-semibold capitalize">{trip.planningMode === 'tour_planner' ? 'Tour Planner' : 'Self Planned'}</p>
+              </div>
+            </div>
+
             <div className="flex items-start gap-3">
               <Calendar className="w-5 h-5 text-primary mt-1" />
               <div>
@@ -980,6 +1033,7 @@ export default function TripDetail() {
           <MealsSection trip={trip} currencies={currencies} />
           {trip.extras && <ExtrasSection trip={trip} currencies={currencies} />}
           <OverheadsSection trip={trip} currencies={currencies} />
+          <CostSummarySection trip={trip} />
         </TabsContent>
 
         {/* Transport Tab */}
@@ -1581,16 +1635,16 @@ function MealsSection({ trip, currencies }: { trip: Trip; currencies: Currency[]
                       <th className="px-3 py-2 font-semibold">Meal</th>
                       <th className="px-3 py-2 font-semibold text-right">Cost / Person</th>
                       <th className="px-3 py-2 font-semibold text-right">Nights</th>
-                      <th className="px-3 py-2 font-semibold text-right">Participants</th>
-                      <th className="px-3 py-2 font-semibold text-right">Free</th>
-                      <th className="px-3 py-2 font-semibold text-right">Billable Nights</th>
+                      <th className="px-3 py-2 font-semibold text-right">Pax</th>
+                      <th className="px-3 py-2 font-semibold text-right">Free Pax</th>
+                      <th className="px-3 py-2 font-semibold text-right">Billable Pax</th>
                       <th className="px-3 py-2 font-semibold text-right">Total</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/30">
                     {meal.breakfastCostPerPerson > 0 && (() => {
-                      const billable = Math.max(0, meal.numberOfNights - meal.freeBreakfast);
-                      const total = meal.breakfastCostPerPerson * billable * meal.totalParticipants;
+                      const billablePax = Math.max(0, meal.totalParticipants - meal.freeBreakfast);
+                      const total = meal.breakfastCostPerPerson * billablePax * meal.numberOfNights;
                       return (
                         <tr key="breakfast">
                           <td className="px-3 py-2 font-medium">Breakfast</td>
@@ -1598,14 +1652,14 @@ function MealsSection({ trip, currencies }: { trip: Trip; currencies: Currency[]
                           <td className="px-3 py-2 text-right">{meal.numberOfNights}</td>
                           <td className="px-3 py-2 text-right">{meal.totalParticipants}</td>
                           <td className="px-3 py-2 text-right text-success">{meal.freeBreakfast > 0 ? meal.freeBreakfast : '—'}</td>
-                          <td className="px-3 py-2 text-right">{billable}</td>
+                          <td className="px-3 py-2 text-right">{billablePax}</td>
                           <td className="px-3 py-2 text-right font-semibold">{formatCurrencyWithSymbol(total, meal.currency, currencies)}</td>
                         </tr>
                       );
                     })()}
                     {meal.lunchCostPerPerson > 0 && (() => {
-                      const billable = Math.max(0, meal.numberOfNights - meal.freeLunch);
-                      const total = meal.lunchCostPerPerson * billable * meal.totalParticipants;
+                      const billablePax = Math.max(0, meal.totalParticipants - meal.freeLunch);
+                      const total = meal.lunchCostPerPerson * billablePax * meal.numberOfNights;
                       return (
                         <tr key="lunch">
                           <td className="px-3 py-2 font-medium">Lunch</td>
@@ -1613,14 +1667,14 @@ function MealsSection({ trip, currencies }: { trip: Trip; currencies: Currency[]
                           <td className="px-3 py-2 text-right">{meal.numberOfNights}</td>
                           <td className="px-3 py-2 text-right">{meal.totalParticipants}</td>
                           <td className="px-3 py-2 text-right text-success">{meal.freeLunch > 0 ? meal.freeLunch : '—'}</td>
-                          <td className="px-3 py-2 text-right">{billable}</td>
+                          <td className="px-3 py-2 text-right">{billablePax}</td>
                           <td className="px-3 py-2 text-right font-semibold">{formatCurrencyWithSymbol(total, meal.currency, currencies)}</td>
                         </tr>
                       );
                     })()}
                     {meal.dinnerCostPerPerson > 0 && (() => {
-                      const billable = Math.max(0, meal.numberOfNights - meal.freeDinner);
-                      const total = meal.dinnerCostPerPerson * billable * meal.totalParticipants;
+                      const billablePax = Math.max(0, meal.totalParticipants - meal.freeDinner);
+                      const total = meal.dinnerCostPerPerson * billablePax * meal.numberOfNights;
                       return (
                         <tr key="dinner">
                           <td className="px-3 py-2 font-medium">Dinner</td>
@@ -1628,7 +1682,7 @@ function MealsSection({ trip, currencies }: { trip: Trip; currencies: Currency[]
                           <td className="px-3 py-2 text-right">{meal.numberOfNights}</td>
                           <td className="px-3 py-2 text-right">{meal.totalParticipants}</td>
                           <td className="px-3 py-2 text-right text-success">{meal.freeDinner > 0 ? meal.freeDinner : '—'}</td>
-                          <td className="px-3 py-2 text-right">{billable}</td>
+                          <td className="px-3 py-2 text-right">{billablePax}</td>
                           <td className="px-3 py-2 text-right font-semibold">{formatCurrencyWithSymbol(total, meal.currency, currencies)}</td>
                         </tr>
                       );
@@ -1842,6 +1896,12 @@ function ActivitiesSection({ trip, currencies }: { trip: Trip; currencies: Curre
                   </tfoot>
                 </table>
               </div>
+              <div className="mt-1 px-1 text-xs text-muted-foreground">
+                {activity.costType === 'lump_sum'
+                  ? 'Lump sum — not multiplied by participant count'
+                  : `Formula: costs × ${trip.participants.totalParticipants} participants`
+                }
+              </div>
               {activity.description && (
                 <p className="text-sm text-muted-foreground italic mt-1">{activity.description}</p>
               )}
@@ -2005,6 +2065,18 @@ function CostSummarySection({ trip }: { trip: Trip }) {
               <span className="font-semibold">{formatINRRounded(trip.tcsAmount)}</span>
             </div>
           )}
+
+          {/* TDS — only when applicable */}
+          {trip.tdsAmount > 0 && trip.tripType !== 'fti' && (
+            <div className="flex justify-between items-center text-sm">
+              <div className="flex items-center gap-2">
+                <BadgePercent className="w-4 h-4 text-primary" />
+                <span className="font-medium">TDS ({trip.tdsPercentage}%)</span>
+              </div>
+              <span className="font-semibold">−{formatINRRounded(trip.tdsAmount)}</span>
+            </div>
+          )}
+
           {trip.tripType === 'commercial' && (
             <p className="text-xs text-muted-foreground">TCS not applicable for commercial trips</p>
           )}

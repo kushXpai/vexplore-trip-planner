@@ -42,6 +42,7 @@ interface DbTrip {
   status: string;
   subtotal_before_tax: number;
   profit: number;
+  profit_mode?: 'flat' | 'percentage' | 'per_person';
   gst_percentage: number;
   gst_amount: number;
   tcs_percentage: number;
@@ -168,6 +169,7 @@ interface DbActivity {
   trip_id: string;
   name: string;
   city?: string;
+  cost_type: 'per_person' | 'lump_sum';
   entry_cost: number;
   transport_cost: number;
   guide_cost: number;
@@ -262,6 +264,7 @@ interface TripInput {
   // Financials
   subtotalBeforeTax: number;
   profit: number;
+  profitMode?: 'flat' | 'percentage' | 'per_person';
   gstPercentage: number;
   gstAmount: number;
   tcsPercentage: number;
@@ -372,6 +375,7 @@ function buildDbActivities(activities: Activity[], tripId: string): DbActivity[]
     trip_id: tripId,
     name: activity.name,
     city: activity.city,
+    cost_type: (activity as any).costType ?? 'per_person',
     entry_cost: activity.entryCost,
     transport_cost: activity.transportCost,
     guide_cost: activity.guideCost,
@@ -435,6 +439,7 @@ export async function createTrip(tripData: TripInput) {
       status: 'draft',
       subtotal_before_tax: tripData.subtotalBeforeTax,
       profit: tripData.profit,
+      profit_mode: tripData.profitMode ?? 'flat',
       gst_percentage: tripData.gstPercentage,
       gst_amount: tripData.gstAmount,
       tcs_percentage: tripData.tcsPercentage,
@@ -508,19 +513,31 @@ export async function createTrip(tripData: TripInput) {
       if (trainsError) throw trainsError;
     }
 
-    // 6. Accommodations
+    // 6. Accommodations — capture returned IDs to remap meals
+    let accIdMap: Record<string, string> = {};
     if (tripData.accommodations.length > 0) {
-      const { error: accommodationsError } = await supabase
+      const { data: insertedAccs, error: accommodationsError } = await supabase
         .from('trip_accommodations')
-        .insert(buildDbAccommodations(tripData.accommodations, tripId));
+        .insert(buildDbAccommodations(tripData.accommodations, tripId))
+        .select('id');
       if (accommodationsError) throw accommodationsError;
+      // Build map: original local ID -> real Supabase UUID (by index order)
+      if (insertedAccs) {
+        tripData.accommodations.forEach((acc, i) => {
+          if (insertedAccs[i]) accIdMap[acc.id] = insertedAccs[i].id;
+        });
+      }
     }
 
-    // 7. Meals
+    // 7. Meals — remap accommodation_id from local temp IDs to real Supabase IDs
     if (tripData.meals && tripData.meals.length > 0) {
+      const remappedMeals = tripData.meals.map(m => ({
+        ...m,
+        accommodation_id: accIdMap[m.accommodation_id] ?? m.accommodation_id,
+      }));
       const { error: mealsError } = await supabase
         .from('trip_meals')
-        .insert(buildDbMeals(tripData.meals, tripId));
+        .insert(buildDbMeals(remappedMeals, tripId));
       if (mealsError) throw mealsError;
     }
 
@@ -620,6 +637,7 @@ export async function updateTrip(tripId: string, tripData: TripInput) {
       package_currency: tripData.packageCurrency || undefined,
       subtotal_before_tax: tripData.subtotalBeforeTax,
       profit: tripData.profit,
+      profit_mode: tripData.profitMode ?? 'flat',
       gst_percentage: tripData.gstPercentage,
       gst_amount: tripData.gstAmount,
       tcs_percentage: tripData.tcsPercentage,
@@ -690,21 +708,32 @@ export async function updateTrip(tripId: string, tripData: TripInput) {
       if (trainsError) throw trainsError;
     }
 
-    // 6. Delete and re-insert accommodations
+    // 6. Delete and re-insert accommodations — capture returned IDs to remap meals
     await supabase.from('trip_accommodations').delete().eq('trip_id', tripId);
+    let accIdMap: Record<string, string> = {};
     if (tripData.accommodations.length > 0) {
-      const { error: accommodationsError } = await supabase
+      const { data: insertedAccs, error: accommodationsError } = await supabase
         .from('trip_accommodations')
-        .insert(buildDbAccommodations(tripData.accommodations, tripId));
+        .insert(buildDbAccommodations(tripData.accommodations, tripId))
+        .select('id');
       if (accommodationsError) throw accommodationsError;
+      if (insertedAccs) {
+        tripData.accommodations.forEach((acc, i) => {
+          if (insertedAccs[i]) accIdMap[acc.id] = insertedAccs[i].id;
+        });
+      }
     }
 
-    // 7. Delete and re-insert meals
+    // 7. Delete and re-insert meals — remap accommodation_id to new Supabase IDs
     await supabase.from('trip_meals').delete().eq('trip_id', tripId);
     if (tripData.meals && tripData.meals.length > 0) {
+      const remappedMeals = tripData.meals.map(m => ({
+        ...m,
+        accommodation_id: accIdMap[m.accommodation_id] ?? m.accommodation_id,
+      }));
       const { error: mealsError } = await supabase
         .from('trip_meals')
-        .insert(buildDbMeals(tripData.meals, tripId));
+        .insert(buildDbMeals(remappedMeals, tripId));
       if (mealsError) throw mealsError;
     }
 

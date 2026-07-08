@@ -19,14 +19,27 @@ const C = {
   amber:        [120, 53, 15]   as [number,number,number],
 };
 
+// jsPDF's built-in Helvetica only covers Latin-1 (U+0000–U+00FF).
+// Characters like ₹ (U+20B9) have zero measured width, causing right-aligned
+// numbers to overflow past the table edge. Use ASCII-safe symbols instead.
+function pdfSafeSym(sym: string, fallbackCode: string): string {
+  if (sym === '₹') return 'Rs.';
+  // Any other non-Latin-1 character → fall back to the ISO currency code
+  for (const ch of sym) {
+    if (ch.charCodeAt(0) > 255) return fallbackCode + ' ';
+  }
+  return sym;
+}
+
 function fmtINR(amount: number): string {
-  if (isNaN(amount)) return '₹0.00';
-  return '₹' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+  if (isNaN(amount)) return 'Rs.0.00';
+  return 'Rs.' + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
 }
 
 function fmtCur(amount: number, code: string, currencies: Currency[]): string {
   const cur = currencies.find(c => c.code === code);
-  const sym = cur?.symbol ?? code;
+  const rawSym = cur?.symbol ?? code;
+  const sym = pdfSafeSym(rawSym, code);
   return sym + new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
 }
 
@@ -74,9 +87,16 @@ function tableRow(
     doc.rect(x, y, w, 7, 'F');
   }
   doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  const valWidth = doc.getTextWidth(value) + 2; // measure value first
+  const labelMaxW = w - valWidth - 8;           // leave gap + right margin
+
   doc.setTextColor(...labelColor);
   doc.setFont('helvetica', 'normal');
-  doc.text(label, x + 3, y + 4.8);
+  // Truncate label if it would overlap the value column
+  const safeLabel = doc.splitTextToSize(label, labelMaxW)[0] ?? label;
+  doc.text(safeLabel, x + 3, y + 4.8);
+
   doc.setTextColor(...valueColor);
   doc.setFont('helvetica', 'bold');
   doc.text(value, x + w - 3, y + 4.8, { align: 'right' });

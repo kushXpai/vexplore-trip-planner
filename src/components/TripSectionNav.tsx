@@ -211,7 +211,7 @@ export function TripSectionNavMobile() {
       <button
         type="button"
         onClick={() => setOpen(prev => !prev)}
-        className="fixed bottom-6 right-4 z-40 flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-full shadow-lg text-sm font-medium"
+        className="fixed bottom-20 right-4 z-40 flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-full shadow-lg text-sm font-medium"
       >
         <List className="w-4 h-4" />
         <span className="max-w-[100px] truncate">{activeSection?.label}</span>

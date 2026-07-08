@@ -67,6 +67,7 @@ export interface Trip {
 
   subtotalBeforeTax: number;
   profit: number;
+  profitMode: 'flat' | 'percentage' | 'per_person';
 
   gstPercentage: number;
   gstAmount: number;
@@ -343,6 +344,7 @@ export interface Activity {
   id: string;
   name: string;
   city?: string;
+  costType: 'per_person' | 'lump_sum';
   entryCost: number;
   transportCost: number;
   guideCost: number;

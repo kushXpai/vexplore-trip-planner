@@ -115,8 +115,9 @@ export default function CreateTrip() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [overheads, setOverheads] = useState<Overhead[]>([]);
   const [profit, setProfit] = useState(0);
-  const [profitMode, setProfitMode] = useState<'flat' | 'percentage'>('flat');
+  const [profitMode, setProfitMode] = useState<'flat' | 'percentage' | 'per_person'>('flat');
   const [profitPercentage, setProfitPercentage] = useState(0);
+  const [profitPerPerson, setProfitPerPerson] = useState(0);
 
   // NEW: Extras state
   const [extras, setExtras] = useState<TripExtras>({
@@ -321,9 +322,17 @@ export default function CreateTrip() {
           commercialFemaleVXplorers: participants?.commercial_female_vxplorers || 0,  // NEW
         });
 
-        // NEW: Load profit from trip
+        // Load profit and profit mode from trip
         const loadedProfit = trip.profit || 0;
         setProfit(loadedProfit);
+        if (trip.profit_mode) {
+          const mode = trip.profit_mode as 'flat' | 'percentage' | 'per_person';
+          setProfitMode(mode);
+          if (mode === 'per_person') {
+            const pax = participants?.total_participants || 1;
+            setProfitPerPerson(pax > 0 ? Math.round(loadedProfit / pax) : 0);
+          }
+        }
 
         // Load package currency
         if (trip.package_currency) {
@@ -429,6 +438,7 @@ export default function CreateTrip() {
           id: a.id!,
           name: a.name,
           city: a.city,
+          costType: (a.cost_type as 'per_person' | 'lump_sum') || 'per_person',
           entryCost: a.entry_cost,
           transportCost: a.transport_cost,
           guideCost: a.guide_cost,
@@ -578,13 +588,14 @@ export default function CreateTrip() {
   const calculateHotelMealCost = (accId: string, nights: number, totalPax: number, currency: string) => {
     const m = getHotelMealDefaults(accId, currency);
     const rate = getCurrencyRate(m.currency);
-    // freeBreakfast/freeLunch/freeDinner = number of free nights (not free people)
-    const billableBfNights = Math.max(0, nights - m.freeBreakfast);
-    const billableLunchNights = Math.max(0, nights - m.freeLunch);
-    const billableDinnerNights = Math.max(0, nights - m.freeDinner);
-    const bfTotal = m.breakfastCostPerPerson * billableBfNights * totalPax;
-    const lunchTotal = m.lunchCostPerPerson * billableLunchNights * totalPax;
-    const dinnerTotal = m.dinnerCostPerPerson * billableDinnerNights * totalPax;
+    // freeBreakfast/freeLunch/freeDinner = number of FREE PEOPLE (pax who eat for free)
+    // Formula: costPerPerson × (totalPax - freePax) × nights
+    const billableBfPax = Math.max(0, totalPax - m.freeBreakfast);
+    const billableLunchPax = Math.max(0, totalPax - m.freeLunch);
+    const billableDinnerPax = Math.max(0, totalPax - m.freeDinner);
+    const bfTotal = m.breakfastCostPerPerson * billableBfPax * nights;
+    const lunchTotal = m.lunchCostPerPerson * billableLunchPax * nights;
+    const dinnerTotal = m.dinnerCostPerPerson * billableDinnerPax * nights;
     const totalCost = bfTotal + lunchTotal + dinnerTotal;
     return {
       breakfastTotal: bfTotal,
@@ -1091,6 +1102,7 @@ export default function CreateTrip() {
       id: `activity-${Date.now()}`,
       name: '',
       city: formData.cities[0]?.name || undefined,
+      costType: 'per_person',
       entryCost: 0,
       transportCost: 0,
       guideCost: 0,
@@ -1105,14 +1117,16 @@ export default function CreateTrip() {
     const updated = [...activities];
     updated[index] = { ...updated[index], [field]: value };
 
-    if (['entryCost', 'transportCost', 'guideCost', 'currency'].includes(field)) {
+    if (['entryCost', 'transportCost', 'guideCost', 'currency', 'costType'].includes(field)) {
       const totalParticipants = calculateTotalParticipants();
       const entry = field === 'entryCost' ? value : updated[index].entryCost;
       const transport = field === 'transportCost' ? value : updated[index].transportCost;
       const guide = field === 'guideCost' ? value : updated[index].guideCost;
       const currency = field === 'currency' ? value : updated[index].currency;
+      const costType = field === 'costType' ? value : updated[index].costType;
 
-      const cost = (entry + transport + guide) * totalParticipants;
+      const baseAmount = entry + transport + guide;
+      const cost = costType === 'lump_sum' ? baseAmount : baseAmount * totalParticipants;
       updated[index].totalCost = cost;
       updated[index].totalCostINR = cost * getCurrencyRate(currency);
     }
@@ -1364,6 +1378,7 @@ export default function CreateTrip() {
         packageOccupancies: planningMode === 'tour_planner' ? packageOccupancies : [],
         subtotalBeforeTax: totals.subtotalBeforeTax,
         profit,
+        profitMode,
         gstPercentage: totals.gstPercentage,
         gstAmount: totals.gstAmount,
         tcsPercentage: totals.tcsPercentage,
@@ -1525,6 +1540,7 @@ export default function CreateTrip() {
 
         subtotalBeforeTax: totals.subtotalBeforeTax,
         profit: profit,
+        profitMode,
         gstPercentage: totals.gstPercentage,
         gstAmount: totals.gstAmount,
         tcsPercentage: totals.tcsPercentage,
@@ -1735,22 +1751,12 @@ export default function CreateTrip() {
                 {isEditing ? 'Update trip details and costs' : 'Plan a new trip'}
               </p>
             </div>
-            {isEditing && autoSaveStatus !== 'idle' && (
-              <div className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-full ${
-                autoSaveStatus === 'saving' ? 'bg-muted text-muted-foreground' :
-                autoSaveStatus === 'saved' ? 'bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400' :
-                'bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400'
-              }`}>
-                {autoSaveStatus === 'saving' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {autoSaveStatus === 'saving' ? 'Auto-saving...' : autoSaveStatus === 'saved' ? '✓ Auto-saved' : 'Auto-save failed'}
-              </div>
-            )}
           </div>
         </div>
       </div>
 
       {/* Scrollable body */}
-      <div id="trip-scroll-container" className="flex-1 overflow-y-auto px-6 pb-6">
+      <div id="trip-scroll-container" className="flex-1 overflow-y-auto px-6 pb-24">
         <div className="max-w-7xl mx-auto flex gap-8 items-start">
           <TripSectionNavDesktop />
 
@@ -3684,7 +3690,7 @@ export default function CreateTrip() {
                             <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-3 px-4 py-2 bg-muted/20 text-xs font-medium text-muted-foreground">
                               <span>Meal</span>
                               <span>Cost / Person</span>
-                              <span>Free Meal Pax</span>
+                              <span>Free Pax</span>
                               <span className="text-right">Row Total (INR)</span>
                             </div>
 
@@ -3757,7 +3763,7 @@ export default function CreateTrip() {
                             {/* Hotel subtotal */}
                             <div className="flex justify-between items-center px-4 py-3 bg-muted/20">
                               <span className="text-xs text-muted-foreground">
-                                Formula: Cost × (Pax − Free Pax) × {acc.numberOfNights} nights
+                                Formula: Cost/person × (Pax − Free Pax) × {acc.numberOfNights} nights
                               </span>
                               <span className="font-semibold text-sm">
                                 Hotel Subtotal: {formatCurrency(costs.totalCostINR, 'INR')}
@@ -3854,7 +3860,22 @@ export default function CreateTrip() {
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label>Cost Type</Label>
+                                <Select
+                                  value={activity.costType}
+                                  onValueChange={(v) => updateActivity(index, 'costType', v as 'per_person' | 'lump_sum')}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-popover">
+                                    <SelectItem value="per_person">Per Person</SelectItem>
+                                    <SelectItem value="lump_sum">Lump Sum</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
                               <div className="space-y-2">
                                 <Label>Currency</Label>
                                 <Select
@@ -3917,6 +3938,12 @@ export default function CreateTrip() {
                             </div>
 
                             <div className="pt-2 border-t">
+                              <p className="text-sm text-muted-foreground">
+                                {activity.costType === 'lump_sum'
+                                  ? `Lump sum: ${formatCurrency(activity.entryCost + activity.transportCost + activity.guideCost, activity.currency)}`
+                                  : `${formatCurrency(activity.entryCost + activity.transportCost + activity.guideCost, activity.currency)} × ${calculateTotalParticipants()} participants`
+                                }
+                              </p>
                               <p className="text-sm font-semibold text-primary">
                                 Total: {formatCurrency(activity.totalCostINR, 'INR')}
                               </p>
@@ -4238,7 +4265,18 @@ export default function CreateTrip() {
                         onClick={() => setProfitMode('flat')}
                         className={`px-3 py-1 rounded-md transition-all ${profitMode === 'flat' ? 'bg-background shadow font-semibold' : 'text-muted-foreground hover:text-foreground'}`}
                       >
-                        ₹ Flat
+                        ₹ Total
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfitMode('per_person');
+                          const pax = calculateTotalParticipants();
+                          setProfitPerPerson(pax > 0 ? Math.round(profit / pax) : 0);
+                        }}
+                        className={`px-3 py-1 rounded-md transition-all ${profitMode === 'per_person' ? 'bg-background shadow font-semibold' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        ₹ / Person
                       </button>
                       <button
                         type="button"
@@ -4250,9 +4288,9 @@ export default function CreateTrip() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    {profitMode === 'flat' ? (
+                    {profitMode === 'flat' && (
                       <div className="flex-1 space-y-1">
-                        <Label className="text-xs text-muted-foreground">Amount (₹)</Label>
+                        <Label className="text-xs text-muted-foreground">Total Amount (₹)</Label>
                         <Input
                           type="number" onFocus={handleNumberFocus}
                           placeholder="0"
@@ -4266,7 +4304,24 @@ export default function CreateTrip() {
                           }}
                         />
                       </div>
-                    ) : (
+                    )}
+                    {profitMode === 'per_person' && (
+                      <div className="flex-1 space-y-1">
+                        <Label className="text-xs text-muted-foreground">Amount per Person (₹)</Label>
+                        <Input
+                          type="number" onFocus={handleNumberFocus}
+                          placeholder="0"
+                          value={profitPerPerson === 0 ? '' : profitPerPerson}
+                          onChange={(e) => {
+                            const perPerson = parseFloat(e.target.value) || 0;
+                            setProfitPerPerson(perPerson);
+                            const totalPax = calculateTotalParticipants();
+                            setProfit(perPerson * totalPax);
+                          }}
+                        />
+                      </div>
+                    )}
+                    {profitMode === 'percentage' && (
                       <div className="flex-1 space-y-1">
                         <Label className="text-xs text-muted-foreground">Percentage (%)</Label>
                         <Input
@@ -4291,9 +4346,15 @@ export default function CreateTrip() {
                           </p>
                         </>
                       )}
+                      {profitMode === 'per_person' && profit > 0 && (
+                        <>
+                          <p className="text-xs text-muted-foreground">Total ({calculateTotalParticipants()} pax)</p>
+                          <p className="text-lg font-bold text-primary">{formatCurrency(profit, 'INR')}</p>
+                        </>
+                      )}
                       {profitMode === 'percentage' && profit > 0 && (
                         <>
-                          <p className="text-xs text-muted-foreground">Flat Amount</p>
+                          <p className="text-xs text-muted-foreground">Total Amount</p>
                           <p className="text-lg font-bold text-primary">{formatCurrency(profit, 'INR')}</p>
                         </>
                       )}
@@ -4674,51 +4735,60 @@ export default function CreateTrip() {
               </DialogContent>
             </Dialog>
 
-            {/* Action Buttons */}
-            <div className="flex justify-end gap-3 pt-4">
-              <Button variant="outline" onClick={() => navigate('/dashboard')} disabled={isSaving || isSavingDraft}>
-                Cancel
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleSaveDraft}
-                disabled={isSaving || isSavingDraft}
-                className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-400 dark:hover:bg-amber-950/20"
-              >
-                {isSavingDraft ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Saving Draft...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Draft
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={handleSaveTrip}
-                disabled={isSaving || isSavingDraft}
-                className="gradient-primary text-primary-foreground px-8"
-              >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 mr-2" />
-                    {isEditing ? 'Update Trip' : 'Create & Submit Trip'}
-                  </>
-                )}
-              </Button>
-            </div>
-
           </div>{/* end flex-1 content column */}
         </div>{/* end max-w-7xl flex row */}
       </div>{/* end scrollable body */}
+
+      {/* Fixed bottom save bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t shadow-lg">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            {isEditing && autoSaveStatus !== 'idle' && (
+              <div className={`flex items-center gap-2 text-xs px-2.5 py-1 rounded-full ${
+                autoSaveStatus === 'saving' ? 'bg-muted text-muted-foreground' :
+                autoSaveStatus === 'saved' ? 'bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400' :
+                'bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400'
+              }`}>
+                {autoSaveStatus === 'saving' && <Loader2 className="w-3 h-3 animate-spin" />}
+                {autoSaveStatus === 'saving' ? 'Auto-saving…' : autoSaveStatus === 'saved' ? '✓ Auto-saved' : 'Auto-save failed'}
+              </div>
+            )}
+            {isEditing && autoSaveStatus === 'idle' && (
+              <span className="text-xs text-muted-foreground">Changes are auto-saved</span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={() => navigate('/dashboard')} disabled={isSaving || isSavingDraft}>
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSaveDraft}
+              disabled={isSaving || isSavingDraft}
+              className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-400 dark:hover:bg-amber-950/20"
+            >
+              {isSavingDraft ? (
+                <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Saving Draft…</>
+              ) : (
+                <><Save className="w-3.5 h-3.5 mr-1.5" />Save Draft</>
+              )}
+            </Button>
+            <Button
+              onClick={handleSaveTrip}
+              size="sm"
+              disabled={isSaving || isSavingDraft}
+              className="gradient-primary text-primary-foreground px-6"
+            >
+              {isSaving ? (
+                <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Saving…</>
+              ) : (
+                <><Save className="w-3.5 h-3.5 mr-1.5" />{isEditing ? 'Update Trip' : 'Create & Submit Trip'}</>
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
 
       <TripSectionNavMobile />
     </div>
