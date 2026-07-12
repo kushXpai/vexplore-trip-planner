@@ -47,9 +47,9 @@ import {
   XCircle,
   Clock,
 } from 'lucide-react';
-import { Trip, PostTripAnalysis, TripCategory, TripType } from '@/types/trip';
+import { Trip, PostTripAnalysis, TripCategory, TripType, PackageOccupancyRow } from '@/types/trip';
 import { supabase } from '@/supabase/client';
-import { fetchCurrencies, Currency } from '@/services/masterDataService';
+import { fetchCurrencies, Currency, calcPackageCost } from '@/services/masterDataService';
 import { generateTripPDF } from '@/services/pdfGenerator';
 
 // Helper function to format currency with symbol
@@ -81,6 +81,7 @@ export default function TripDetail() {
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [currentUserRole, setCurrentUserRole] = useState<'superadmin' | 'admin' | 'manager' | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [packageOccupancies, setPackageOccupancies] = useState<PackageOccupancyRow[]>([]);
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
   const [showRejectionDialog, setShowRejectionDialog] = useState(false);
@@ -138,6 +139,7 @@ export default function TripDetail() {
           trip_activities (*),
           trip_overheads (*),
           trip_extras (*),
+          trip_package_occupancies (*),
           post_trip_analysis (*)
         `)
         .eq('id', id)
@@ -375,6 +377,18 @@ export default function TripDetail() {
           } : undefined,
           packageCurrency: data.package_currency ?? ''
         };
+
+        // Map package occupancies (tour_planner mode)
+        if (data.trip_package_occupancies && Array.isArray(data.trip_package_occupancies)) {
+          setPackageOccupancies(data.trip_package_occupancies.map((o: any) => ({
+            id: o.id,
+            occupancySize: o.occupancy_size,
+            costPerRoom: o.cost_per_room,
+            roomCount: o.room_count,
+            peopleCovered: o.occupancy_size * o.room_count,
+            rowCost: o.cost_per_room * o.room_count,
+          })));
+        }
 
         setTrip(mappedTrip);
         setTripStatus(mappedTrip.status);
@@ -705,7 +719,13 @@ export default function TripDetail() {
           </Button>
           <div>
             <h1 className="text-3xl font-bold">{trip.name}</h1>
-            <p className="text-muted-foreground">{trip.institution}</p>
+            <p className="text-muted-foreground">
+              {trip.institution}
+              {' · '}
+              <span className="capitalize">{trip.tripType === 'fti' ? 'FTI' : trip.tripType} Trip</span>
+              {' · '}
+              <span className="capitalize">{trip.tripCategory}</span>
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -1029,6 +1049,9 @@ export default function TripDetail() {
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
           <ParticipantsSection trip={trip} />
+          {trip.planningMode === 'tour_planner' && packageOccupancies.length > 0 && (
+            <PackageCostSection trip={trip} packageOccupancies={packageOccupancies} currencies={currencies} />
+          )}
           <MealsSection trip={trip} currencies={currencies} />
           {trip.extras && <ExtrasSection trip={trip} currencies={currencies} />}
           <OverheadsSection trip={trip} currencies={currencies} />
@@ -1117,6 +1140,21 @@ function ParticipantsSection({ trip }: { trip: Trip }) {
               <p className="text-2xl font-bold">{participants.femaleVXplorers}</p>
             </div>
           </div>
+        ) : tripType === 'fti' ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="p-4 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground">Male Participants</p>
+              <p className="text-2xl font-bold">{participants.maleCount}</p>
+            </div>
+            <div className="p-4 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground">Female Participants</p>
+              <p className="text-2xl font-bold">{participants.femaleCount}</p>
+            </div>
+            <div className="p-4 bg-muted/30 rounded-lg">
+              <p className="text-sm text-muted-foreground">Kids</p>
+              <p className="text-2xl font-bold">{participants.otherCount}</p>
+            </div>
+          </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div className="p-4 bg-muted/30 rounded-lg">
@@ -1155,7 +1193,7 @@ function ParticipantsSection({ trip }: { trip: Trip }) {
               </div>
             </>
           )}
-          {tripType === 'commercial' && (
+          {(tripType === 'commercial' || tripType === 'fti') && (
             <div className="p-4 bg-primary/5 rounded-lg">
               <p className="text-sm text-muted-foreground">Total Participants</p>
               <p className="text-xl font-bold">{participants.totalCommercial}</p>
@@ -1168,6 +1206,71 @@ function ParticipantsSection({ trip }: { trip: Trip }) {
           <div className="p-4 bg-primary/10 rounded-lg">
             <p className="text-sm text-muted-foreground">Grand Total</p>
             <p className="text-xl font-bold text-primary">{participants.totalParticipants}</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PackageCostSection({ trip, packageOccupancies, currencies }: { trip: Trip; packageOccupancies: PackageOccupancyRow[]; currencies: Currency[] }) {
+  const pkg = calcPackageCost(packageOccupancies, trip.packageCurrency || 'INR', currencies);
+
+  return (
+    <Card className="shadow-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Calculator className="w-5 h-5 text-primary" />
+          Package Cost (Tour Planner)
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 mb-2">
+            <Badge variant="outline">Currency: {trip.packageCurrency || 'INR'}</Badge>
+          </div>
+          <div className="border border-border/50 rounded-md overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/40 text-left">
+                  <th className="px-3 py-2 font-semibold">Occupancy Size</th>
+                  <th className="px-3 py-2 font-semibold text-right">Cost / Group</th>
+                  <th className="px-3 py-2 font-semibold text-right">Groups</th>
+                  <th className="px-3 py-2 font-semibold text-right">People Covered</th>
+                  <th className="px-3 py-2 font-semibold text-right">Row Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/30">
+                {packageOccupancies.map((row, idx) => (
+                  <tr key={idx}>
+                    <td className="px-3 py-2 font-medium">{row.occupancySize} pax/group</td>
+                    <td className="px-3 py-2 text-right">{formatCurrencyWithSymbol(row.costPerRoom, trip.packageCurrency || 'INR', currencies)}</td>
+                    <td className="px-3 py-2 text-right">{row.roomCount}</td>
+                    <td className="px-3 py-2 text-right">{row.peopleCovered}</td>
+                    <td className="px-3 py-2 text-right font-semibold">{formatCurrencyWithSymbol(row.rowCost, trip.packageCurrency || 'INR', currencies)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-muted/30 border-t-2 border-border">
+                  <td className="px-3 py-2 font-semibold">Total</td>
+                  <td></td>
+                  <td></td>
+                  <td className="px-3 py-2 text-right font-semibold text-primary">{pkg.totalPeople} people</td>
+                  <td className="px-3 py-2 text-right font-bold text-primary">{formatCurrencyWithSymbol(pkg.totalCost, trip.packageCurrency || 'INR', currencies)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-3 bg-primary/5 rounded-lg">
+              <p className="text-xs text-muted-foreground">Total Package Cost (INR)</p>
+              <p className="text-lg font-bold">{formatINR(pkg.totalCostINR)}</p>
+            </div>
+            <div className="p-3 bg-primary/5 rounded-lg">
+              <p className="text-xs text-muted-foreground">Cost Per Person</p>
+              <p className="text-lg font-bold">{formatCurrencyWithSymbol(pkg.costPerPerson, trip.packageCurrency || 'INR', currencies)}</p>
+            </div>
           </div>
         </div>
       </CardContent>
@@ -2029,9 +2132,19 @@ function CostSummarySection({ trip }: { trip: Trip }) {
               <div className="flex items-center gap-2">
                 <BadgePercent className="w-4 h-4 text-primary" />
                 <span className="font-medium">Admin Charges</span>
-                {trip.subtotalBeforeTax > 0 && (
+                {trip.profitMode === 'percentage' && trip.subtotalBeforeTax > 0 && (
                   <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
                     {((trip.profit / trip.subtotalBeforeTax) * 100).toFixed(2)}%
+                  </span>
+                )}
+                {trip.profitMode === 'per_person' && (
+                  <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                    per person
+                  </span>
+                )}
+                {trip.profitMode === 'flat' && (
+                  <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                    flat
                   </span>
                 )}
               </div>
