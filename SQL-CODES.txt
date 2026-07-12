@@ -1,13 +1,14 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
-CREATE TABLE public.cities (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
+CREATE TABLE public.users (
+  id uuid NOT NULL,
+  email text NOT NULL UNIQUE,
   name text NOT NULL,
-  country_id uuid,
+  role USER-DEFINED NOT NULL,
   created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT cities_pkey PRIMARY KEY (id),
-  CONSTRAINT cities_country_id_fkey FOREIGN KEY (country_id) REFERENCES public.countries(id)
+  CONSTRAINT users_pkey PRIMARY KEY (id),
+  CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.countries (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -16,6 +17,14 @@ CREATE TABLE public.countries (
   default_currency text NOT NULL,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT countries_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.cities (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  country_id uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT cities_pkey PRIMARY KEY (id),
+  CONSTRAINT cities_country_id_fkey FOREIGN KEY (country_id) REFERENCES public.countries(id)
 );
 CREATE TABLE public.currencies (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -27,19 +36,6 @@ CREATE TABLE public.currencies (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT currencies_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.hotel (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  hotelname text NOT NULL,
-  countryid uuid,
-  cityid uuid,
-  breakfastincluded boolean NOT NULL DEFAULT false,
-  remarks text,
-  createdat timestamp with time zone DEFAULT now(),
-  updatedat timestamp with time zone DEFAULT now(),
-  CONSTRAINT hotel_pkey PRIMARY KEY (id),
-  CONSTRAINT hotel_countryid_fkey FOREIGN KEY (countryid) REFERENCES public.countries(id),
-  CONSTRAINT hotel_cityid_fkey FOREIGN KEY (cityid) REFERENCES public.cities(id)
-);
 CREATE TABLE public.institutions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   name text NOT NULL,
@@ -48,43 +44,116 @@ CREATE TABLE public.institutions (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT institutions_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.post_trip_analysis (
-  trip_id uuid NOT NULL,
-  total_expected numeric NOT NULL DEFAULT 0,
-  total_actual numeric NOT NULL DEFAULT 0,
-  profit_loss numeric NOT NULL DEFAULT 0,
-  profit_loss_percentage numeric NOT NULL DEFAULT 0,
-  variance_explanation text,
-  is_finalized boolean NOT NULL DEFAULT false,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT post_trip_analysis_pkey PRIMARY KEY (trip_id),
-  CONSTRAINT post_trip_analysis_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
-);
-CREATE TABLE public.restaurants (
+CREATE TABLE public.trips (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   name text NOT NULL,
-  city text,
-  country_id uuid,
-  city_id uuid,
-  star_rating text CHECK (star_rating = ANY (ARRAY['1'::text, '2'::text, '3'::text, '4'::text, '5'::text])),
-  remarks text,
+  institution text NOT NULL,
+  trip_category USER-DEFINED NOT NULL,
+  trip_type USER-DEFINED NOT NULL,
+  cities jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (validate_cities_array(cities)),
+  start_date date NOT NULL,
+  end_date date NOT NULL,
+  total_days integer NOT NULL CHECK (total_days > 0),
+  total_nights integer NOT NULL CHECK (total_nights >= 0),
+  default_currency text NOT NULL,
+  status USER-DEFINED NOT NULL DEFAULT 'draft'::trip_status,
+  subtotal_before_tax numeric NOT NULL DEFAULT 0,
+  gst_percentage numeric NOT NULL DEFAULT 5.0,
+  gst_amount numeric NOT NULL DEFAULT 0,
+  tcs_percentage numeric NOT NULL DEFAULT 5.0,
+  tcs_amount numeric NOT NULL DEFAULT 0,
+  grand_total numeric NOT NULL DEFAULT 0,
+  grand_total_inr numeric NOT NULL DEFAULT 0,
+  cost_per_participant numeric NOT NULL DEFAULT 0,
+  created_by uuid,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT restaurants_pkey PRIMARY KEY (id),
-  CONSTRAINT restaurants_country_id_fkey FOREIGN KEY (country_id) REFERENCES public.countries(id),
-  CONSTRAINT restaurants_city_id_fkey FOREIGN KEY (city_id) REFERENCES public.cities(id)
+  profit numeric NOT NULL DEFAULT 0,
+  countries jsonb NOT NULL DEFAULT '[]'::jsonb,
+  tds_percentage numeric NOT NULL DEFAULT 0,
+  tds_amount numeric NOT NULL DEFAULT 0,
+  planning_mode text NOT NULL DEFAULT 'self_planned'::text CHECK (planning_mode = ANY (ARRAY['self_planned'::text, 'tour_planner'::text])),
+  package_total_cost numeric NOT NULL DEFAULT 0,
+  package_total_cost_inr numeric NOT NULL DEFAULT 0,
+  package_cost_per_person numeric NOT NULL DEFAULT 0,
+  package_currency text DEFAULT 'INR'::text,
+  approved_by uuid,
+  approved_at timestamp with time zone,
+  approval_remarks text,
+  profit_mode text NOT NULL DEFAULT 'flat'::text CHECK (profit_mode = ANY (ARRAY['flat'::text, 'percentage'::text, 'per_person'::text])),
+  CONSTRAINT trips_pkey PRIMARY KEY (id),
+  CONSTRAINT trips_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id),
+  CONSTRAINT trips_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id)
 );
-CREATE TABLE public.tax_rates (
+CREATE TABLE public.trip_participants (
+  trip_id uuid NOT NULL,
+  boys integer NOT NULL DEFAULT 0 CHECK (boys >= 0),
+  girls integer NOT NULL DEFAULT 0 CHECK (girls >= 0),
+  male_faculty integer NOT NULL DEFAULT 0 CHECK (male_faculty >= 0),
+  female_faculty integer NOT NULL DEFAULT 0 CHECK (female_faculty >= 0),
+  male_vxplorers integer NOT NULL DEFAULT 0 CHECK (male_vxplorers >= 0),
+  female_vxplorers integer NOT NULL DEFAULT 0 CHECK (female_vxplorers >= 0),
+  male_count integer NOT NULL DEFAULT 0 CHECK (male_count >= 0),
+  female_count integer NOT NULL DEFAULT 0 CHECK (female_count >= 0),
+  other_count integer NOT NULL DEFAULT 0 CHECK (other_count >= 0),
+  total_students integer NOT NULL DEFAULT 0,
+  total_faculty integer NOT NULL DEFAULT 0,
+  total_vxplorers integer NOT NULL DEFAULT 0,
+  total_commercial integer NOT NULL DEFAULT 0,
+  total_participants integer NOT NULL DEFAULT 0,
+  commercial_male_vxplorers integer NOT NULL DEFAULT 0 CHECK (commercial_male_vxplorers >= 0),
+  commercial_female_vxplorers integer NOT NULL DEFAULT 0 CHECK (commercial_female_vxplorers >= 0),
+  CONSTRAINT trip_participants_pkey PRIMARY KEY (trip_id),
+  CONSTRAINT trip_participants_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
+);
+CREATE TABLE public.trip_extras (
+  trip_id uuid NOT NULL,
+  visa_cost_per_person numeric NOT NULL DEFAULT 0 CHECK (visa_cost_per_person >= 0::numeric),
+  visa_currency text NOT NULL DEFAULT 'INR'::text,
+  visa_total_cost numeric NOT NULL DEFAULT 0,
+  visa_total_cost_inr numeric NOT NULL DEFAULT 0,
+  tips_cost_per_person numeric NOT NULL DEFAULT 0 CHECK (tips_cost_per_person >= 0::numeric),
+  tips_currency text NOT NULL DEFAULT 'INR'::text,
+  tips_total_cost numeric NOT NULL DEFAULT 0,
+  tips_total_cost_inr numeric NOT NULL DEFAULT 0,
+  insurance_cost_per_person numeric NOT NULL DEFAULT 0 CHECK (insurance_cost_per_person >= 0::numeric),
+  insurance_currency text NOT NULL DEFAULT 'INR'::text,
+  insurance_total_cost numeric NOT NULL DEFAULT 0,
+  insurance_total_cost_inr numeric NOT NULL DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT trip_extras_pkey PRIMARY KEY (trip_id),
+  CONSTRAINT trip_extras_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
+);
+CREATE TABLE public.trip_buses (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  rate_type text NOT NULL CHECK (rate_type = ANY (ARRAY['gst'::text, 'tcs'::text, 'tds'::text])),
-  rate_percentage numeric NOT NULL CHECK (rate_percentage >= 0::numeric AND rate_percentage <= 100::numeric),
-  effective_from date NOT NULL,
-  effective_to date,
-  is_current boolean DEFAULT true,
-  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
-  updated_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
-  CONSTRAINT tax_rates_pkey PRIMARY KEY (id)
+  trip_id uuid,
+  name text NOT NULL,
+  seating_capacity integer NOT NULL DEFAULT 0 CHECK (seating_capacity > 0),
+  cost_per_bus numeric NOT NULL DEFAULT 0 CHECK (cost_per_bus >= 0::numeric),
+  currency text NOT NULL,
+  number_of_days integer NOT NULL DEFAULT 1 CHECK (number_of_days > 0),
+  quantity integer NOT NULL DEFAULT 1 CHECK (quantity > 0),
+  description text,
+  total_cost numeric NOT NULL DEFAULT 0,
+  total_cost_inr numeric NOT NULL DEFAULT 0,
+  costing_mode USER-DEFINED NOT NULL DEFAULT 'per_day'::bus_costing_mode,
+  CONSTRAINT trip_buses_pkey PRIMARY KEY (id),
+  CONSTRAINT trip_buses_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
+);
+CREATE TABLE public.trip_trains (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  trip_id uuid,
+  name text NOT NULL,
+  train_number text,
+  class text,
+  timing text,
+  cost_per_person numeric NOT NULL DEFAULT 0 CHECK (cost_per_person >= 0::numeric),
+  currency text NOT NULL,
+  description text,
+  total_cost numeric NOT NULL DEFAULT 0,
+  total_cost_inr numeric NOT NULL DEFAULT 0,
+  CONSTRAINT trip_trains_pkey PRIMARY KEY (id),
+  CONSTRAINT trip_trains_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
 );
 CREATE TABLE public.trip_accommodations (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -117,61 +186,59 @@ CREATE TABLE public.trip_activities (
   description text,
   total_cost numeric NOT NULL DEFAULT 0,
   total_cost_inr numeric NOT NULL DEFAULT 0,
+  cost_type text NOT NULL DEFAULT 'per_person'::text CHECK (cost_type = ANY (ARRAY['per_person'::text, 'lump_sum'::text])),
   CONSTRAINT trip_activities_pkey PRIMARY KEY (id),
   CONSTRAINT trip_activities_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
 );
-CREATE TABLE public.trip_buses (
+CREATE TABLE public.post_trip_analysis (
+  trip_id uuid NOT NULL,
+  total_expected numeric NOT NULL DEFAULT 0,
+  total_actual numeric NOT NULL DEFAULT 0,
+  profit_loss numeric NOT NULL DEFAULT 0,
+  profit_loss_percentage numeric NOT NULL DEFAULT 0,
+  variance_explanation text,
+  is_finalized boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT post_trip_analysis_pkey PRIMARY KEY (trip_id),
+  CONSTRAINT post_trip_analysis_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
+);
+CREATE TABLE public.tax_rates (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  rate_type text NOT NULL CHECK (rate_type = ANY (ARRAY['gst'::text, 'tcs'::text, 'tds'::text])),
+  rate_percentage numeric NOT NULL CHECK (rate_percentage >= 0::numeric AND rate_percentage <= 100::numeric),
+  effective_from date NOT NULL,
+  effective_to date,
+  is_current boolean DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT tax_rates_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.trip_overheads (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   trip_id uuid,
   name text NOT NULL,
-  seating_capacity integer NOT NULL DEFAULT 0 CHECK (seating_capacity > 0),
-  cost_per_bus numeric NOT NULL DEFAULT 0 CHECK (cost_per_bus >= 0::numeric),
-  currency text NOT NULL,
-  number_of_days integer NOT NULL DEFAULT 1 CHECK (number_of_days > 0),
-  quantity integer NOT NULL DEFAULT 1 CHECK (quantity > 0),
-  description text,
+  amount_per_participant numeric NOT NULL DEFAULT 0 CHECK (amount_per_participant >= 0::numeric),
+  currency text NOT NULL DEFAULT 'INR'::text,
   total_cost numeric NOT NULL DEFAULT 0,
   total_cost_inr numeric NOT NULL DEFAULT 0,
-  CONSTRAINT trip_buses_pkey PRIMARY KEY (id),
-  CONSTRAINT trip_buses_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
+  hide_from_client boolean NOT NULL DEFAULT false,
+  cost_type text NOT NULL DEFAULT 'per_person'::text CHECK (cost_type = ANY (ARRAY['per_person'::text, 'lump_sum'::text])),
+  CONSTRAINT trip_overheads_pkey PRIMARY KEY (id),
+  CONSTRAINT trip_overheads_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
 );
-CREATE TABLE public.trip_extras (
-  trip_id uuid NOT NULL,
-  visa_cost_per_person numeric NOT NULL DEFAULT 0 CHECK (visa_cost_per_person >= 0::numeric),
-  visa_currency text NOT NULL DEFAULT 'INR'::text,
-  visa_total_cost numeric NOT NULL DEFAULT 0,
-  visa_total_cost_inr numeric NOT NULL DEFAULT 0,
-  tips_cost_per_person numeric NOT NULL DEFAULT 0 CHECK (tips_cost_per_person >= 0::numeric),
-  tips_currency text NOT NULL DEFAULT 'INR'::text,
-  tips_total_cost numeric NOT NULL DEFAULT 0,
-  tips_total_cost_inr numeric NOT NULL DEFAULT 0,
-  insurance_cost_per_person numeric NOT NULL DEFAULT 0 CHECK (insurance_cost_per_person >= 0::numeric),
-  insurance_currency text NOT NULL DEFAULT 'INR'::text,
-  insurance_total_cost numeric NOT NULL DEFAULT 0,
-  insurance_total_cost_inr numeric NOT NULL DEFAULT 0,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT trip_extras_pkey PRIMARY KEY (trip_id),
-  CONSTRAINT trip_extras_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
-);
-CREATE TABLE public.trip_flights (
+CREATE TABLE public.hotel (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  trip_id uuid,
-  from_city text NOT NULL,
-  to_city text NOT NULL,
-  airline text NOT NULL,
-  flight_number text,
-  departure_time timestamp with time zone,
-  arrival_time timestamp with time zone,
-  currency text NOT NULL,
-  description text,
-  classes jsonb NOT NULL DEFAULT '[]'::jsonb,
-  seat_upgrades jsonb NOT NULL DEFAULT '[]'::jsonb,
-  meal_upgrades jsonb NOT NULL DEFAULT '[]'::jsonb,
-  total_cost numeric NOT NULL DEFAULT 0,
-  total_cost_inr numeric NOT NULL DEFAULT 0,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT trip_flights_pkey PRIMARY KEY (id),
-  CONSTRAINT trip_flights_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
+  hotelname text NOT NULL,
+  countryid uuid,
+  cityid uuid,
+  breakfastincluded boolean NOT NULL DEFAULT false,
+  remarks text,
+  createdat timestamp with time zone DEFAULT now(),
+  updatedat timestamp with time zone DEFAULT now(),
+  CONSTRAINT hotel_pkey PRIMARY KEY (id),
+  CONSTRAINT hotel_countryid_fkey FOREIGN KEY (countryid) REFERENCES public.countries(id),
+  CONSTRAINT hotel_cityid_fkey FOREIGN KEY (cityid) REFERENCES public.cities(id)
 );
 CREATE TABLE public.trip_meals (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -197,93 +264,58 @@ CREATE TABLE public.trip_meals (
   CONSTRAINT trip_meals_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id),
   CONSTRAINT trip_meals_restaurant_id_fkey FOREIGN KEY (restaurant_id) REFERENCES public.restaurants(id)
 );
-CREATE TABLE public.trip_overheads (
+CREATE TABLE public.trip_flights (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   trip_id uuid,
-  name text NOT NULL,
-  amount_per_participant numeric NOT NULL DEFAULT 0 CHECK (amount_per_participant >= 0::numeric),
-  currency text NOT NULL DEFAULT 'INR'::text,
-  total_cost numeric NOT NULL DEFAULT 0,
-  total_cost_inr numeric NOT NULL DEFAULT 0,
-  hide_from_client boolean NOT NULL DEFAULT false,
-  cost_type text NOT NULL DEFAULT 'per_person'::text CHECK (cost_type = ANY (ARRAY['per_person'::text, 'lump_sum'::text])),
-  CONSTRAINT trip_overheads_pkey PRIMARY KEY (id),
-  CONSTRAINT trip_overheads_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
-);
-CREATE TABLE public.trip_participants (
-  trip_id uuid NOT NULL,
-  boys integer NOT NULL DEFAULT 0 CHECK (boys >= 0),
-  girls integer NOT NULL DEFAULT 0 CHECK (girls >= 0),
-  male_faculty integer NOT NULL DEFAULT 0 CHECK (male_faculty >= 0),
-  female_faculty integer NOT NULL DEFAULT 0 CHECK (female_faculty >= 0),
-  male_vxplorers integer NOT NULL DEFAULT 0 CHECK (male_vxplorers >= 0),
-  female_vxplorers integer NOT NULL DEFAULT 0 CHECK (female_vxplorers >= 0),
-  male_count integer NOT NULL DEFAULT 0 CHECK (male_count >= 0),
-  female_count integer NOT NULL DEFAULT 0 CHECK (female_count >= 0),
-  other_count integer NOT NULL DEFAULT 0 CHECK (other_count >= 0),
-  total_students integer NOT NULL DEFAULT 0,
-  total_faculty integer NOT NULL DEFAULT 0,
-  total_vxplorers integer NOT NULL DEFAULT 0,
-  total_commercial integer NOT NULL DEFAULT 0,
-  total_participants integer NOT NULL DEFAULT 0,
-  commercial_male_vxplorers integer NOT NULL DEFAULT 0 CHECK (commercial_male_vxplorers >= 0),
-  commercial_female_vxplorers integer NOT NULL DEFAULT 0 CHECK (commercial_female_vxplorers >= 0),
-  CONSTRAINT trip_participants_pkey PRIMARY KEY (trip_id),
-  CONSTRAINT trip_participants_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
-);
-CREATE TABLE public.trip_trains (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  trip_id uuid,
-  name text NOT NULL,
-  train_number text,
-  class text,
-  timing text,
-  cost_per_person numeric NOT NULL DEFAULT 0 CHECK (cost_per_person >= 0::numeric),
+  from_city text NOT NULL,
+  to_city text NOT NULL,
+  airline text NOT NULL,
+  flight_number text,
+  departure_time timestamp with time zone,
+  arrival_time timestamp with time zone,
   currency text NOT NULL,
   description text,
+  classes jsonb NOT NULL DEFAULT '[]'::jsonb,
+  seat_upgrades jsonb NOT NULL DEFAULT '[]'::jsonb,
+  meal_upgrades jsonb NOT NULL DEFAULT '[]'::jsonb,
   total_cost numeric NOT NULL DEFAULT 0,
   total_cost_inr numeric NOT NULL DEFAULT 0,
-  CONSTRAINT trip_trains_pkey PRIMARY KEY (id),
-  CONSTRAINT trip_trains_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT trip_flights_pkey PRIMARY KEY (id),
+  CONSTRAINT trip_flights_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
 );
-CREATE TABLE public.trips (
+CREATE TABLE public.restaurants (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   name text NOT NULL,
-  institution text NOT NULL,
-  trip_category USER-DEFINED NOT NULL,
-  trip_type USER-DEFINED NOT NULL,
-  cities jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (validate_cities_array(cities)),
-  start_date date NOT NULL,
-  end_date date NOT NULL,
-  total_days integer NOT NULL CHECK (total_days > 0),
-  total_nights integer NOT NULL CHECK (total_nights >= 0),
-  default_currency text NOT NULL,
-  status USER-DEFINED NOT NULL DEFAULT 'draft'::trip_status,
-  subtotal_before_tax numeric NOT NULL DEFAULT 0,
-  gst_percentage numeric NOT NULL DEFAULT 5.0,
-  gst_amount numeric NOT NULL DEFAULT 0,
-  tcs_percentage numeric NOT NULL DEFAULT 5.0,
-  tcs_amount numeric NOT NULL DEFAULT 0,
-  grand_total numeric NOT NULL DEFAULT 0,
-  grand_total_inr numeric NOT NULL DEFAULT 0,
-  cost_per_participant numeric NOT NULL DEFAULT 0,
-  created_by uuid,
+  city text,
+  country_id uuid,
+  city_id uuid,
+  star_rating text CHECK (star_rating = ANY (ARRAY['1'::text, '2'::text, '3'::text, '4'::text, '5'::text])),
+  remarks text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
-  profit numeric NOT NULL DEFAULT 0,
-  countries jsonb NOT NULL DEFAULT '[]'::jsonb,
-  tds_percentage numeric NOT NULL DEFAULT 0,
-  tds_amount numeric NOT NULL DEFAULT 0,
-  planning_mode text NOT NULL DEFAULT 'self_planned'::text CHECK (planning_mode = ANY (ARRAY['self_planned'::text, 'tour_planner'::text])),
-  CONSTRAINT trips_pkey PRIMARY KEY (id),
-  CONSTRAINT trips_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id)
+  CONSTRAINT restaurants_pkey PRIMARY KEY (id),
+  CONSTRAINT restaurants_country_id_fkey FOREIGN KEY (country_id) REFERENCES public.countries(id),
+  CONSTRAINT restaurants_city_id_fkey FOREIGN KEY (city_id) REFERENCES public.cities(id)
 );
-CREATE TABLE public.users (
-  id uuid NOT NULL,
-  email text NOT NULL UNIQUE,
-  name text NOT NULL,
-  role USER-DEFINED NOT NULL,
+CREATE TABLE public.trip_package_occupancies (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  trip_id uuid NOT NULL,
+  occupancy_size integer NOT NULL CHECK (occupancy_size > 0),
+  cost_per_room numeric NOT NULL DEFAULT 0 CHECK (cost_per_room >= 0::numeric),
+  room_count integer NOT NULL DEFAULT 1 CHECK (room_count > 0),
+  people_covered integer NOT NULL DEFAULT (occupancy_size * room_count),
+  row_cost numeric NOT NULL DEFAULT 0,
   created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT users_pkey PRIMARY KEY (id),
-  CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+  CONSTRAINT trip_package_occupancies_pkey PRIMARY KEY (id),
+  CONSTRAINT trip_package_occupancies_trip_id_fkey FOREIGN KEY (trip_id) REFERENCES public.trips(id)
+);
+CREATE TABLE public.email_settings (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  notifications_enabled boolean NOT NULL DEFAULT true,
+  super_admin_email text NOT NULL,
+  admin_emails ARRAY NOT NULL DEFAULT '{}'::text[],
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT email_settings_pkey PRIMARY KEY (id)
 );

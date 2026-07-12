@@ -646,7 +646,6 @@ export default function TripDetail() {
 
     const analysisData = {
       trip_id: trip.id,
-      categories,
       total_expected: totalExpected,
       total_actual: totalActual,
       profit_loss: profitLoss,

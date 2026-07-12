@@ -98,8 +98,8 @@ interface DbFlight {
   to_city: string;
   airline: string;
   flight_number: string;
-  departure_time: string;
-  arrival_time: string;
+  departure_time: string | null;
+  arrival_time: string | null;
   currency: string;
   description: string;
   classes: FlightClassEntry[];
@@ -303,8 +303,8 @@ function buildDbFlights(flights: Flight[], tripId: string): DbFlight[] {
     to_city: flight.to,
     airline: flight.airline,
     flight_number: flight.flightNumber,
-    departure_time: flight.departureTime,
-    arrival_time: flight.arrivalTime,
+    departure_time: flight.departureTime || null,
+    arrival_time: flight.arrivalTime || null,
     currency: flight.currency,
     description: flight.description || '',
     classes: flight.classes,
@@ -541,7 +541,7 @@ export async function createTrip(tripData: TripInput) {
       if (mealsError) throw mealsError;
     }
 
-    // 7.5. Extras
+    // 7.5. Extras — use upsert so a second save of the same trip doesn't error on PK conflict
     if (tripData.extras) {
       const dbExtras: DbTripExtras = {
         trip_id: tripId,
@@ -560,7 +560,7 @@ export async function createTrip(tripData: TripInput) {
       };
       const { error: extrasError } = await supabase
         .from('trip_extras')
-        .insert(dbExtras);
+        .upsert(dbExtras, { onConflict: 'trip_id' });
       if (extrasError) throw extrasError;
     }
 

@@ -201,6 +201,7 @@ export default function CreateTrip() {
     if (editId && countries.length > 0 && cities.length > 0) {
       loadTripData(editId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId, countries.length, cities.length]);
 
   // Fetch master data on component mount
@@ -259,6 +260,7 @@ export default function CreateTrip() {
       insuranceTotalCost: prev.insuranceCostPerPerson * totalParticipants,
       insuranceTotalCostINR: prev.insuranceCostPerPerson * totalParticipants * getCurrencyRate(prev.insuranceCurrency),
     }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     formData.boys, formData.girls, formData.maleFaculty, formData.femaleFaculty,
     formData.maleVXplorers, formData.femaleVXplorers,
@@ -297,15 +299,17 @@ export default function CreateTrip() {
         setTripType(trip.trip_type);
         setPlanningMode(trip.planning_mode || 'self_planned');
 
-        const tripCountries = Array.isArray(trip.countries) ? trip.countries : (trip.country ? [trip.country] : []);
-
-        // NEW: Handle multi-city array
-        const cityNames = Array.isArray(trip.cities) ? trip.cities : [trip.cities];
+        // Map stored country names back to country IDs for form state
+        const storedCountries: string[] = Array.isArray(trip.countries) ? trip.countries : (trip.country ? [trip.country] : []);
+        const countryIds = storedCountries.map(nameOrId => {
+          const found = countries.find(c => c.id === nameOrId || c.name === nameOrId);
+          return found ? found.id : nameOrId;
+        });
 
         setFormData({
           name: trip.name,
           institution: trip.institution,
-          countries: trip.countries || [],
+          countries: countryIds,
           cities: trip.cities || [],
           startDate: trip.start_date,
           endDate: trip.end_date,
@@ -331,6 +335,8 @@ export default function CreateTrip() {
           if (mode === 'per_person') {
             const pax = participants?.total_participants || 1;
             setProfitPerPerson(pax > 0 ? Math.round(loadedProfit / pax) : 0);
+          } else if (mode === 'percentage' && trip.subtotal_before_tax > 0) {
+            setProfitPercentage(parseFloat(((loadedProfit / trip.subtotal_before_tax) * 100).toFixed(4)));
           }
         }
 
@@ -341,7 +347,7 @@ export default function CreateTrip() {
 
         // Load package occupancies (tour_planner mode)
         if (dbPackageOccupancies && Array.isArray(dbPackageOccupancies)) {
-          setPackageOccupancies(dbPackageOccupancies.map((o: any) => ({
+          setPackageOccupancies(dbPackageOccupancies.map((o: { id: string; occupancy_size: number; cost_per_room: number; room_count: number }) => ({
             id: o.id,
             occupancySize: o.occupancy_size,
             costPerRoom: o.cost_per_room,
@@ -396,7 +402,7 @@ export default function CreateTrip() {
           currency: b.currency,
           numberOfDays: b.number_of_days,
           quantity: b.quantity,
-          costingMode: 'per_day' as const,
+          costingMode: (b.costing_mode as 'per_day' | 'lump_sum') || 'per_day',
           description: b.description,
           totalCost: b.total_cost,
           totalCostINR: b.total_cost_inr,
@@ -462,8 +468,8 @@ export default function CreateTrip() {
 
         // Map meals (hotel-wise)
         if (dbMeals && Array.isArray(dbMeals)) {
-          const mealsMap: Record<string, any> = {};
-          dbMeals.forEach((m: any) => {
+          const mealsMap: Record<string, { restaurantId: string; restaurantName: string; breakfastCostPerPerson: number; lunchCostPerPerson: number; dinnerCostPerPerson: number; freeBreakfast: number; freeLunch: number; freeDinner: number; currency: string; }> = {};
+          dbMeals.forEach((m: { accommodation_id: string; restaurant_id?: string; restaurant_name?: string; breakfast_cost_per_person: number; lunch_cost_per_person: number; dinner_cost_per_person: number; free_breakfast: number; free_lunch: number; free_dinner: number; currency: string; }) => {
             mealsMap[m.accommodation_id] = {
               restaurantId: m.restaurant_id ?? '',
               restaurantName: m.restaurant_name ?? '',
@@ -703,7 +709,7 @@ export default function CreateTrip() {
     setFlights(updated);
   };
 
-  const updateFlightClass = (flightIndex: number, classIndex: number, field: keyof FlightClassEntry, value: any) => {
+  const updateFlightClass = (flightIndex: number, classIndex: number, field: keyof FlightClassEntry, value: string | number) => {
     const updated = [...flights];
     const classes = [...updated[flightIndex].classes];
     classes[classIndex] = { ...classes[classIndex], [field]: value };
@@ -727,7 +733,7 @@ export default function CreateTrip() {
     setFlights(updated);
   };
 
-  const updateFlightSeatUpgrade = (flightIndex: number, upgradeIndex: number, field: keyof FlightSeatUpgrade, value: any) => {
+  const updateFlightSeatUpgrade = (flightIndex: number, upgradeIndex: number, field: keyof FlightSeatUpgrade, value: string | number) => {
     const updated = [...flights];
     const seatUpgrades = [...updated[flightIndex].seatUpgrades];
     seatUpgrades[upgradeIndex] = { ...seatUpgrades[upgradeIndex], [field]: value };
@@ -751,7 +757,7 @@ export default function CreateTrip() {
     setFlights(updated);
   };
 
-  const updateFlightMealUpgrade = (flightIndex: number, upgradeIndex: number, field: keyof FlightMealUpgrade, value: any) => {
+  const updateFlightMealUpgrade = (flightIndex: number, upgradeIndex: number, field: keyof FlightMealUpgrade, value: string | number) => {
     const updated = [...flights];
     const mealUpgrades = [...updated[flightIndex].mealUpgrades];
     mealUpgrades[upgradeIndex] = { ...mealUpgrades[upgradeIndex], [field]: value };
@@ -792,18 +798,20 @@ export default function CreateTrip() {
     }]);
   };
 
-  const updateBus = (index: number, field: keyof BusType, value: any) => {
+  const updateBus = (index: number, field: keyof BusType, value: string | number) => {
     const updated = [...buses];
     updated[index] = { ...updated[index], [field]: value };
 
-    if (['costPerBus', 'numberOfDays', 'quantity', 'currency'].includes(field)) {
-      const cost = field === 'costPerBus' ? value : updated[index].costPerBus;
-      const days = field === 'numberOfDays' ? value : updated[index].numberOfDays;
-      const qty = field === 'quantity' ? value : (updated[index].quantity || 1);
-      const currency = field === 'currency' ? value : updated[index].currency;
+    if (['costPerBus', 'numberOfDays', 'quantity', 'currency', 'costingMode'].includes(field)) {
+      const cost = Number(field === 'costPerBus' ? value : updated[index].costPerBus);
+      const days = Number(field === 'numberOfDays' ? value : updated[index].numberOfDays);
+      const qty = Number(field === 'quantity' ? value : updated[index].quantity) || 1;
+      const currency = String(field === 'currency' ? value : updated[index].currency);
+      const mode = field === 'costingMode' ? String(value) : updated[index].costingMode;
 
-      updated[index].totalCost = cost * days * qty;
-      updated[index].totalCostINR = cost * days * qty * getCurrencyRate(currency);
+      const rawCost = mode === 'lump_sum' ? cost * qty : cost * days * qty;
+      updated[index].totalCost = rawCost;
+      updated[index].totalCostINR = rawCost * getCurrencyRate(currency);
     }
 
     setBuses(updated);
@@ -831,14 +839,14 @@ export default function CreateTrip() {
     }]);
   };
 
-  const updateTrain = (index: number, field: keyof TrainType, value: any) => {
+  const updateTrain = (index: number, field: keyof TrainType, value: string | number) => {
     const updated = [...trains];
     updated[index] = { ...updated[index], [field]: value };
 
     if (field === 'costPerPerson' || field === 'currency') {
       const totalParticipants = calculateTotalParticipants();
-      const cost = field === 'costPerPerson' ? value : updated[index].costPerPerson;
-      const currency = field === 'currency' ? value : updated[index].currency;
+      const cost = Number(field === 'costPerPerson' ? value : updated[index].costPerPerson);
+      const currency = String(field === 'currency' ? value : updated[index].currency);
 
       updated[index].totalCost = cost * totalParticipants;
       updated[index].totalCostINR = cost * totalParticipants * getCurrencyRate(currency);
@@ -895,7 +903,7 @@ export default function CreateTrip() {
     }]);
   };
 
-  const updateAccommodation = (index: number, field: keyof Accommodation, value: any) => {
+  const updateAccommodation = (index: number, field: keyof Accommodation, value: string | number | boolean | RoomTypeConfig[] | RoomPreferences | object) => {
     const updated = [...accommodations];
     updated[index] = { ...updated[index], [field]: value };
 
@@ -949,14 +957,14 @@ export default function CreateTrip() {
 
           updated[index].totalCost = costs.totalCost;
           updated[index].totalCostINR = costs.totalCostINR;
-        } catch (error: any) {
-          toast.error(error.message);
+        } catch (error: unknown) {
+          toast.error(error instanceof Error ? error.message : 'Allocation failed');
         }
       }
     }
 
     // Recalculate costs when nights, currency, or driverRoom change
-    if (field === 'numberOfNights' || field === 'currency' || field === ('driverRoom' as any)) {
+    if (field === 'numberOfNights' || field === 'currency' || field === 'driverRoom') {
       if (updated[index].roomAllocation.totalRooms > 0) {
         const costs = calculateAccommodationCost(
           updated[index].roomAllocation,
@@ -1040,8 +1048,8 @@ export default function CreateTrip() {
       setAccommodations(updated);
 
       toast.success('Rooms allocated successfully!');
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Allocation failed');
     }
   };
 
@@ -1113,17 +1121,17 @@ export default function CreateTrip() {
     }]);
   };
 
-  const updateActivity = (index: number, field: keyof Activity, value: any) => {
+  const updateActivity = (index: number, field: keyof Activity, value: string | number) => {
     const updated = [...activities];
     updated[index] = { ...updated[index], [field]: value };
 
     if (['entryCost', 'transportCost', 'guideCost', 'currency', 'costType'].includes(field)) {
       const totalParticipants = calculateTotalParticipants();
-      const entry = field === 'entryCost' ? value : updated[index].entryCost;
-      const transport = field === 'transportCost' ? value : updated[index].transportCost;
-      const guide = field === 'guideCost' ? value : updated[index].guideCost;
-      const currency = field === 'currency' ? value : updated[index].currency;
-      const costType = field === 'costType' ? value : updated[index].costType;
+      const entry = Number(field === 'entryCost' ? value : updated[index].entryCost);
+      const transport = Number(field === 'transportCost' ? value : updated[index].transportCost);
+      const guide = Number(field === 'guideCost' ? value : updated[index].guideCost);
+      const currency = String(field === 'currency' ? value : updated[index].currency);
+      const costType = String(field === 'costType' ? value : updated[index].costType);
 
       const baseAmount = entry + transport + guide;
       const cost = costType === 'lump_sum' ? baseAmount : baseAmount * totalParticipants;
@@ -1155,15 +1163,15 @@ export default function CreateTrip() {
     }]);
   };
 
-  const updateOverhead = (index: number, field: keyof Overhead, value: any) => {
+  const updateOverhead = (index: number, field: keyof Overhead, value: string | number | boolean) => {
     const updated = [...overheads];
     updated[index] = { ...updated[index], [field]: value };
 
     if (field === 'amountPerParticipant' || field === 'currency' || field === 'costType') {
       const totalParticipants = calculateTotalParticipants();
-      const amountPerParticipant = field === 'amountPerParticipant' ? value : updated[index].amountPerParticipant;
-      const currency = field === 'currency' ? value : updated[index].currency;
-      const costType = field === 'costType' ? value : updated[index].costType;
+      const amountPerParticipant = Number(field === 'amountPerParticipant' ? value : updated[index].amountPerParticipant);
+      const currency = String(field === 'currency' ? value : updated[index].currency);
+      const costType = String(field === 'costType' ? value : updated[index].costType);
 
       updated[index].totalCost = costType === 'lump_sum'
         ? amountPerParticipant
@@ -1271,6 +1279,7 @@ export default function CreateTrip() {
       setTotals(newTotals);
     };
     updateTotals();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     flights,
     buses,
@@ -1288,11 +1297,48 @@ export default function CreateTrip() {
     packageCurrency,
     formData.boys,
     formData.girls,
+    formData.maleFaculty,
+    formData.femaleFaculty,
+    formData.maleVXplorers,
+    formData.femaleVXplorers,
     formData.maleCount,
     formData.femaleCount,
     formData.otherCount,
+    formData.commercialMaleVXplorers,
+    formData.commercialFemaleVXplorers,
     formData.startDate,
     formData.endDate,
+  ]);
+
+  // Recalculate per-person costs (trains, activities, overheads) when participant counts change
+  useEffect(() => {
+    const totalParticipants = calculateTotalParticipants();
+
+    setTrains(prev => prev.map(t => {
+      const cost = t.costPerPerson * totalParticipants;
+      return { ...t, totalCost: cost, totalCostINR: cost * getCurrencyRate(t.currency) };
+    }));
+
+    setActivities(prev => prev.map(a => {
+      if (a.costType === 'lump_sum') return a;
+      const base = a.entryCost + a.transportCost + a.guideCost;
+      const cost = base * totalParticipants;
+      return { ...a, totalCost: cost, totalCostINR: cost * getCurrencyRate(a.currency) };
+    }));
+
+    setOverheads(prev => prev.map(o => {
+      if (o.costType === 'lump_sum') return o;
+      const cost = o.amountPerParticipant * totalParticipants;
+      return { ...o, totalCost: cost, totalCostINR: cost * getCurrencyRate(o.currency) };
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    formData.boys, formData.girls,
+    formData.maleFaculty, formData.femaleFaculty,
+    formData.maleVXplorers, formData.femaleVXplorers,
+    formData.maleCount, formData.femaleCount, formData.otherCount,
+    formData.commercialMaleVXplorers, formData.commercialFemaleVXplorers,
+    tripType,
   ]);
 
   // Save draft — no validation, stays on page, persists partial data
@@ -1399,16 +1445,16 @@ export default function CreateTrip() {
         }
       } else {
         const result = await createTrip(draftData);
-        if (result.success && (result as any).tripId) {
+        if (result.success && (result as { success: boolean; tripId?: string }).tripId) {
           toast.success('Draft saved! You can continue editing.');
           // Navigate to edit mode so subsequent saves update the same record
-          navigate(`/trips/create?edit=${(result as any).tripId}`, { replace: true });
+          navigate(`/trips/create?edit=${(result as { success: boolean; tripId?: string }).tripId}`, { replace: true });
         } else {
           toast.error(result.error || 'Failed to save draft');
         }
       }
-    } catch (error: any) {
-      toast.error(error.message || 'An error occurred while saving the draft');
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'An error occurred while saving the draft');
     } finally {
       setIsSavingDraft(false);
     }
@@ -1438,6 +1484,14 @@ export default function CreateTrip() {
       validationErrors.push('Insurance cost per person is required');
     if (tripCategory === 'international' && (!extras.visaCostPerPerson || extras.visaCostPerPerson <= 0))
       validationErrors.push('Visa cost per person is required for international trips');
+    if (planningMode === 'tour_planner' && packageOccupancies.length > 0) {
+      const totalParticipantsForValidation = calculateTotalParticipants();
+      const validation = validateOccupancyTotal(packageOccupancies, totalParticipantsForValidation);
+      if (!validation.valid) {
+        const covered = packageOccupancies.reduce((sum, r) => sum + r.peopleCovered, 0);
+        validationErrors.push(`Tour package covers ${covered} people but trip has ${totalParticipantsForValidation} participants`);
+      }
+    }
 
     if (validationErrors.length > 0) {
       validationErrors.forEach(err => toast.error(err));
@@ -1558,10 +1612,10 @@ export default function CreateTrip() {
 
       if (result.success) {
         // Send submission email when a NEW trip is created (not on edits)
-        if (!isEditing && (result as any).tripId) {
+        if (!isEditing && (result as { success: boolean; tripId?: string }).tripId) {
           try {
             const { sendTripSubmittedEmail } = await import('../services/email');
-            const emailResult = await sendTripSubmittedEmail((result as any).tripId);
+            const emailResult = await sendTripSubmittedEmail((result as { success: boolean; tripId?: string }).tripId!);
             if (emailResult.success) {
               toast.success('Trip created and submitted for approval!', {
                 description: 'Email notification sent to admins.',
@@ -1583,9 +1637,9 @@ export default function CreateTrip() {
       } else {
         toast.error(result.error || 'Failed to save trip');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving trip:', error);
-      toast.error(error.message || 'An error occurred while saving the trip');
+      toast.error(error instanceof Error ? error.message : 'An error occurred while saving the trip');
     } finally {
       setIsSaving(false);
     }
@@ -1678,6 +1732,7 @@ export default function CreateTrip() {
         })() : {}),
         subtotalBeforeTax: totals.subtotalBeforeTax,
         profit,
+        profitMode,
         gstPercentage: totals.gstPercentage,
         gstAmount: totals.gstAmount,
         tcsPercentage: totals.tcsPercentage,
@@ -1696,6 +1751,7 @@ export default function CreateTrip() {
     }
     // Reset status after 3s
     setTimeout(() => setAutoSaveStatus('idle'), 3000);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isEditing, editId, isSaving, isLoading, isLoadingMasterData, formData, tripCategory, tripType,
     planningMode, flights, buses, trains, accommodations, hotelMeals, activities, overheads, extras,
@@ -1712,6 +1768,7 @@ export default function CreateTrip() {
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     formData, flights, buses, trains, accommodations, hotelMeals, activities, overheads,
     extras, profit, tripCategory, tripType, planningMode, packageCurrency, packageOccupancies
@@ -3522,7 +3579,7 @@ export default function CreateTrip() {
                                       <div className="flex items-center gap-2">
                                         <Switch
                                           checked={accommodation.driverRoom ?? false}
-                                          onCheckedChange={(checked) => updateAccommodation(index, 'driverRoom' as any, checked)}
+                                          onCheckedChange={(checked) => updateAccommodation(index, 'driverRoom', checked)}
                                         />
                                         <div>
                                           <p className="text-xs font-semibold">Driver Room</p>
@@ -3709,7 +3766,7 @@ export default function CreateTrip() {
                                 placeholder="0"
                                 className="h-8 text-sm"
                                 value={m.freeBreakfast || ''}
-                                onChange={(e) => updateHotelMeal(acc.id, 'freeBreakfast', parseFloat(e.target.value) || 0, acc.currency)}
+                                onChange={(e) => updateHotelMeal(acc.id, 'freeBreakfast', parseInt(e.target.value) || 0, acc.currency)}
                               />
                               <span className="text-right text-sm font-medium">
                                 {formatCurrency(costs.breakfastTotal * getCurrencyRate(m.currency), 'INR')}
@@ -3731,7 +3788,7 @@ export default function CreateTrip() {
                                 placeholder="0"
                                 className="h-8 text-sm"
                                 value={m.freeLunch || ''}
-                                onChange={(e) => updateHotelMeal(acc.id, 'freeLunch', parseFloat(e.target.value) || 0, acc.currency)}
+                                onChange={(e) => updateHotelMeal(acc.id, 'freeLunch', parseInt(e.target.value) || 0, acc.currency)}
                               />
                               <span className="text-right text-sm font-medium">
                                 {formatCurrency(costs.lunchTotal * getCurrencyRate(m.currency), 'INR')}
@@ -3753,7 +3810,7 @@ export default function CreateTrip() {
                                 placeholder="0"
                                 className="h-8 text-sm"
                                 value={m.freeDinner || ''}
-                                onChange={(e) => updateHotelMeal(acc.id, 'freeDinner', parseFloat(e.target.value) || 0, acc.currency)}
+                                onChange={(e) => updateHotelMeal(acc.id, 'freeDinner', parseInt(e.target.value) || 0, acc.currency)}
                               />
                               <span className="text-right text-sm font-medium">
                                 {formatCurrency(costs.dinnerTotal * getCurrencyRate(m.currency), 'INR')}
